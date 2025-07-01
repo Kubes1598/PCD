@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poisoned Candy Duel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #2D1810, #4A2C2A);
+            min-height: 100vh;
+            color: white;
+            overflow-x: hidden;
+        }
+
+        .game-container {
+            max-width: 400px;
+            margin: 0 auto;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #8B4513, #D2691E);
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            padding: 20px;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease-in-out;
+        }
+
+        .screen.active {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .screen.prev {
+            transform: translateX(-100%);
+        }
+
+        /* Game Stats Header */
+        .game-stats {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(0,0,0,0.7);
+            padding: 5px 15px;
+            border-radius: 20px;
+            display: flex;
+            gap: 15px;
+            font-size: 14px;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Button Styles */
+        .game-button {
+            background: linear-gradient(135deg, #D2691E, #8B4513);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .game-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+        }
+
+        .game-button:active {
+            transform: translateY(0);
+            box-shadow: 
+                0 4px 8px rgba(0,0,0,0.3),
+                inset 0 2px 0 rgba(255,255,255,0.2);
+        }
+
+        /* Icon Styles */
+        .game-icon {
+            position: absolute;
+            cursor: pointer;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .game-icon:hover {
+            transform: scale(1.1);
+        }
+
+        /* Label Styles */
+        .game-label {
+            position: absolute;
+            color: white;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        /* Grid Styles */
+        .game-grid {
+            position: absolute;
+            display: grid;
+            gap: 5px;
+        }
+
+        .grid-cell {
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .grid-cell:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+        }
+
+        .grid-cell.selected {
+            animation: pulse 1s infinite;
+            border: 3px solid #FFD700;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        /* Color mappings for grid cells */
+        .color-darkGray { background: linear-gradient(135deg, #696969, #2F2F2F); }
+        .color-darkBlue { background: linear-gradient(135deg, #4169E1, #191970); }
+        .color-red { background: linear-gradient(135deg, #FF6B6B, #DC143C); }
+        .color-brown { background: linear-gradient(135deg, #D2B48C, #8B4513); }
+        .color-yellow { background: linear-gradient(135deg, #FFD700, #FFA500); }
+        .color-green { background: linear-gradient(135deg, #90EE90, #228B22); }
+        .color-pink { background: linear-gradient(135deg, #FFB6C1, #FF69B4); }
+
+        /* Navigation */
+        .nav-debug {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 1000;
+        }
+
+        .page-nav {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .nav-btn {
+            background: rgba(0,0,0,0.7);
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .nav-btn:hover {
+            background: rgba(0,0,0,0.9);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 480px) {
+            .game-container {
+                max-width: 100%;
+            }
+            
+            .screen {
+                padding: 15px;
+            }
+        }
+
+        /* Loading Animation */
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2000;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- Game Stats Header -->
+        <div class="game-stats">
+            <div class="stat-item">
+                <span>🪙</span>
+                <span id="coins-count">1000</span>
+            </div>
+            <div class="stat-item">
+                <span>💎</span>
+                <span id="diamonds-count">50</span>
+            </div>
+            <div class="stat-item">
+                <span>🎮</span>
+                <span id="games-played">0</span>
+            </div>
+        </div>
+
+        <!-- Screen 1: Main Menu -->
+        <div class="screen active" id="page1">
+            <button class="game-button" style="left: 50px; top: 150px; width: 200px; height: 50px;" onclick="handleAction('start_game_online')">
+                🌐 Play Online
+            </button>
+            <button class="game-button" style="left: 50px; top: 220px; width: 250px; height: 50px;" onclick="handleAction('play_with_friends')">
+                👥 Play with Friends
+            </button>
+            <button class="game-button" style="left: 50px; top: 290px; width: 200px; height: 50px;" onclick="handleAction('play_with_computer')">
+                🤖 Play Offline
+            </button>
+            <div class="game-icon" style="left: 20px; top: 20px; width: 30px; height: 30px;" onclick="handleAction('view_coins')">
+                🪙
+            </div>
+            <div class="game-icon" style="left: 60px; top: 20px; width: 30px; height: 30px;" onclick="handleAction('view_diamonds')">
+                💎
+            </div>
+            <button class="game-button" style="left: 50px; top: 360px; width: 200px; height: 50px;" onclick="handleAction('view_rewards')">
+                🏆 Rewards
+            </button>
+            <button class="game-button" style="left: 50px; top: 430px; width: 200px; height: 50px;" onclick="handleAction('view_ranking')">
+                📊 Ranking
+            </button>
+            <button class="game-button" style="left: 50px; top: 500px; width: 200px; height: 50px;" onclick="handleAction('view_profile')">
+                👤 Profile
+            </button>
+        </div>
+
+        <!-- Screen 2: Play Online Cities -->
+        <div class="screen" id="page2">
+            <div class="game-label" style="left: 100px; top: 50px; width: 300px; height: 40px; font-size: 24px;">
+                Play Online
+            </div>
+            <button class="game-button" style="left: 100px; top: 120px; width: 250px; height: 50px;" onclick="handleAction('start_game_dubai')">
+                🏙️ Dubai
+            </button>
+            <button class="game-button" style="left: 100px; top: 190px; width: 250px; height: 50px;" onclick="handleAction('start_game_cairo')">
+                🏛️ Cairo
+            </button>
+            <button class="game-button" style="left: 100px; top: 260px; width: 250px; height: 50px;" onclick="handleAction('start_game_oslo')">
+                🏔️ Oslo
+            </button>
+            <button class="game-button" style="left: 100px; top: 330px; width: 250px; height: 50px;" onclick="handleAction('go_back_to_main_screen')">
+                ← Back to Main
+            </button>
+        </div>
+
+        <!-- Screen 3: Dubai Game Screen -->
+        <div class="screen" id="page3">
+            <div class="game-label" style="left: 20px; top: 20px; width: 100px; height: 30px; font-size: 20px;">
+                Dubai
+            </div>
+            <div class="game-label" style="left: 120px; top: 20px; width: 60px; height: 30px; font-size: 20px;">
+                500
+            </div>
+            
+            <!-- Game Grid -->
+            <div class="game-grid" id="game-grid" style="left: 50px; top: 60px; grid-template-columns: repeat(4, 50px); grid-template-rows: repeat(4, 50px);">
+                <!-- Grid cells will be populated by JavaScript -->
+            </div>
+            
+            <div class="game-label" style="left: 50px; top: 270px; width: 150px; height: 30px; font-size: 18px;">
+                Player 2 (9/9)
+            </div>
+            <div class="game-label" style="left: 150px; top: 270px; width: 150px; height: 30px; font-size: 18px;">
+                Player 1 (9/9)
+            </div>
+            
+            <button class="game-button" style="left: 20px; top: 330px; width: 50px; height: 50px;" onclick="handleAction('go_to_home_screen')">
+                🏠
+            </button>
+            <button class="game-button" style="left: 80px; top: 330px; width: 50px; height: 50px;" onclick="handleAction('open_help_screen')">
+                ❓
+            </button>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div class="loading" id="loading" style="display: none;">
+            <div class="spinner"></div>
+        </div>
+    </div>
+
+    <!-- Navigation Debug Panel -->
+    <div class="nav-debug">
+        <div>Current: <span id="current-screen">page1</span></div>
+        <div>Screen: <span id="current-screen-name">Main Screen</span></div>
+    </div>
+
+    <!-- Page Navigation -->
+    <div class="page-nav">
+        <button class="nav-btn" onclick="navigateToScreen('page1')">1</button>
+        <button class="nav-btn" onclick="navigateToScreen('page2')">2</button>
+        <button class="nav-btn" onclick="navigateToScreen('page3')">3</button>
+        <button class="nav-btn" onclick="navigateToScreen('page4')">4</button>
+    </div>
+
+    <script>
+        // Game State
+        let gameState = {
+            coins: 1000,
+            diamonds: 50,
+            gamesPlayed: 0,
+            currentScreen: 'page1',
+            selectedCells: [],
+            gameGrid: []
+        };
+
+        // Screen Data (converted from JSON)
+        const screenData = {
+            'page1': { name: 'Main Screen' },
+            'page2': { name: 'Play Online Cities' },
+            'page3': { name: 'Dubai Game Screen' },
+            'page4': { name: 'Cairo Game Screen' }
+        };
+
+        // Initialize Game
+        function initGame() {
+            updateGameStats();
+            initializeGameGrid();
+            updateDebugInfo();
+        }
+
+        // Update Game Stats Display
+        function updateGameStats() {
+            document.getElementById('coins-count').textContent = gameState.coins;
+            document.getElementById('diamonds-count').textContent = gameState.diamonds;
+            document.getElementById('games-played').textContent = gameState.gamesPlayed;
+        }
+
+        // Initialize Game Grid
+        function initializeGameGrid() {
+            const grid = document.getElementById('game-grid');
+            if (!grid) return;
+
+            const colors = ['darkGray', 'darkBlue', 'red', 'brown', 'yellow', 'green', 'pink'];
+            const candyEmojis = ['🍭', '🍬', '🧁', '🍩', '🍪', '🎂', '🍰', '🍫', '🍯'];
+            
+            grid.innerHTML = '';
+            gameState.gameGrid = [];
+
+            for (let i = 0; i < 16; i++) {
+                const cell = document.createElement('div');
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const emoji = candyEmojis[Math.floor(Math.random() * candyEmojis.length)];
+                
+                cell.className = `grid-cell color-${color}`;
+                cell.textContent = emoji;
+                cell.dataset.index = i;
+                cell.dataset.color = color;
+                cell.dataset.emoji = emoji;
+                
+                cell.addEventListener('click', () => selectGridCell(i));
+                
+                grid.appendChild(cell);
+                gameState.gameGrid.push({ color, emoji, selected: false });
+            }
+        }
+
+        // Select Grid Cell
+        function selectGridCell(index) {
+            const cell = document.querySelector(`[data-index="${index}"]`);
+            const isSelected = gameState.gameGrid[index].selected;
+            
+            if (isSelected) {
+                cell.classList.remove('selected');
+                gameState.gameGrid[index].selected = false;
+                gameState.selectedCells = gameState.selectedCells.filter(i => i !== index);
+            } else {
+                cell.classList.add('selected');
+                gameState.gameGrid[index].selected = true;
+                gameState.selectedCells.push(index);
+            }
+            
+            console.log('Selected cells:', gameState.selectedCells);
+        }
+
+        // Navigate to Screen
+        function navigateToScreen(screenId) {
+            const currentScreen = document.querySelector('.screen.active');
+            const targetScreen = document.getElementById(screenId);
+            
+            if (!targetScreen || screenId === gameState.currentScreen) return;
+            
+            // Add transition classes
+            currentScreen.classList.remove('active');
+            currentScreen.classList.add('prev');
+            
+            setTimeout(() => {
+                currentScreen.classList.remove('prev');
+                targetScreen.classList.add('active');
+                gameState.currentScreen = screenId;
+                updateDebugInfo();
+                
+                // Initialize screen-specific features
+                if (screenId === 'page3') {
+                    initializeGameGrid();
+                }
+            }, 150);
+        }
+
+        // Update Debug Info
+        function updateDebugInfo() {
+            document.getElementById('current-screen').textContent = gameState.currentScreen;
+            document.getElementById('current-screen-name').textContent = 
+                screenData[gameState.currentScreen]?.name || 'Unknown';
+        }
+
+        // Action Handlers
+        const actionHandlers = {
+            // Main Menu Actions
+            'start_game_online': () => {
+                showLoading();
+                setTimeout(() => {
+                    hideLoading();
+                    navigateToScreen('page2');
+                }, 1000);
+            },
+            
+            'play_with_friends': () => {
+                alert('Play with Friends feature coming soon!');
+            },
+            
+            'play_with_computer': () => {
+                showLoading();
+                setTimeout(() => {
+                    hideLoading();
+                    navigateToScreen('page3');
+                    gameState.gamesPlayed++;
+                    updateGameStats();
+                }, 1000);
+            },
+            
+            'view_coins': () => {
+                alert(`You have ${gameState.coins} coins!`);
+            },
+            
+            'view_diamonds': () => {
+                alert(`You have ${gameState.diamonds} diamonds!`);
+            },
+            
+            'view_rewards': () => {
+                alert('Rewards system coming soon!');
+            },
+            
+            'view_ranking': () => {
+                alert('Ranking system coming soon!');
+            },
+            
+            'view_profile': () => {
+                alert('Profile page coming soon!');
+            },
+            
+            // Online Game Actions
+            'start_game_dubai': () => {
+                showLoading();
+                setTimeout(() => {
+                    hideLoading();
+                    navigateToScreen('page3');
+                    gameState.gamesPlayed++;
+                    updateGameStats();
+                }, 1500);
+            },
+            
+            'start_game_cairo': () => {
+                alert('Cairo game mode coming soon!');
+            },
+            
+            'start_game_oslo': () => {
+                alert('Oslo game mode coming soon!');
+            },
+            
+            'go_back_to_main_screen': () => {
+                navigateToScreen('page1');
+            },
+            
+            // Game Actions
+            'go_to_home_screen': () => {
+                navigateToScreen('page1');
+            },
+            
+            'open_help_screen': () => {
+                alert('Game Rules:\n\n1. Select candies from the grid\n2. Avoid poisoned candies\n3. Collect more candies than your opponent\n4. Win the game!');
+            }
+        };
+
+        // Handle Action
+        function handleAction(action) {
+            console.log('Action triggered:', action);
+            
+            const handler = actionHandlers[action];
+            if (handler) {
+                handler();
+            } else {
+                console.warn(`No handler found for action: ${action}`);
+                alert(`Action "${action}" is not implemented yet.`);
+            }
+        }
+
+        // Loading Functions
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // Keyboard Navigation
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case '1':
+                    navigateToScreen('page1');
+                    break;
+                case '2':
+                    navigateToScreen('page2');
+                    break;
+                case '3':
+                    navigateToScreen('page3');
+                    break;
+                case '4':
+                    navigateToScreen('page4');
+                    break;
+                case 'Escape':
+                    navigateToScreen('page1');
+                    break;
+            }
+        });
+
+        // Initialize Game on Load
+        document.addEventListener('DOMContentLoaded', initGame);
+
+        // Auto-save game state
+        setInterval(() => {
+            localStorage.setItem('pcd-game-state', JSON.stringify(gameState));
+        }, 5000);
+
+        // Load saved game state
+        const savedState = localStorage.getItem('pcd-game-state');
+        if (savedState) {
+            try {
+                const parsed = JSON.parse(savedState);
+                gameState = { ...gameState, ...parsed };
+            } catch (e) {
+                console.warn('Failed to load saved game state');
+            }
+        }
+    </script>
+</body>
+</html> 

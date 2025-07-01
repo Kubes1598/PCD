@@ -1,0 +1,1485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>PCD Game - Mobile</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #2D1810, #4A2C2A);
+            min-height: 100vh;
+            color: white;
+            overflow: hidden;
+        }
+
+        .game-container {
+            max-width: 400px;
+            margin: 0 auto;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #8B4513, #D2691E);
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            padding: 20px;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease-in-out;
+            overflow-y: auto;
+        }
+
+        .screen.active {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        /* Element Types */
+        .game-button {
+            background: linear-gradient(135deg, #D2691E, #8B4513);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 14px;
+        }
+
+        .game-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+        }
+
+        .game-icon {
+            position: absolute;
+            cursor: pointer;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .game-label {
+            position: absolute;
+            color: white;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .game-grid {
+            position: absolute;
+            display: grid;
+            gap: 5px;
+        }
+
+        .grid-cell {
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            width: 40px;
+            height: 40px;
+        }
+
+        .grid-cell:hover {
+            transform: scale(1.05);
+        }
+
+        .grid-cell.selected {
+            border: 3px solid #FFD700;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        /* Color mappings */
+        .color-darkGray { background: linear-gradient(135deg, #696969, #2F2F2F); }
+        .color-darkBlue { background: linear-gradient(135deg, #4169E1, #191970); }
+        .color-red { background: linear-gradient(135deg, #FF6B6B, #DC143C); }
+        .color-brown { background: linear-gradient(135deg, #D2B48C, #8B4513); }
+        .color-yellow { background: linear-gradient(135deg, #FFD700, #FFA500); }
+        .color-green { background: linear-gradient(135deg, #90EE90, #228B22); }
+        .color-pink { background: linear-gradient(135deg, #FFB6C1, #FF69B4); }
+
+        /* Ranking list */
+        .ranking-list {
+            position: absolute;
+        }
+
+        .ranking-item {
+            position: absolute;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 8px;
+            color: white;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Stats header */
+        .stats-header {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(0,0,0,0.7);
+            padding: 5px 15px;
+            border-radius: 20px;
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+        }
+
+        /* Navigation */
+        .nav-debug {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 10px;
+            z-index: 1000;
+        }
+
+        .page-nav {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            z-index: 1000;
+            max-width: 200px;
+        }
+
+        .nav-btn {
+            background: rgba(0,0,0,0.7);
+            border: none;
+            color: white;
+            padding: 6px 10px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+
+        .nav-btn:hover {
+            background: rgba(0,0,0,0.9);
+        }
+
+        .nav-btn.active {
+            background: #D2691E;
+        }
+
+        /* Loading */
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2000;
+            display: none;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Mobile-First Responsive Design */
+        @media (max-width: 480px) {
+            .game-container {
+                max-width: 100%;
+                margin: 0;
+            }
+            
+            .screen {
+                padding: 10px;
+            }
+            
+            /* Optimize button sizes for mobile touch */
+            .game-button {
+                min-height: 60px;
+                min-width: 120px;
+                font-size: 16px;
+                touch-action: manipulation;
+                -webkit-tap-highlight-color: transparent;
+            }
+            
+            /* Mobile-specific main page layout */
+            #page1 .game-button[style*="left: 30px"] { /* Profile */
+                left: 15px !important;
+                top: 60px !important;
+                width: 100px !important;
+                height: 60px !important;
+                font-size: 14px !important;
+            }
+            
+            #page1 div[style*="right: 30px"] { /* Currency */
+                right: 15px !important;
+                top: 60px !important;
+            }
+            
+            #page1 .game-button[style*="calc(50% - 120px)"] { /* Play Online */
+                left: calc(50% - 140px) !important;
+                width: 280px !important;
+                height: 70px !important;
+                font-size: 18px !important;
+            }
+            
+            #page1 .game-button[style*="calc(50% - 190px)"] { /* Friends */
+                left: calc(50% - 150px) !important;
+                width: 140px !important;
+                height: 60px !important;
+                font-size: 12px !important;
+            }
+            
+            #page1 .game-button[style*="calc(50% + 20px)"] { /* Offline */
+                left: calc(50% + 10px) !important;
+                width: 140px !important;
+                height: 60px !important;
+                font-size: 14px !important;
+            }
+            
+            #page1 .game-button[style*="calc(50% - 210px)"] { /* Rewards */
+                left: calc(50% - 145px) !important;
+                width: 90px !important;
+                height: 50px !important;
+                font-size: 12px !important;
+            }
+            
+            #page1 .game-button[style*="calc(50% - 65px)"] { /* Home */
+                left: calc(50% - 45px) !important;
+                width: 90px !important;
+                height: 50px !important;
+                font-size: 12px !important;
+            }
+            
+            #page1 .game-button[style*="calc(50% + 80px)"] { /* Ranking */
+                left: calc(50% + 55px) !important;
+                width: 90px !important;
+                height: 50px !important;
+                font-size: 12px !important;
+            }
+            
+            /* Optimize grid cells for mobile */
+            .grid-cell {
+                width: 60px !important;
+                height: 60px !important;
+                font-size: 28px;
+                touch-action: manipulation;
+            }
+            
+            .grid-cell.empty {
+                background: transparent !important;
+                border: 2px dashed rgba(255,255,255,0.3) !important;
+            }
+            
+            .grid-cell.picked {
+                background: rgba(0,0,0,0.1) !important;
+                border: 2px dashed rgba(255,255,255,0.2) !important;
+            }
+            
+            .game-grid {
+                grid-template-columns: repeat(4, 60px) !important;
+                grid-template-rows: repeat(3, 60px) !important;
+                gap: 10px;
+            }
+            
+            /* Mobile navigation */
+            .page-nav {
+                bottom: 5px;
+                right: 5px;
+                max-width: 150px;
+            }
+            
+            .nav-btn {
+                padding: 8px 12px;
+                font-size: 11px;
+                min-height: 35px;
+                touch-action: manipulation;
+            }
+            
+            .nav-debug {
+                bottom: 5px;
+                left: 5px;
+                font-size: 9px;
+            }
+            
+            .stats-header {
+                top: 5px;
+                font-size: 14px;
+                padding: 8px 20px;
+            }
+        }
+        
+        /* Portrait orientation optimization */
+        @media (max-width: 480px) and (orientation: portrait) {
+            .game-container {
+                min-height: 100vh;
+            }
+            
+            /* Adjust button positions for portrait */
+            #page1 .game-button[style*="top: 200px"] { /* Play Online */
+                top: 180px !important;
+            }
+            
+            #page1 .game-button[style*="top: 320px"] { /* Friends & Offline */
+                top: 280px !important;
+            }
+            
+            #page1 .game-button[style*="top: 430px"] { /* Bottom row */
+                top: 360px !important;
+            }
+        }
+        
+        /* Landscape orientation optimization */
+        @media (max-width: 900px) and (orientation: landscape) {
+            .game-container {
+                max-width: 100%;
+                min-height: 100vh;
+            }
+            
+            .screen {
+                padding: 10px 20px;
+            }
+            
+            /* Compact layout for landscape */
+            #page1 .game-button[style*="top: 200px"] { /* Play Online */
+                top: 120px !important;
+            }
+            
+            #page1 .game-button[style*="top: 320px"] { /* Friends & Offline */
+                top: 210px !important;
+            }
+            
+            #page1 .game-button[style*="top: 430px"] { /* Bottom row */
+                top: 290px !important;
+            }
+        }
+        
+        /* Touch-specific optimizations */
+        @media (pointer: coarse) {
+            .game-button {
+                min-height: 50px;
+                padding: 12px;
+            }
+            
+            .grid-cell {
+                min-width: 50px;
+                min-height: 50px;
+            }
+            
+            .nav-btn {
+                min-height: 40px;
+                min-width: 60px;
+            }
+        }
+        
+        /* Prevent text selection on mobile */
+        * {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- Stats Header -->
+        <div class="stats-header">
+            <div>🪙 <span id="coins">1000</span></div>
+            <div>💎 <span id="diamonds">50</span></div>
+            <div>🎮 <span id="games">0</span></div>
+            <div id="connection-status">🔴 Checking...</div>
+        </div>
+
+        <!-- Page 1: Main Screen -->
+        <div class="screen active" id="page1">
+            <!-- TOP ROW -->
+            <!-- Profile Button (Top Left) -->
+            <button class="game-button" style="left: 30px; top: 80px; width: 120px; height: 70px; font-size: 16px;" onclick="handleAction('view_profile')">
+                👤 PROFILE
+            </button>
+            
+            <!-- Currency Displays (Top Right) -->
+            <div style="position: absolute; right: 30px; top: 80px; display: flex; flex-direction: column; gap: 8px;">
+                <div class="game-icon" style="width: 100px; height: 30px; border-radius: 15px; background: rgba(255,215,0,0.9); color: #8B4513; font-weight: bold; font-size: 14px;" onclick="handleAction('view_diamonds')">
+                    ▲ 50
+                </div>
+                <div class="game-icon" style="width: 100px; height: 30px; border-radius: 15px; background: rgba(255,215,0,0.9); color: #8B4513; font-weight: bold; font-size: 14px;" onclick="handleAction('view_coins')">
+                    ● 1000
+                </div>
+            </div>
+            
+            <!-- MIDDLE ROW -->
+            <!-- Play Online Button (Center, Large) -->
+            <button class="game-button" style="left: calc(50% - 120px); top: 200px; width: 240px; height: 80px; font-size: 20px;" onclick="handleAction('start_game_online')">
+                🌐 PLAY ONLINE
+            </button>
+            
+            <!-- SECOND ROW (Horizontal alignment) -->
+            <!-- Play with Friends Button (Left) -->
+            <button class="game-button" style="left: calc(50% - 190px); top: 320px; width: 170px; height: 70px; font-size: 14px;" onclick="handleAction('play_with_friends')">
+                👥 PLAY WITH<br>FRIENDS
+            </button>
+            
+            <!-- Offline Button (Right) -->
+            <button class="game-button" style="left: calc(50% + 20px); top: 320px; width: 170px; height: 70px; font-size: 16px;" onclick="handleAction('play_with_computer')">
+                🤖 OFFLINE
+            </button>
+            
+            <!-- BOTTOM ROW (Horizontal alignment) -->
+            <!-- Rewards Button (Left) -->
+            <button class="game-button" style="left: calc(50% - 210px); top: 430px; width: 130px; height: 60px; font-size: 14px;" onclick="handleAction('view_rewards')">
+                🏆 REWARDS
+            </button>
+            
+            <!-- Home Button (Center) -->
+            <button class="game-button" style="left: calc(50% - 65px); top: 430px; width: 130px; height: 60px; font-size: 14px;" onclick="handleAction('go_to_home_screen')">
+                🏠 HOME
+            </button>
+            
+            <!-- Ranking Button (Right) -->
+            <button class="game-button" style="left: calc(50% + 80px); top: 430px; width: 130px; height: 60px; font-size: 14px;" onclick="handleAction('view_ranking')">
+                📊 RANKING
+            </button>
+        </div>
+
+        <!-- Page 2: Play Online Cities -->
+        <div class="screen" id="page2">
+            <div class="game-label" style="left: 100px; top: 50px; width: 300px; height: 40px; font-size: 24px;">
+                Play Online
+            </div>
+            <button class="game-button" style="left: 100px; top: 120px; width: 250px; height: 50px;" onclick="handleAction('start_game_dubai')">
+                🏙️ Dubai
+            </button>
+            <button class="game-button" style="left: 100px; top: 190px; width: 250px; height: 50px;" onclick="handleAction('start_game_cairo')">
+                🏛️ Cairo
+            </button>
+            <button class="game-button" style="left: 100px; top: 260px; width: 250px; height: 50px;" onclick="handleAction('start_game_oslo')">
+                🏔️ Oslo
+            </button>
+            <button class="game-button" style="left: 100px; top: 330px; width: 250px; height: 50px;" onclick="handleAction('go_back_to_main_screen')">
+                ← Back to Main
+            </button>
+        </div>
+
+        <!-- Page 3: Dubai Game Screen -->
+        <div class="screen" id="page3">
+            <div class="game-label" style="left: 20px; top: 20px; width: 100px; height: 30px; font-size: 20px;">
+                Dubai
+            </div>
+            <div class="game-label" style="left: 120px; top: 20px; width: 60px; height: 30px; font-size: 20px;">
+                500
+            </div>
+            <div class="game-grid" id="dubai-grid" style="left: 50px; top: 60px; grid-template-columns: repeat(4, 40px); grid-template-rows: repeat(4, 40px);">
+                <!-- Grid populated by JS -->
+            </div>
+            <div class="game-label" style="left: 50px; top: 270px; width: 150px; height: 30px; font-size: 18px;">
+                Player 2 (9/9)
+            </div>
+            <div class="game-label" style="left: 150px; top: 270px; width: 150px; height: 30px; font-size: 18px;">
+                Player 1 (9/9)
+            </div>
+            <button class="game-button" style="left: 20px; top: 330px; width: 50px; height: 50px;" onclick="handleAction('go_to_home_screen')">
+                🏠
+            </button>
+            <button class="game-button" style="left: 80px; top: 330px; width: 50px; height: 50px;" onclick="handleAction('open_help_screen')">
+                ❓
+            </button>
+        </div>
+
+        <!-- Page 4: Cairo Game Screen -->
+        <div class="screen" id="page4">
+            <div class="game-label" style="left: 20px; top: 20px; width: 100px; height: 30px; font-size: 20px;">
+                Cairo
+            </div>
+            <div class="game-label" style="left: 120px; top: 20px; width: 60px; height: 30px; font-size: 20px;">
+                1000
+            </div>
+            <div class="game-grid" id="cairo-grid" style="left: 50px; top: 60px; grid-template-columns: repeat(4, 40px); grid-template-rows: repeat(4, 40px);">
+                <!-- Grid populated by JS -->
+            </div>
+            <div class="game-label" style="left: 50px; top: 270px; width: 150px; height: 30px; font-size: 18px;">
+                Player 2 (9/9)
+            </div>
+            <div class="game-label" style="left: 150px; top: 270px; width: 150px; height: 30px; font-size: 18px;">
+                Player 1 (9/9)
+            </div>
+            <button class="game-button" style="left: 20px; top: 330px; width: 50px; height: 50px;" onclick="handleAction('go_to_home_screen')">
+                🏠
+            </button>
+            <button class="game-button" style="left: 80px; top: 330px; width: 50px; height: 50px;" onclick="handleAction('open_help_screen')">
+                ❓
+            </button>
+        </div>
+
+        <!-- Page 5: Oslo Game Screen -->
+        <div class="screen" id="page5">
+            <div class="game-label" style="left: 20px; top: 20px; width: 100px; height: 30px; font-size: 20px;">
+                Oslo
+            </div>
+            <div class="game-label" style="left: 120px; top: 20px; width: 60px; height: 30px; font-size: 20px;">
+                5000
+            </div>
+            <div class="game-grid" id="oslo-grid" style="left: 50px; top: 60px; grid-template-columns: repeat(4, 40px); grid-template-rows: repeat(4, 40px);">
+                <!-- Grid populated by JS -->
+            </div>
+            <div class="game-label" style="left: 50px; top: 270px; width: 150px; height: 30px; font-size: 18px;">
+                Player 2 (9/9)
+            </div>
+            <div class="game-label" style="left: 150px; top: 270px; width: 150px; height: 30px; font-size: 18px;">
+                Player 1 (9/9)
+            </div>
+            <button class="game-button" style="left: 20px; top: 330px; width: 50px; height: 50px;" onclick="handleAction('go_to_home_screen')">
+                🏠
+            </button>
+            <button class="game-button" style="left: 80px; top: 330px; width: 50px; height: 50px;" onclick="handleAction('open_help_screen')">
+                ❓
+            </button>
+        </div>
+
+        <!-- Page 6: Play with Friends -->
+        <div class="screen" id="page6">
+            <div class="game-label" style="left: 100px; top: 50px; width: 300px; height: 40px; font-size: 24px;">
+                Play with Friends
+            </div>
+            <button class="game-button" style="left: 100px; top: 120px; width: 250px; height: 50px;" onclick="handleAction('play_with_friend_1')">
+                👤 Friend 1
+            </button>
+            <button class="game-button" style="left: 100px; top: 190px; width: 250px; height: 50px;" onclick="handleAction('play_with_friend_2')">
+                👤 Friend 2
+            </button>
+            <button class="game-button" style="left: 100px; top: 260px; width: 250px; height: 50px;" onclick="handleAction('play_with_friend_3')">
+                👤 Friend 3
+            </button>
+            <button class="game-button" style="left: 100px; top: 330px; width: 250px; height: 50px;" onclick="handleAction('play_with_friend_4')">
+                👤 Friend 4
+            </button>
+            <button class="game-button" style="left: 100px; top: 400px; width: 250px; height: 50px;" onclick="handleAction('play_with_friend_5')">
+                👤 Friend 5
+            </button>
+            <button class="game-button" style="left: 100px; top: 470px; width: 250px; height: 50px;" onclick="handleAction('go_back_to_main_screen')">
+                ← Back to Main
+            </button>
+        </div>
+
+        <!-- Page 7: Offline Game -->
+        <div class="screen" id="page7">
+            <div class="game-label" style="left: 100px; top: 50px; width: 300px; height: 40px; font-size: 24px;">
+                Offline - Play with Computer
+            </div>
+            <button class="game-button" style="left: 100px; top: 120px; width: 250px; height: 50px;" onclick="handleAction('start_game_computer')">
+                🤖 Start Game
+            </button>
+            <button class="game-button" style="left: 100px; top: 190px; width: 250px; height: 50px;" onclick="handleAction('go_back_to_main_screen')">
+                ← Back to Main
+            </button>
+        </div>
+
+        <!-- Page 8: Computer Game Screen -->
+        <div class="screen" id="page8">
+            <div class="game-label" style="left: 100px; top: 50px; width: 300px; height: 40px; font-size: 24px;">
+                Computer vs Player 1
+            </div>
+            <div class="game-label" style="left: 100px; top: 120px; width: 200px; height: 30px; font-size: 18px;">
+                COMPUTER (9/9)
+            </div>
+            <div class="game-label" style="left: 100px; top: 160px; width: 200px; height: 30px; font-size: 18px;">
+                Player 1 (9/9)
+            </div>
+            <div class="game-grid" id="computer-grid" style="left: 50px; top: 200px; grid-template-columns: repeat(4, 40px); grid-template-rows: repeat(4, 40px);">
+                <!-- Grid populated by JS -->
+            </div>
+            <button class="game-button" style="left: 100px; top: 350px; width: 250px; height: 50px;" onclick="handleAction('next_move_computer')">
+                ➡️ Next Move
+            </button>
+            <button class="game-button" style="left: 100px; top: 420px; width: 250px; height: 50px;" onclick="handleAction('end_game_computer')">
+                🛑 End Game
+            </button>
+            <button class="game-button" style="left: 100px; top: 490px; width: 250px; height: 50px;" onclick="handleAction('go_back_to_main_screen')">
+                ← Back to Main
+            </button>
+        </div>
+
+        <!-- Page 9: Rewards Screen -->
+        <div class="screen" id="page9">
+            <div class="game-label" style="left: 100px; top: 50px; width: 300px; height: 40px; font-size: 24px;">
+                Rewards
+            </div>
+            <button class="game-button" style="left: 100px; top: 150px; width: 250px; height: 50px;" onclick="handleAction('view_50_games_reward')">
+                🎯 Play 50 Games
+            </button>
+            <button class="game-button" style="left: 100px; top: 220px; width: 250px; height: 50px;" onclick="handleAction('view_100_games_reward')">
+                🎯 Play 100 Games
+            </button>
+            <button class="game-button" style="left: 100px; top: 290px; width: 250px; height: 50px;" onclick="handleAction('view_500_games_reward')">
+                🎯 Play 500 Games
+            </button>
+            <button class="game-button" style="left: 100px; top: 360px; width: 250px; height: 50px;" onclick="handleAction('view_dubai_reward')">
+                🏙️ 500 Games in Dubai
+            </button>
+            <button class="game-button" style="left: 100px; top: 430px; width: 250px; height: 50px;" onclick="handleAction('view_cairo_reward')">
+                🏛️ 500 Games in Cairo
+            </button>
+            <button class="game-button" style="left: 100px; top: 500px; width: 250px; height: 50px;" onclick="handleAction('view_oslo_reward')">
+                🏔️ 50 Games in Oslo
+            </button>
+        </div>
+
+        <!-- Page 10: Leaderboard -->
+        <div class="screen" id="page10">
+            <div class="game-label" style="left: 100px; top: 50px; width: 300px; height: 40px; font-size: 24px;">
+                Leaderboard
+            </div>
+            <div class="ranking-list" id="leaderboard">
+                <!-- Populated by JS -->
+            </div>
+            <button class="game-button" style="left: 100px; top: 550px; width: 250px; height: 50px;" onclick="handleAction('refresh_leaderboard')">
+                🔄 Refresh Leaderboard
+            </button>
+        </div>
+
+        <!-- Page 11: Profile and Settings -->
+        <div class="screen" id="page11">
+            <div class="game-label" style="left: 100px; top: 50px; width: 300px; height: 40px; font-size: 24px;">
+                Profile and Settings
+            </div>
+            <button class="game-button" style="left: 100px; top: 120px; width: 250px; height: 50px;" onclick="handleAction('sign_in')">
+                🔑 Sign In
+            </button>
+            <button class="game-button" style="left: 100px; top: 190px; width: 250px; height: 50px;" onclick="handleAction('sign_up')">
+                📝 Sign Up
+            </button>
+            <button class="game-button" style="left: 100px; top: 260px; width: 250px; height: 50px;" onclick="handleAction('remove_ads')">
+                🚫 Remove Ads
+            </button>
+            <button class="game-button" style="left: 100px; top: 330px; width: 250px; height: 50px;" onclick="handleAction('change_username')">
+                👤 Change Username
+            </button>
+            <button class="game-button" style="left: 100px; top: 400px; width: 250px; height: 50px;" onclick="handleAction('change_avatar')">
+                🖼️ Change Avatar
+            </button>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="nav-debug">
+        <div>Screen: <span id="current-screen">page1</span></div>
+        <div>Name: <span id="screen-name">Main Screen</span></div>
+    </div>
+
+    <div class="page-nav">
+        <button class="nav-btn active" onclick="navigateToScreen('page1')">Main</button>
+        <button class="nav-btn" onclick="navigateToScreen('page2')">Online</button>
+        <button class="nav-btn" onclick="navigateToScreen('page3')">Dubai</button>
+        <button class="nav-btn" onclick="navigateToScreen('page4')">Cairo</button>
+        <button class="nav-btn" onclick="navigateToScreen('page5')">Oslo</button>
+        <button class="nav-btn" onclick="navigateToScreen('page6')">Friends</button>
+        <button class="nav-btn" onclick="navigateToScreen('page7')">Offline</button>
+        <button class="nav-btn" onclick="navigateToScreen('page8')">Computer</button>
+        <button class="nav-btn" onclick="navigateToScreen('page9')">Rewards</button>
+        <button class="nav-btn" onclick="navigateToScreen('page10')">Leaderboard</button>
+        <button class="nav-btn" onclick="navigateToScreen('page11')">Profile</button>
+    </div>
+
+    <script>
+        // Backend Configuration
+        const API_BASE_URL = 'http://localhost:8000';
+        const WS_BASE_URL = 'ws://localhost:8000';
+
+        // Game State
+        let gameState = {
+            currentScreen: 'page1',
+            coins: 1000,
+            diamonds: 50,
+            gamesPlayed: 0,
+            selectedCells: [],
+            // Backend integration
+            currentGame: null,
+            playerId: null,
+            playerName: null,
+            websocket: null,
+            isConnected: false,
+            playerCandies: [], // 10 candies for this player
+            opponentCandies: [], // 10 candies from opponent
+            poisonChoice: null
+        };
+
+        // Screen Names
+        const screenNames = {
+            'page1': 'Main Screen',
+            'page2': 'Play Online Cities',
+            'page3': 'Dubai Game Screen',
+            'page4': 'Cairo Game Screen',
+            'page5': 'Oslo Game Screen',
+            'page6': 'Play with Friends Screen',
+            'page7': 'Offline Game Screen',
+            'page8': 'Computer Game Screen',
+            'page9': 'Rewards Screen',
+            'page10': 'Leaderboard Screen',
+            'page11': 'Profile and Settings Screen'
+        };
+
+        // Initialize
+        function init() {
+            updateStats();
+            initializeGrids();
+            initializeLeaderboard();
+            updateDebugInfo();
+        }
+
+        // Update stats display
+        function updateStats() {
+            document.getElementById('coins').textContent = gameState.coins;
+            document.getElementById('diamonds').textContent = gameState.diamonds;
+            document.getElementById('games').textContent = gameState.gamesPlayed;
+        }
+
+        // Initialize game grids
+        function initializeGrids() {
+            const grids = ['dubai-grid', 'cairo-grid', 'oslo-grid', 'computer-grid'];
+            const colors = ['darkGray', 'darkBlue', 'red', 'brown', 'yellow', 'green', 'pink'];
+            const candyEmojis = ['🍭', '🍬', '🧁', '🍩', '🍪', '🎂', '🍰', '🍫'];
+
+            grids.forEach(gridId => {
+                const grid = document.getElementById(gridId);
+                if (!grid) return;
+
+                grid.innerHTML = '';
+                for (let i = 0; i < 16; i++) {
+                    const cell = document.createElement('div');
+                    const color = colors[Math.floor(Math.random() * colors.length)];
+                    const emoji = candyEmojis[Math.floor(Math.random() * candyEmojis.length)];
+                    
+                    cell.className = `grid-cell color-${color}`;
+                    cell.textContent = emoji;
+                    cell.dataset.index = i;
+                    cell.addEventListener('click', () => selectCell(cell, i));
+                    
+                    grid.appendChild(cell);
+                }
+            });
+        }
+
+        // Initialize leaderboard
+        function initializeLeaderboard() {
+            const leaderboard = document.getElementById('leaderboard');
+            if (!leaderboard) return;
+
+            leaderboard.innerHTML = '';
+            for (let i = 1; i <= 10; i++) {
+                const item = document.createElement('div');
+                item.className = 'ranking-item';
+                item.style.cssText = `left: 50px; top: ${120 + (i-1) * 40}px; width: 300px; height: 30px;`;
+                item.innerHTML = `<span>${i}.</span> <span>USERNAME ${i}</span>`;
+                leaderboard.appendChild(item);
+            }
+        }
+
+        // Select grid cell
+        function selectCell(cell, index) {
+            if (cell.classList.contains('selected')) {
+                cell.classList.remove('selected');
+                gameState.selectedCells = gameState.selectedCells.filter(i => i !== index);
+            } else {
+                cell.classList.add('selected');
+                gameState.selectedCells.push(index);
+            }
+        }
+
+        // Navigate to screen
+        function navigateToScreen(screenId) {
+            const currentScreen = document.querySelector('.screen.active');
+            const targetScreen = document.getElementById(screenId);
+            
+            if (!targetScreen || screenId === gameState.currentScreen) return;
+
+            // Update navigation buttons
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Transition screens
+            currentScreen.classList.remove('active');
+            targetScreen.classList.add('active');
+            
+            gameState.currentScreen = screenId;
+            updateDebugInfo();
+        }
+
+        // Update debug info
+        function updateDebugInfo() {
+            document.getElementById('current-screen').textContent = gameState.currentScreen;
+            document.getElementById('screen-name').textContent = screenNames[gameState.currentScreen];
+        }
+
+        // Show/hide loading
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // Action handlers based on JSON specifications
+        const actionHandlers = {
+            // Main screen actions
+            'start_game_online': () => {
+                showLoading();
+                setTimeout(() => {
+                    hideLoading();
+                    navigateToScreen('page2');
+                }, 1000);
+            },
+            'play_with_friends': () => navigateToScreen('page6'),
+            'play_with_computer': () => navigateToScreen('page7'),
+            'view_coins': () => alert(`You have ${gameState.coins} coins!`),
+            'view_diamonds': () => alert(`You have ${gameState.diamonds} diamonds!`),
+            'view_rewards': () => navigateToScreen('page9'),
+            'view_ranking': () => navigateToScreen('page10'),
+            'view_profile': () => navigateToScreen('page11'),
+
+            // Online game actions
+            'start_game_dubai': async () => {
+                showLoading();
+                const connected = await checkBackendConnection();
+                if (!connected) {
+                    hideLoading();
+                    alert('❌ Backend server not connected!\nPlease make sure the backend is running on http://localhost:8000');
+                    return;
+                }
+                
+                const gameCreated = await createGame();
+                if (gameCreated) {
+                    hideLoading();
+                    navigateToScreen('page3');
+                    gameState.gamesPlayed++;
+                    updateStats();
+                } else {
+                    hideLoading();
+                    alert('Failed to create game. Please try again.');
+                }
+            },
+            'start_game_cairo': async () => {
+                showLoading();
+                const connected = await checkBackendConnection();
+                if (!connected) {
+                    hideLoading();
+                    alert('❌ Backend server not connected!\nPlease make sure the backend is running on http://localhost:8000');
+                    return;
+                }
+                
+                const gameCreated = await createGame();
+                if (gameCreated) {
+                    hideLoading();
+                    navigateToScreen('page4');
+                    gameState.gamesPlayed++;
+                    updateStats();
+                } else {
+                    hideLoading();
+                    alert('Failed to create game. Please try again.');
+                }
+            },
+            'start_game_oslo': async () => {
+                showLoading();
+                const connected = await checkBackendConnection();
+                if (!connected) {
+                    hideLoading();
+                    alert('❌ Backend server not connected!\nPlease make sure the backend is running on http://localhost:8000');
+                    return;
+                }
+                
+                const gameCreated = await createGame();
+                if (gameCreated) {
+                    hideLoading();
+                    navigateToScreen('page5');
+                    gameState.gamesPlayed++;
+                    updateStats();
+                } else {
+                    hideLoading();
+                    alert('Failed to create game. Please try again.');
+                }
+            },
+
+            // Friends actions
+            'play_with_friend_1': () => alert('Playing with Friend 1!'),
+            'play_with_friend_2': () => alert('Playing with Friend 2!'),
+            'play_with_friend_3': () => alert('Playing with Friend 3!'),
+            'play_with_friend_4': () => alert('Playing with Friend 4!'),
+            'play_with_friend_5': () => alert('Playing with Friend 5!'),
+
+            // Computer game actions
+            'start_game_computer': () => {
+                showLoading();
+                setTimeout(() => {
+                    hideLoading();
+                    navigateToScreen('page8');
+                    gameState.gamesPlayed++;
+                    updateStats();
+                }, 1000);
+            },
+            'next_move_computer': () => {
+                alert('Computer is thinking...');
+                // Simulate computer move
+                setTimeout(() => {
+                    alert('Computer made a move!');
+                }, 1000);
+            },
+            'end_game_computer': () => {
+                if (confirm('Are you sure you want to end the game?')) {
+                    navigateToScreen('page1');
+                }
+            },
+
+            // Rewards actions
+            'view_50_games_reward': () => alert('Reward: 50 Games Achievement!'),
+            'view_100_games_reward': () => alert('Reward: 100 Games Achievement!'),
+            'view_500_games_reward': () => alert('Reward: 500 Games Achievement!'),
+            'view_dubai_reward': () => alert('Reward: Dubai Master!'),
+            'view_cairo_reward': () => alert('Reward: Cairo Champion!'),
+            'view_oslo_reward': () => alert('Reward: Oslo Explorer!'),
+
+            // Leaderboard actions
+            'refresh_leaderboard': () => {
+                showLoading();
+                setTimeout(() => {
+                    hideLoading();
+                    alert('Leaderboard refreshed!');
+                }, 1000);
+            },
+
+            // Profile actions
+            'sign_in': () => alert('Sign In functionality coming soon!'),
+            'sign_up': () => alert('Sign Up functionality coming soon!'),
+            'remove_ads': () => alert('Remove Ads - Premium feature!'),
+            'change_username': () => {
+                const newName = prompt('Enter new username:');
+                if (newName) alert(`Username changed to: ${newName}`);
+            },
+            'change_avatar': () => alert('Avatar selection coming soon!'),
+
+            // Navigation actions
+            'go_back_to_main_screen': () => navigateToScreen('page1'),
+            'go_to_home_screen': () => navigateToScreen('page1'),
+
+            // Help action
+            'open_help_screen': () => {
+                alert('Game Rules:\n\n1. Select candies from the grid\n2. Avoid poisoned candies\n3. Collect more candies than your opponent\n4. Win the game!');
+            }
+        };
+
+        // Handle action
+        function handleAction(action) {
+            console.log('Action:', action);
+            const handler = actionHandlers[action];
+            if (handler) {
+                handler();
+            } else {
+                alert(`Action "${action}" not implemented yet.`);
+            }
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            const key = e.key;
+            if (key >= '1' && key <= '9') {
+                const pageNum = parseInt(key);
+                if (pageNum <= 11) {
+                    navigateToScreen(`page${pageNum}`);
+                }
+            } else if (key === '0') {
+                navigateToScreen('page10');
+            } else if (key === 'Escape') {
+                navigateToScreen('page1');
+            }
+        });
+
+        // Auto-save game state
+        setInterval(() => {
+            localStorage.setItem('pcd-game-state', JSON.stringify(gameState));
+        }, 5000);
+
+        // Load saved state
+        const savedState = localStorage.getItem('pcd-game-state');
+        if (savedState) {
+            try {
+                gameState = { ...gameState, ...JSON.parse(savedState) };
+            } catch (e) {
+                console.warn('Failed to load saved state');
+            }
+        }
+
+        // Mobile-specific optimizations
+        function initMobile() {
+            // Prevent zoom on double tap
+            let lastTouchEnd = 0;
+            document.addEventListener('touchend', function (event) {
+                const now = (new Date()).getTime();
+                if (now - lastTouchEnd <= 300) {
+                    event.preventDefault();
+                }
+                lastTouchEnd = now;
+            }, false);
+            
+            // Add touch feedback to buttons
+            document.querySelectorAll('.game-button, .nav-btn, .grid-cell').forEach(element => {
+                element.addEventListener('touchstart', function() {
+                    this.style.transform = 'scale(0.95)';
+                    this.style.opacity = '0.8';
+                });
+                
+                element.addEventListener('touchend', function() {
+                    setTimeout(() => {
+                        this.style.transform = '';
+                        this.style.opacity = '';
+                    }, 100);
+                });
+            });
+            
+            // Optimize for mobile viewport
+            function adjustViewport() {
+                const vh = window.innerHeight * 0.01;
+                document.documentElement.style.setProperty('--vh', `${vh}px`);
+                
+                // Hide address bar on mobile
+                if (window.innerHeight < window.innerWidth) {
+                    // Landscape mode
+                    document.body.style.height = '100vh';
+                } else {
+                    // Portrait mode
+                    document.body.style.height = window.innerHeight + 'px';
+                }
+            }
+            
+            window.addEventListener('resize', adjustViewport);
+            window.addEventListener('orientationchange', () => {
+                setTimeout(adjustViewport, 100);
+            });
+            adjustViewport();
+            
+            // Add haptic feedback (if supported)
+            if ('vibrate' in navigator) {
+                document.addEventListener('click', () => {
+                    navigator.vibrate(50);
+                });
+            }
+        }
+        
+        // Enhanced touch handling for grid cells
+        function enhancedSelectCell(cell, index) {
+            // Add visual feedback
+            cell.style.transform = 'scale(1.1)';
+            setTimeout(() => {
+                cell.style.transform = '';
+            }, 200);
+            
+            // Original selection logic
+            selectCell(cell, index);
+            
+            // Haptic feedback
+            if ('vibrate' in navigator) {
+                navigator.vibrate(30);
+            }
+        }
+        
+        // Backend API Helper
+        async function apiCall(endpoint, method = 'GET', data = null) {
+            try {
+                const options = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                };
+                
+                if (data) {
+                    options.body = JSON.stringify(data);
+                }
+                
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+                return await response.json();
+            } catch (error) {
+                console.error('API call failed:', error);
+                return { success: false, error: error.message };
+            }
+        }
+
+        // Check backend connection
+        async function checkBackendConnection() {
+            const result = await apiCall('/health');
+            gameState.isConnected = result.status === 'healthy';
+            updateConnectionStatus();
+            return gameState.isConnected;
+        }
+
+        // Update connection status display
+        function updateConnectionStatus() {
+            const statusElement = document.getElementById('connection-status');
+            if (statusElement) {
+                statusElement.textContent = gameState.isConnected ? '🟢 Connected' : '🔴 Offline';
+                statusElement.style.color = gameState.isConnected ? '#4CAF50' : '#F44336';
+            }
+        }
+
+        // Initialize player name
+        function setupPlayerName() {
+            if (!gameState.playerName) {
+                gameState.playerName = prompt('Enter your player name:') || `Player_${Date.now()}`;
+            }
+        }
+
+        // Create game with 10 candies each
+        async function createGame() {
+            setupPlayerName();
+            const result = await apiCall('/games', 'POST', {
+                player1_name: gameState.playerName,
+                player2_name: 'AI_Opponent'
+            });
+            
+            if (result.success) {
+                gameState.currentGame = result.data.game_id;
+                gameState.playerId = result.data.game_state.player1.id;
+                gameState.playerCandies = Array.from(result.data.game_state.player1.owned_candies).slice(0, 10);
+                gameState.opponentCandies = Array.from(result.data.game_state.player2.owned_candies).slice(0, 10);
+                
+                // Auto-select poison for player (random from their candies)
+                const randomPoison = gameState.playerCandies[Math.floor(Math.random() * gameState.playerCandies.length)];
+                await setPoisonChoice(randomPoison);
+                
+                connectWebSocket();
+                
+                // Show game ready message
+                alert(`🎮 Game Ready!\n\nYour poison: ${randomPoison}\nTap candies from opponent's grid to collect them!\nAvoid the opponent's poison!`);
+                
+                return true;
+            }
+            return false;
+        }
+
+        // Set poison choice
+        async function setPoisonChoice(poisonCandy) {
+            const result = await apiCall(`/games/${gameState.currentGame}/poison`, 'POST', {
+                player_id: gameState.playerId,
+                poison_candy: poisonCandy
+            });
+            
+            if (result.success) {
+                gameState.poisonChoice = poisonCandy;
+                console.log(`Poison set to: ${poisonCandy}`);
+                return true;
+            }
+            return false;
+        }
+
+        // WebSocket connection for real-time updates
+        function connectWebSocket() {
+            if (!gameState.currentGame) return;
+            
+            gameState.websocket = new WebSocket(`${WS_BASE_URL}/ws/${gameState.currentGame}`);
+            
+            gameState.websocket.onopen = () => {
+                console.log('WebSocket connected');
+            };
+            
+            gameState.websocket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            };
+            
+            gameState.websocket.onclose = () => {
+                console.log('WebSocket disconnected');
+                setTimeout(connectWebSocket, 3000); // Reconnect after 3 seconds
+            };
+        }
+
+        // Handle WebSocket messages
+        function handleWebSocketMessage(data) {
+            if (data.type === 'game_update') {
+                // Update game state from server
+                updateGameFromServer(data.game_state);
+            } else if (data.type === 'move_made') {
+                // Handle opponent move
+                handleOpponentMove(data);
+            } else if (data.type === 'ai_move_made') {
+                // Handle AI move
+                handleAIMove(data);
+            }
+        }
+
+        // Update game state from server
+        function updateGameFromServer(serverGameState) {
+            if (!serverGameState) return;
+            
+            // Update local game state
+            gameState.playerCandies = serverGameState.player1.owned_candies || gameState.playerCandies;
+            gameState.opponentCandies = serverGameState.player2.owned_candies || gameState.opponentCandies;
+            
+            // Update UI if needed
+            console.log('Game state updated from server');
+        }
+
+        // Handle opponent move
+        function handleOpponentMove(data) {
+            console.log('Opponent made a move:', data.candy);
+            
+            // Visual feedback for opponent move
+            const message = `👤 Opponent picked: ${data.candy}`;
+            showTemporaryMessage(message);
+            
+            // Check if game ended
+            if (data.result && data.result !== 'ongoing') {
+                setTimeout(() => {
+                    handleGameEndFromResult(data.result, data.game_state);
+                }, 1500);
+            }
+        }
+
+        // Handle AI move
+        function handleAIMove(data) {
+            console.log('AI made a move:', data.candy);
+            
+            // Visual feedback for AI move
+            const message = `🤖 AI picked: ${data.candy}`;
+            showTemporaryMessage(message);
+            
+            // Check if game ended
+            if (data.result && data.result !== 'ongoing') {
+                setTimeout(() => {
+                    handleGameEndFromResult(data.result, data.game_state);
+                }, 1500);
+            }
+        }
+
+        // Show temporary message
+        function showTemporaryMessage(message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.textContent = message;
+            messageDiv.style.position = 'fixed';
+            messageDiv.style.top = '50%';
+            messageDiv.style.left = '50%';
+            messageDiv.style.transform = 'translate(-50%, -50%)';
+            messageDiv.style.background = 'rgba(0,0,0,0.8)';
+            messageDiv.style.color = 'white';
+            messageDiv.style.padding = '20px';
+            messageDiv.style.borderRadius = '10px';
+            messageDiv.style.fontSize = '18px';
+            messageDiv.style.zIndex = '10000';
+            
+            document.body.appendChild(messageDiv);
+            
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 2000);
+        }
+
+        // Handle game end from WebSocket result
+        function handleGameEndFromResult(result, serverGameState) {
+            let message = '';
+            
+            if (result === 'player1_win') {
+                message = '🎉 You Win! You collected 9 candies!';
+                gameState.coins += 100;
+            } else if (result === 'player2_win') {
+                message = '💀 AI Wins! You picked the poison!';
+            } else {
+                message = '🤝 It\'s a draw!';
+            }
+            
+            alert(message);
+            updateStats();
+            navigateToScreen('page1');
+        }
+
+        // Update grid initialization for mobile with 10 candies
+        function initializeMobileGrids() {
+            const grids = ['dubai-grid', 'cairo-grid', 'oslo-grid', 'computer-grid'];
+            
+            grids.forEach(gridId => {
+                const grid = document.getElementById(gridId);
+                if (!grid) return;
+
+                // Create 3x4 grid for 10 candies (with 2 empty spaces)
+                grid.style.gridTemplateColumns = 'repeat(4, 60px)';
+                grid.style.gridTemplateRows = 'repeat(3, 60px)';
+                grid.innerHTML = '';
+                
+                // Generate 10 unique candies for opponent pool
+                const candyEmojis = ['🍭', '🍬', '🧁', '🍩', '🍪', '🎂', '🍰', '🍫', '🍯', '🍮'];
+                const shuffledCandies = [...candyEmojis].sort(() => Math.random() - 0.5).slice(0, 10);
+                
+                for (let i = 0; i < 12; i++) { // 3x4 = 12 slots
+                    const cell = document.createElement('div');
+                    
+                    if (i < 10) { // First 10 slots have candies
+                        const emoji = shuffledCandies[i];
+                        cell.className = 'grid-cell';
+                        cell.textContent = emoji;
+                        cell.dataset.index = i;
+                        cell.dataset.candy = emoji;
+                        cell.style.background = 'linear-gradient(135deg, #FFD700, #FFA500)';
+                        
+                        // Enhanced mobile touch handling
+                        cell.addEventListener('touchstart', (e) => {
+                            e.preventDefault();
+                            cell.style.transform = 'scale(1.1)';
+                        });
+                        
+                        cell.addEventListener('touchend', (e) => {
+                            e.preventDefault();
+                            setTimeout(() => {
+                                cell.style.transform = '';
+                            }, 200);
+                            pickCandy(cell, emoji);
+                        });
+                        
+                        // Fallback for desktop
+                        cell.addEventListener('click', () => pickCandy(cell, emoji));
+                    } else {
+                        // Empty slots
+                        cell.className = 'grid-cell empty';
+                        cell.style.background = 'transparent';
+                        cell.style.border = '2px dashed rgba(255,255,255,0.3)';
+                    }
+                    
+                    grid.appendChild(cell);
+                }
+            });
+        }
+
+        // Pick candy from opponent's pool (new gameplay)
+        async function pickCandy(cell, candy) {
+            if (!gameState.currentGame || cell.classList.contains('picked')) return;
+            
+            // Visual feedback
+            if ('vibrate' in navigator) {
+                navigator.vibrate(50);
+            }
+            
+            // Make API call to pick candy
+            const result = await apiCall(`/games/${gameState.currentGame}/pick`, 'POST', {
+                player: 'player1',  // Frontend always plays as player1
+                candy_choice: candy
+            });
+            
+            if (result.success) {
+                // Remove candy from grid (disappear effect)
+                cell.style.transition = 'all 0.5s ease';
+                cell.style.transform = 'scale(0)';
+                cell.style.opacity = '0';
+                
+                setTimeout(() => {
+                    cell.classList.add('picked');
+                    cell.textContent = '';
+                    cell.style.background = 'rgba(0,0,0,0.1)';
+                    cell.style.border = '2px dashed rgba(255,255,255,0.2)';
+                    cell.style.transform = '';
+                    cell.style.opacity = '1';
+                }, 500);
+                
+                // Check if game ended
+                if (result.data && result.data.game_result !== 'ongoing') {
+                    setTimeout(() => {
+                        handleGameEnd(result.data);
+                    }, 1000);
+                }
+            } else {
+                // Show error
+                alert(result.message || 'Failed to pick candy');
+            }
+        }
+
+        // Handle game end
+        function handleGameEnd(gameData) {
+            const result = gameData.game_result;
+            let message = '';
+            
+            if (result === 'player1_win') {
+                message = '🎉 You Win! Congratulations!';
+                gameState.coins += 100;
+            } else if (result === 'player2_win') {
+                message = '💀 You picked the poison! Game Over!';
+            } else {
+                message = '🤝 It\'s a draw!';
+            }
+            
+            alert(message);
+            updateStats();
+            navigateToScreen('page1');
+        }
+        
+        // Mobile-optimized initialization
+        async function initMobileApp() {
+            updateStats();
+            initializeMobileGrids();
+            initializeLeaderboard();
+            updateDebugInfo();
+            initMobile();
+            
+            // Check backend connection on startup
+            await checkBackendConnection();
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', initMobileApp);
+    </script>
+</body>
+</html>

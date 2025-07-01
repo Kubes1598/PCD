@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poisoned Candy Duel - Homepage</title>
+    <style>
+        /* Base styles from PDF conversion */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #9e9e9e;
+            overflow: hidden;
+        }
+        
+        /* Page container styles from PDF */
+        #page-container {
+            position: relative;
+            background-color: #9e9e9e;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .pf {
+            position: relative;
+            background-color: white;
+            overflow: hidden;
+            margin: 13px auto;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            width: calc(100vw - 26px);
+            height: calc(100vh - 26px);
+            max-width: 375px;
+            max-height: 812px;
+        }
+        
+        .pc {
+            position: absolute;
+            border: 0;
+            padding: 0;
+            margin: 0;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            display: block;
+            transform-origin: 0 0;
+        }
+        
+        .bi {
+            position: absolute;
+            border: 0;
+            margin: 0;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            user-select: none;
+        }
+        
+        .t {
+            position: absolute;
+            white-space: pre;
+            font-size: 1px;
+            transform-origin: 0 100%;
+            unicode-bidi: bidi-override;
+            color: #000;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        /* Homepage specific styles */
+        .homepage-title {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            font-weight: bold;
+            color: #8B4513;
+            text-align: center;
+        }
+        
+        .menu-container {
+            position: absolute;
+            top: 120px;
+            left: 20px;
+            right: 20px;
+            bottom: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            gap: 15px;
+        }
+        
+        .menu-button {
+            background: linear-gradient(135deg, #D2691E, #8B4513);
+            border: none;
+            border-radius: 15px;
+            padding: 20px;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            box-shadow: 
+                0 8px 15px rgba(0,0,0,0.3),
+                inset 0 2px 0 rgba(255,255,255,0.3),
+                inset 0 -2px 0 rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .menu-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 
+                0 12px 20px rgba(0,0,0,0.4),
+                inset 0 2px 0 rgba(255,255,255,0.3),
+                inset 0 -2px 0 rgba(0,0,0,0.3);
+        }
+        
+        .menu-button:active {
+            transform: translateY(1px);
+            box-shadow: 
+                0 4px 8px rgba(0,0,0,0.3),
+                inset 0 2px 0 rgba(255,255,255,0.3),
+                inset 0 -2px 0 rgba(0,0,0,0.3);
+        }
+        
+        .menu-button.primary {
+            background: linear-gradient(135deg, #CD853F, #D2691E);
+            font-size: 20px;
+            padding: 25px;
+        }
+        
+        .menu-button.secondary {
+            background: linear-gradient(135deg, #A0522D, #8B4513);
+            font-size: 16px;
+            padding: 18px;
+        }
+        
+        /* Logo/Brand area */
+        .brand-area {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            height: 80px;
+            background: linear-gradient(135deg, #F4A460, #D2B48C);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .brand-text {
+            color: #8B4513;
+            font-size: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        
+        /* Navigation dots at bottom */
+        .nav-dots {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+        }
+        
+        .nav-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #8B4513;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-dot.active {
+            background: #D2691E;
+            transform: scale(1.2);
+        }
+        
+        .nav-dot:hover {
+            background: #CD853F;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 400px) {
+            .pf {
+                margin: 5px auto;
+                width: calc(100vw - 10px);
+                height: calc(100vh - 10px);
+            }
+            
+            .menu-container {
+                top: 100px;
+                left: 15px;
+                right: 15px;
+                gap: 12px;
+            }
+            
+            .menu-button {
+                padding: 15px;
+                font-size: 16px;
+            }
+            
+            .menu-button.primary {
+                font-size: 18px;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="page-container">
+        <div class="pf">
+            <div class="pc">
+                <!-- Brand/Logo Area -->
+                <div class="brand-area">
+                    <div class="brand-text">Poisoned Candy Duel</div>
+                </div>
+                
+                <!-- Main Menu Buttons -->
+                <div class="menu-container">
+                    <button class="menu-button primary" onclick="navigateToPage('play-online')">
+                        🌐 Play Online
+                    </button>
+                    
+                    <button class="menu-button secondary" onclick="navigateToPage('home')">
+                        🏠 Home
+                    </button>
+                    
+                    <button class="menu-button secondary" onclick="navigateToPage('rewards')">
+                        🏆 Rewards
+                    </button>
+                    
+                    <button class="menu-button secondary" onclick="navigateToPage('ranking')">
+                        📊 Ranking
+                    </button>
+                    
+                    <button class="menu-button secondary" onclick="navigateToPage('offline')">
+                        📱 Offline
+                    </button>
+                    
+                    <button class="menu-button secondary" onclick="navigateToPage('friends')">
+                        👥 Play with Friends
+                    </button>
+                </div>
+                
+                <!-- Navigation Dots -->
+                <div class="nav-dots">
+                    <div class="nav-dot active" onclick="goToPage(1)"></div>
+                    <div class="nav-dot" onclick="goToPage(2)"></div>
+                    <div class="nav-dot" onclick="goToPage(3)"></div>
+                    <div class="nav-dot" onclick="goToPage(4)"></div>
+                    <div class="nav-dot" onclick="goToPage(5)"></div>
+                    <div class="nav-dot" onclick="goToPage(6)"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function navigateToPage(page) {
+            switch(page) {
+                case 'play-online':
+                    alert('Navigating to Play Online page...');
+                    // window.location.href = 'play-online.html';
+                    break;
+                case 'home':
+                    alert('Navigating to Home/Profile page...');
+                    // window.location.href = 'profile.html';
+                    break;
+                case 'rewards':
+                    alert('Navigating to Rewards page...');
+                    // window.location.href = 'rewards.html';
+                    break;
+                case 'ranking':
+                    alert('Navigating to Ranking page...');
+                    // window.location.href = 'ranking.html';
+                    break;
+                case 'offline':
+                    alert('Navigating to Offline mode...');
+                    // window.location.href = 'offline.html';
+                    break;
+                case 'friends':
+                    alert('Navigating to Play with Friends...');
+                    // window.location.href = 'friends.html';
+                    break;
+                default:
+                    console.log('Unknown page:', page);
+            }
+        }
+        
+        function goToPage(pageNum) {
+            // Update active dot
+            document.querySelectorAll('.nav-dot').forEach((dot, index) => {
+                dot.classList.toggle('active', index + 1 === pageNum);
+            });
+            
+            // Navigate to different pages
+            switch(pageNum) {
+                case 1:
+                    // Already on homepage
+                    break;
+                case 2:
+                    alert('Going to page 2...');
+                    break;
+                case 3:
+                    alert('Going to page 3...');
+                    break;
+                case 4:
+                    alert('Going to page 4...');
+                    break;
+                case 5:
+                    alert('Going to page 5...');
+                    break;
+                case 6:
+                    alert('Going to page 6...');
+                    break;
+            }
+        }
+        
+        // Add some interactive effects
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add ripple effect to buttons
+            document.querySelectorAll('.menu-button').forEach(button => {
+                button.addEventListener('click', function(e) {
+                    const ripple = document.createElement('span');
+                    const rect = button.getBoundingClientRect();
+                    const size = Math.max(rect.width, rect.height);
+                    const x = e.clientX - rect.left - size / 2;
+                    const y = e.clientY - rect.top - size / 2;
+                    
+                    ripple.style.width = ripple.style.height = size + 'px';
+                    ripple.style.left = x + 'px';
+                    ripple.style.top = y + 'px';
+                    ripple.classList.add('ripple');
+                    
+                    button.appendChild(ripple);
+                    
+                    setTimeout(() => {
+                        ripple.remove();
+                    }, 600);
+                });
+            });
+        });
+    </script>
+    
+    <style>
+        /* Ripple effect */
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.6);
+            transform: scale(0);
+            animation: ripple 0.6s linear;
+            pointer-events: none;
+        }
+        
+        @keyframes ripple {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+    </style>
+</body>
+</html> 
