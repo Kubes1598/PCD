@@ -129,35 +129,50 @@ class PoisonedCandyDuel:
         Returns:
             True if successful, False otherwise
         """
+        print(f"🧪 set_poison_choice called: game_id={game_id}, player_id={player_id}, poison_candy={poison_candy}")
+        
         if game_id not in self.games:
+            print(f"❌ Game {game_id} not found")
             return False
         
         game = self.games[game_id]
+        print(f"🎲 Current game state: {game.state}")
+        
         if game.state != GameState.SETUP:
+            print(f"❌ Game not in setup state, current state: {game.state}")
             return False
         
         # Find the player
+        target_player = None
         if game.player1.id == player_id:
             target_player = game.player1
+            print(f"✅ Setting poison for Player 1: {target_player.name}")
         elif game.player2.id == player_id:
             target_player = game.player2
+            print(f"✅ Setting poison for Player 2: {target_player.name}")
         else:
+            print(f"❌ Invalid player ID: {player_id}")
             return False
         
         # Check if player has already set their poison
         if target_player.poison_choice is not None:
+            print(f"❌ Player {target_player.name} already set poison")
             return False  # Poison already set, cannot change
         
         # VERSION A: Validate poison candy is from PLAYER'S OWN pool
         if poison_candy not in target_player.owned_candies:
+            print(f"❌ Poison candy {poison_candy} not in player's owned candies")
+            print(f"Available candies: {list(target_player.owned_candies)}")
             return False
         
         # Set poison choice
         target_player.poison_choice = poison_candy
+        print(f"✅ Poison set: {poison_candy}")
         
         # Check if both players have made their poison choices
         if game.player1.poison_choice and game.player2.poison_choice:
             game.state = GameState.PLAYING
+            print(f"🎮 Both players set poison - transitioning to PLAYING state")
         
         game.last_updated = time.time()
         return True
@@ -178,56 +193,112 @@ class PoisonedCandyDuel:
         Returns:
             Dictionary with success status and game information
         """
+        print(f"🎮 make_move called: game_id={game_id}, player_id={player_id}, candy={candy}")
+        
         if game_id not in self.games:
+            print(f"❌ Game {game_id} not found")
             return {"success": False, "error": "Game not found"}
         
         game = self.games[game_id]
+        print(f"🎲 Current game state: {game.state}")
+        print(f"🎯 Player1 ID: {game.player1.id}")
+        print(f"🎯 Player2 ID: {game.player2.id}")
         
         if game.state != GameState.PLAYING:
+            print(f"❌ Game not in playing state, current state: {game.state}")
             return {"success": False, "error": "Game not in playing state"}
         
-        # Determine whose turn it is
-        current_player = (
+        # Find which player is making the move
+        current_player = None
+        opponent_player = None
+        
+        if game.player1.id == player_id:
+            current_player = game.player1
+            opponent_player = game.player2
+            print(f"✅ Player found: {current_player.name} (Player 1)")
+        elif game.player2.id == player_id:
+            current_player = game.player2
+            opponent_player = game.player1
+            print(f"✅ Player found: {current_player.name} (Player 2)")
+        else:
+            print(f"❌ Invalid player ID: {player_id}")
+            print(f"Available player IDs: {game.player1.id}, {game.player2.id}")
+            return {"success": False, "error": "Invalid player"}
+        
+        # Determine whose turn it is (alternating turns starting with player1)
+        expected_player = (
             game.player1 if game.current_turn % 2 == 1 else game.player2
         )
-        opponent_player = (
-            game.player2 if current_player == game.player1 else game.player1
-        )
         
-        if current_player.id != player_id:
+        if current_player != expected_player:
+            print(f"❌ Not player's turn. Current turn: {game.current_turn}, Expected: {expected_player.name}")
             return {"success": False, "error": "Not your turn"}
         
-        # Validate candy is from opponent's pool and not already collected
+        # Validate candy is from opponent's pool and available
         if candy not in opponent_player.owned_candies:
-            return {"success": False, "error": "Candy not from opponent's pool"}
+            print(f"❌ Candy {candy} not in opponent's pool")
+            return {"success": False, "error": "Candy not available in opponent's pool"}
         
-        # Check if candy is already collected or is opponent's poison
-        if candy in current_player.collected_candies:
+        # Check if candy was already collected by either player
+        if (candy in current_player.collected_candies or 
+            candy in opponent_player.collected_candies):
+            print(f"❌ Candy {candy} already collected")
             return {"success": False, "error": "Candy already collected"}
         
-        if candy in opponent_player.collected_candies:
-            return {"success": False, "error": "Candy already collected by opponent"}
+        print(f"✅ Move validation passed")
         
-        # Make the move
-        current_player.collected_candies.append(candy)
+        # Check if picked candy is opponent's poison
+        picked_poison = (candy == opponent_player.poison_choice)
         
-        # Check win conditions
-        result = self._check_game_end(game, current_player, candy)
-        
-        if result != GameResult.ONGOING:
+        if picked_poison:
+            # Current player loses by picking opponent's poison
             game.state = GameState.FINISHED
-            game.result = result
+            game.result = (
+                GameResult.PLAYER2_WIN if current_player == game.player1 
+                else GameResult.PLAYER1_WIN
+            )
+            print(f"💀 Player picked poison! Game over. Winner: {game.result}")
         else:
-            game.current_turn += 1
+            # Add candy to current player's collection if it's new
+            if candy not in current_player.collected_candies:
+                current_player.collected_candies.append(candy)
+                print(f"🍬 Added {candy} to {current_player.name}'s collection")
+            
+            # Check win condition (11 different candies)
+            if len(current_player.collected_candies) >= 11:
+                game.state = GameState.FINISHED
+                game.result = (
+                    GameResult.PLAYER1_WIN if current_player == game.player1 
+                    else GameResult.PLAYER2_WIN
+                )
+                print(f"🏆 Player wins by collecting 11 candies! Winner: {game.result}")
+            else:
+                # Advance turn
+                game.current_turn += 1
+                print(f"🔄 Turn advanced to: {game.current_turn}")
         
         game.last_updated = time.time()
         
+        # Determine final result string
+        result_str = "ongoing"
+        if game.state == GameState.FINISHED:
+            if game.result == GameResult.PLAYER1_WIN:
+                result_str = "player1_win"
+            elif game.result == GameResult.PLAYER2_WIN:
+                result_str = "player2_win"
+            else:
+                result_str = "draw"
+        
+        print(f"🎯 Move completed. Result: {result_str}")
+        
         return {
             "success": True,
+            "result": result_str,
+            "picked_poison": picked_poison,
             "game_state": self._get_game_state(game),
-            "result": result.value if result else None,
-            "current_turn": game.current_turn,
-            "game_over": result != GameResult.ONGOING
+            "winner": game.player1.id if game.result == GameResult.PLAYER1_WIN 
+                     else game.player2.id if game.result == GameResult.PLAYER2_WIN 
+                     else None
         }
     
     def _check_game_end(

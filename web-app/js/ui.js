@@ -324,7 +324,7 @@ function loadSettings() {
     return settings;
 }
 
-function applyTheme(theme) {
+function applyThemeDirectly(theme) {
     document.body.className = document.body.className.replace(/theme-\w+/g, '');
     if (theme !== 'default') {
         document.body.classList.add(`theme-${theme}`);
@@ -344,13 +344,13 @@ function isTouch() {
 document.addEventListener('keydown', (e) => {
     // ESC key - go back or close
     if (e.key === 'Escape') {
-        if (gameState.currentScreen !== 'main-menu') {
-            if (gameState.currentScreen === 'game-board') {
+        if (gameState.currentScreen !== 'page1') {
+            if (gameState.currentScreen === 'page3') {
                 if (confirm('Are you sure you want to return to the main menu? Your game will be lost.')) {
-                    showScreen('main-menu');
+                    showScreen('page1');
                 }
             } else {
-                showScreen('main-menu');
+                showScreen('page1');
             }
         }
     }
@@ -390,8 +390,8 @@ if (isTouch()) {
         
         // Swipe right - go back
         if (deltaX > 100 && Math.abs(deltaY) < 50) {
-            if (gameState.currentScreen !== 'main-menu') {
-                showScreen('main-menu');
+            if (gameState.currentScreen !== 'page1') {
+                showScreen('page1');
             }
         }
         
