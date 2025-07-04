@@ -264,14 +264,20 @@ class MockAPI {
     }
     
     generateCandies(count = 15) {
-        const candies = [];
-        const candyTypes = ['🍬', '🍭', '🍫', '🧁', '🍰', '🎂', '🍪', '🍩', '🍯', '🍮'];
+        // Use the same candy types as main game
+        const candyTypes = [
+            '🍏', '🍋', '🍇', '🍒', '🍎', '🍓', '🍑', '🍐', '🍌', '🫐', 
+            '🥭', '🍊', '🍉', '🍈', '🍍', '🥥', '🥑', '🥒', '🥕', '🥝', 
+            '🫛', '🌶️', '🫒', '🍅', '🥦', '🫑', '🧄', '🍆', '🥬', '🌽', 
+            '🧅', '🥔', '🫜', '🍠', '🥖', '🍞', '🥚', '🧇', '🧀', '🥞', 
+            '🧈', '🍖', '🍗', '🌭', '🥩', '🌮', '🌯', '🥙', '🥗', '🧆', 
+            '🍕', '🫔', '🦴', '🍝', '🍜', '🍥', '🍰', '🍬', '🍭', '🍪', 
+            '🍩', '🌰', '🍫', '🍵'
+        ];
         
-        for (let i = 0; i < count; i++) {
-            candies.push(candyTypes[Math.floor(Math.random() * candyTypes.length)]);
-        }
-        
-        return candies;
+        // Ensure no duplicates by shuffling and slicing
+        const shuffled = [...candyTypes].sort(() => Math.random() - 0.5);
+        return shuffled.slice(0, Math.min(count, candyTypes.length));
     }
     
     async createGame(playerData) {

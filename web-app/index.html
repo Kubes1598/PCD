@@ -345,8 +345,8 @@
                         <h3 class="text-xl font-display font-bold text-primary mb-4">Choose Your Poison Candy</h3>
                         <p class="text-gray-600 mb-8">Select one candy from your collection to poison. Your opponent will try to avoid it!</p>
                         
-                        <div id="poison-candy-grid" class="grid grid-cols-6 gap-3 mb-8 max-w-md mx-auto">
-                            <!-- Populated by JavaScript -->
+                        <div id="poison-candy-grid" class="mb-8">
+                            <!-- Populated by JavaScript - 4x4 Matrix -->
                         </div>
                         
                         <div id="selected-poison-display" class="mb-6 min-h-8">
@@ -486,6 +486,115 @@
                             <p class="text-gray-600 mb-4">Ultimate challenge</p>
                             <div class="flex items-center justify-center space-x-2 bg-danger bg-opacity-10 rounded-lg p-3">
                                 <span class="font-mono font-bold text-danger">Free Practice</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page 8: Enhanced Offline Game Board -->
+        <div id="page8" class="screen">
+            <div class="container mx-auto px-4 py-6">
+                <!-- Game Board Header with Profile Timers -->
+                <div class="game-board-header">
+                    <!-- Player 1 Profile -->
+                    <div class="player-profile">
+                        <div class="player-profile-wrapper">
+                            <div class="profile-logo">
+                                P1
+                            </div>
+                            <svg class="circular-timer" viewBox="0 0 80 80">
+                                <circle class="circular-timer-track" cx="40" cy="40" r="36"></circle>
+                                <circle class="circular-timer-progress" id="player1-timer-progress" cx="40" cy="40" r="36" 
+                                        style="stroke-dasharray: 226.2; stroke-dashoffset: 0;"></circle>
+                            </svg>
+                        </div>
+                        <div class="player-name">Player 1</div>
+                    </div>
+                    
+                    <!-- Round Counter -->
+                    <div class="round-counter">
+                        <span class="round-number" id="round-display">1</span>
+                        <span class="round-label">Round</span>
+                    </div>
+                    
+                    <!-- Player 2 Profile -->
+                    <div class="player-profile">
+                        <div class="player-profile-wrapper">
+                            <div class="profile-logo player2">
+                                AI
+                            </div>
+                            <svg class="circular-timer" viewBox="0 0 80 80">
+                                <circle class="circular-timer-track" cx="40" cy="40" r="36"></circle>
+                                <circle class="circular-timer-progress" id="player2-timer-progress" cx="40" cy="40" r="36" 
+                                        style="stroke-dasharray: 226.2; stroke-dashoffset: 0;"></circle>
+                            </svg>
+                        </div>
+                        <div class="player-name">AI Opponent</div>
+                    </div>
+                </div>
+
+                <!-- Horizontal Game Board -->
+                <div class="game-board-horizontal">
+                    <!-- Player 1 Section -->
+                    <div class="candy-section player-section">
+                        <div class="candy-section-header">
+                            <div class="candy-section-title">
+                                🏠 Your Candies
+                            </div>
+                            <div class="candy-counter" id="player-candy-count">12 left</div>
+                        </div>
+                        <div class="candy-grid-enhanced" id="player-candy-grid-enhanced">
+                            <!-- Player's candies populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Player 2 Section -->
+                    <div class="candy-section opponent-section">
+                        <div class="candy-section-header">
+                            <div class="candy-section-title">
+                                🎯 Opponent's Candies
+                            </div>
+                            <div class="candy-counter" id="opponent-candy-count">12 left</div>
+                        </div>
+                        <div class="candy-grid-enhanced" id="opponent-candy-grid-enhanced">
+                            <!-- Opponent's candies populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Game Status and Actions -->
+                <div class="card mt-6">
+                    <div class="p-6">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-4">
+                                <div id="game-status-display-enhanced" class="btn btn-info cursor-default">
+                                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,6A1,1 0 0,1 13,7A1,1 0 0,1 12,8A1,1 0 0,1 11,7A1,1 0 0,1 12,6M12,10C12.5,10 13,10.5 13,11V17C13,17.5 12.5,18 12,18C11.5,18 11,17.5 11,17V11C11,10.5 11.5,10 12,10Z"/>
+                                    </svg>
+                                    <span id="game-status-text-enhanced">🎯 Your Turn - Pick a candy!</span>
+                                </div>
+                                <div class="btn btn-secondary cursor-default">
+                                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M19,5V19H5V5H19Z"/>
+                                    </svg>
+                                    <span id="collection-status">0/11 collected</span>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button class="btn btn-secondary" onclick="showScreen('page1')">
+                                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+                                    </svg>
+                                    Home
+                                </button>
+                                <button class="btn btn-secondary" onclick="showHelp()">
+                                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
+                                    </svg>
+                                    Help
+                                </button>
                             </div>
                         </div>
                     </div>

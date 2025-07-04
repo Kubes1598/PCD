@@ -169,7 +169,7 @@ async def set_poison(game_id: str, request: SetPoisonRequest):
         player2 = game_state["player2"]
         
         # Check if any player is AI and hasn't set poison (support multiple AI names)
-        ai_names = ["AI Assistant", "AI Opponent", "AI", "Computer"]
+        ai_names = ["AI Assistant", "AI Opponent", "AI", "Computer", "Online Opponent", "Opponent", "Friend"]
         
         # If player2 is AI and hasn't set poison, set it automatically
         if (player2["name"] in ai_names and not player2["has_set_poison"]):

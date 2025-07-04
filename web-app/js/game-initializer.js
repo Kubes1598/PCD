@@ -472,18 +472,20 @@ class GameInitializer {
 
     // ===== UTILITY METHODS =====
     _generateRandomCandies(count) {
+        // Use the same candy types as main game
         const candyTypes = [
-            '🍬', '🍭', '🍫', '🧁', '🍰', '🎂', '🍪', '🍩', '🍯', '🍮',
-            '🧊', '🍓', '🍒', '🍑', '🥭', '🍍', '🥝', '🍇', '🫐', '🍉',
-            '🍊', '🍋', '🍌', '🍈', '🍎', '🍏', '🥥', '🥕', '🌽', '🥜'
+            '🍏', '🍋', '🍇', '🍒', '🍎', '🍓', '🍑', '🍐', '🍌', '🫐', 
+            '🥭', '🍊', '🍉', '🍈', '🍍', '🥥', '🥑', '🥒', '🥕', '🥝', 
+            '🫛', '🌶️', '🫒', '🍅', '🥦', '🫑', '🧄', '🍆', '🥬', '🌽', 
+            '🧅', '🥔', '🫜', '🍠', '🥖', '🍞', '🥚', '🧇', '🧀', '🥞', 
+            '🧈', '🍖', '🍗', '🌭', '🥩', '🌮', '🌯', '🥙', '🥗', '🧆', 
+            '🍕', '🫔', '🦴', '🍝', '🍜', '🍥', '🍰', '🍬', '🍭', '🍪', 
+            '🍩', '🌰', '🍫', '🍵'
         ];
         
-        const candies = [];
-        for (let i = 0; i < count; i++) {
-            const randomCandy = candyTypes[Math.floor(Math.random() * candyTypes.length)];
-            candies.push(randomCandy);
-        }
-        return candies;
+        // Ensure no duplicates by shuffling and slicing
+        const shuffled = [...candyTypes].sort(() => Math.random() - 0.5);
+        return shuffled.slice(0, Math.min(count, candyTypes.length));
     }
 
     _generateRoomCode() {

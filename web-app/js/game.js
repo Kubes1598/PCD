@@ -72,18 +72,103 @@ class GameState {
 
 // ===== CANDY DEFINITIONS =====
 const CANDY_TYPES = [
-    '🍬', '🍭', '🍫', '🧁', '🍰', '🎂', '🍪', '🍩', '🍯', '🍮',
-    '🧊', '🍓', '🍒', '🍑', '🥭', '🍍', '🥝', '🍇', '🫐', '🍉',
-    '🍊', '🍋', '🍌', '🍈', '🍎', '🍏', '🥥', '🥕', '🌽', '🥜'
+    '🍏', '🍋', '🍇', '🍒', '🍎', '🍓', '🍑', '🍐', '🍌', '🫐', 
+    '🥭', '🍊', '🍉', '🍈', '🍍', '🥥', '🥑', '🥒', '🥕', '🥝', 
+    '🫛', '🌶️', '🫒', '🍅', '🥦', '🫑', '🧄', '🍆', '🥬', '🌽', 
+    '🧅', '🥔', '🫜', '🍠', '🥖', '🍞', '🥚', '🧇', '🧀', '🥞', 
+    '🧈', '🍖', '🍗', '🌭', '🥩', '🌮', '🌯', '🥙', '🥗', '🧆', 
+    '🍕', '🫔', '🦴', '🍝', '🍜', '🍥', '🍰', '🍬', '🍭', '🍪', 
+    '🍩', '🌰', '🍫', '🍵'
 ];
 
+// Global candy allocation tracker to ensure absolute uniqueness
+let globalUsedCandies = new Set();
+
 function getRandomCandies(count) {
-    const candies = [];
-    for (let i = 0; i < count; i++) {
-        const randomCandy = CANDY_TYPES[Math.floor(Math.random() * CANDY_TYPES.length)];
-        candies.push(randomCandy);
+    // Ensure no duplicates by shuffling the entire candy array
+    const shuffledCandies = [...CANDY_TYPES].sort(() => Math.random() - 0.5);
+    
+    // Take only the number of candies requested (max 30 since we have 30 different types)
+    const maxCandies = Math.min(count, CANDY_TYPES.length);
+    const uniqueCandies = shuffledCandies.slice(0, maxCandies);
+    
+    // CRITICAL FIX: Ensure absolute uniqueness by checking against global tracker
+    const finalCandies = [...new Set(uniqueCandies)];
+    if (finalCandies.length !== uniqueCandies.length) {
+        console.warn('⚠️ Duplicates detected and removed!');
     }
-    return candies;
+    
+    console.log(`Generated ${finalCandies.length} unique candies:`, finalCandies);
+    return finalCandies;
+}
+
+// Generate completely unique candy sets for the entire game
+function generateUniqueGameCandies() {
+    console.log('🍭 Generating completely unique candy sets for entire game...');
+    
+    // Reset the global tracker
+    globalUsedCandies.clear();
+    
+    // Verify we have enough candies
+    if (CANDY_TYPES.length < 24) {
+        console.error('❌ Not enough candy types! Need at least 24, have:', CANDY_TYPES.length);
+        throw new Error(`Need at least 24 candy types, but only have ${CANDY_TYPES.length}`);
+    }
+    
+    // Shuffle all available candies multiple times for better randomness
+    let shuffledCandies = [...CANDY_TYPES];
+    for (let i = 0; i < 3; i++) {
+        shuffledCandies = shuffledCandies.sort(() => Math.random() - 0.5);
+    }
+    
+    // CRITICAL FIX: Allocate candies ensuring NO overlaps anywhere
+    const playerCandies = shuffledCandies.slice(0, 12);      // First 12 unique candies
+    const opponentCandies = shuffledCandies.slice(12, 24);   // Next 12 unique candies (no overlap)
+    
+    // Verify arrays are exactly the right length
+    if (playerCandies.length !== 12 || opponentCandies.length !== 12) {
+        console.error('❌ Invalid candy array lengths!', {
+            playerLength: playerCandies.length,
+            opponentLength: opponentCandies.length
+        });
+        throw new Error('Failed to generate correct candy array lengths');
+    }
+    
+    // Force uniqueness check (this should be redundant but critical)
+    const playerSet = new Set(playerCandies);
+    const opponentSet = new Set(opponentCandies);
+    
+    if (playerSet.size !== 12) {
+        console.error('❌ PLAYER DUPLICATES DETECTED!', playerCandies);
+        throw new Error('Player candies contain duplicates!');
+    }
+    
+    if (opponentSet.size !== 12) {
+        console.error('❌ OPPONENT DUPLICATES DETECTED!', opponentCandies);
+        throw new Error('Opponent candies contain duplicates!');
+    }
+    
+    // Check for overlaps
+    const intersection = [...playerSet].filter(candy => opponentSet.has(candy));
+    if (intersection.length > 0) {
+        console.error('❌ OVERLAP DETECTED:', intersection);
+        throw new Error('Player and opponent candies overlap!');
+    }
+    
+    // CRITICAL FIX: Poison selection uses player's actual game candies
+    const poisonCandies = [...playerCandies]; // Exact copy
+    
+    console.log('✅ Generated unique candy sets:');
+    console.log('   Player candies:', playerCandies);
+    console.log('   Opponent candies:', opponentCandies);
+    console.log('   Poison selection (same as player):', poisonCandies);
+    console.log('✅ All validation checks passed');
+    
+    return {
+        playerCandies: playerCandies,
+        opponentCandies: opponentCandies,
+        poisonCandies: poisonCandies
+    };
 }
 
 // ===== GLOBAL GAME STATE =====
@@ -159,6 +244,13 @@ function showScreen(screenId) {
                 break;
         case 'page7':
             // Offline mode - no special handling needed
+                break;
+        case 'page8':
+            // Enhanced offline game board - initialize if game started
+            if (gameState && gameState.gameStarted) {
+                console.log('Initializing enhanced game board');
+                initializeEnhancedGameBoard();
+            }
                 break;
         default:
             console.log(`No special handling for screen: ${screenId}`);
@@ -313,8 +405,12 @@ async function startGame() {
             // Fallback for offline mode or unknown mode
             console.log('Starting offline game mode');
             gameState.gameMode = 'offline';
-            gameState.playerCandies = getRandomCandies(12);
-            gameState.opponentCandies = getRandomCandies(12);
+            
+            // Generate completely unique candy sets using new system
+            const uniqueCandySets = generateUniqueGameCandies();
+            gameState.playerCandies = uniqueCandySets.playerCandies;
+            gameState.opponentCandies = uniqueCandySets.opponentCandies;
+            
             gameState.playerCollection = [];
             gameState.opponentCollection = [];
             gameState.isPlayerTurn = true;
@@ -338,15 +434,47 @@ async function startGame() {
         
     } catch (error) {
         console.error('Error starting game:', error);
+        console.error('Error stack:', error.stack);
         showNotification('❌ Failed to start game: ' + error.message, 'error', 5000);
+        
+        // More specific error messages based on error type
+        let errorTitle = '❌ Game Start Error';
+        let errorContent = '';
+        
+        if (error.message.includes('duplicate')) {
+            errorTitle = '❌ Duplicate Candy Error';
+            errorContent = `
+                <div class="text-center">
+                    <p class="text-lg mb-4">Duplicate candies detected!</p>
+                    <p class="text-gray-600 mb-2">The candy generation system found duplicate items.</p>
+                    <p class="text-sm text-gray-500">This should be automatically fixed now. Please try again.</p>
+                </div>
+            `;
+        } else if (error.message.includes('overlap')) {
+            errorTitle = '❌ Candy Pool Error';
+            errorContent = `
+                <div class="text-center">
+                    <p class="text-lg mb-4">Candy pool overlap detected!</p>
+                    <p class="text-gray-600 mb-2">Player and opponent candies must be unique.</p>
+                    <p class="text-sm text-gray-500">The system will regenerate unique candy sets.</p>
+                </div>
+            `;
+        } else {
+            errorContent = `
+                <div class="text-center">
+                    <p class="text-lg mb-4">Failed to start AI game</p>
+                    <p class="text-gray-600">${error.message}</p>
+                    <p class="text-sm text-gray-500 mt-2">Please try again or contact support if the issue persists</p>
+                </div>
+            `;
+        }
+        
         createModal(
-            '❌ Game Error',
-            `<div class="text-center">
-                <p class="text-lg mb-4">Failed to start game</p>
-                <p class="text-gray-600">${error.message}</p>
-            </div>`,
+            errorTitle,
+            errorContent,
             [
                 { text: 'Try Again', action: () => { closeModal(); startGame(); }, class: 'btn-primary' },
+                { text: 'Play Offline', action: () => { closeModal(); startAIGame('easy'); }, class: 'btn-secondary' },
                 { text: 'Main Menu', action: () => { closeModal(); showScreen('page1'); }, class: 'btn-secondary' }
             ]
         );
@@ -365,13 +493,39 @@ function initializePoisonSelection() {
     
     candyGrid.innerHTML = '';
     
-    // Use player's owned candies for poison selection
-    const playerCandies = gameState.playerCandies || [];
+    // CRITICAL FIX: Use player's actual game candies for poison selection
+    // This ensures the poison selection pool matches the player's game pool perfectly
+    let playerCandies = gameState.playerCandies || [];
     console.log('Player candies for poison selection:', playerCandies);
     
     if (playerCandies.length === 0) {
         console.error('No player candies available for poison selection');
         return;
+    }
+    
+    // CRITICAL FIX: Use player's actual candies (typically 12) for poison selection
+    // No need to force 16 - use the actual player candy set
+    console.log('✅ Using player\'s actual game candies for poison selection:', playerCandies);
+    
+    // CRITICAL: Verify all candies are unique
+    const uniqueCandies = [...new Set(playerCandies)];
+    if (uniqueCandies.length !== playerCandies.length) {
+        console.error('❌ DUPLICATE CANDIES DETECTED IN PLAYER POOL!');
+        console.error('Original array:', playerCandies);
+        console.error('Unique array:', uniqueCandies);
+        console.error('Duplicates found:', playerCandies.filter((candy, index) => playerCandies.indexOf(candy) !== index));
+        
+        // Try to fix by using unique candies
+        console.log('🔧 Attempting to fix by using unique candies...');
+        gameState.playerCandies = uniqueCandies;
+        playerCandies = uniqueCandies;
+        
+        if (uniqueCandies.length < 12) {
+            console.error('❌ Not enough unique candies after deduplication!');
+            throw new Error(`Duplicate candies found in player pool! Only ${uniqueCandies.length} unique candies available.`);
+        }
+        
+        console.log('✅ Fixed duplicate issue by using unique candies');
     }
     
     // Clear previous selection
@@ -397,33 +551,8 @@ function initializePoisonSelection() {
         candyElement.textContent = candy;
         candyElement.dataset.index = index;
         candyElement.dataset.candy = candy;
-        candyElement.style.cursor = 'pointer';
-        candyElement.style.padding = '12px';
-        candyElement.style.margin = '4px';
-        candyElement.style.border = '2px solid #ddd';
-        candyElement.style.borderRadius = '8px';
-        candyElement.style.fontSize = '20px';
-        candyElement.style.textAlign = 'center';
-        candyElement.style.backgroundColor = '#f8f9fa';
-        candyElement.style.userSelect = 'none';
-        candyElement.style.transition = 'all 0.3s ease';
         
-        // Add hover effects
-        candyElement.addEventListener('mouseenter', function() {
-            if (!this.classList.contains('selected')) {
-                this.style.backgroundColor = '#e9ecef';
-                this.style.transform = 'scale(1.05)';
-            }
-        });
-        
-        candyElement.addEventListener('mouseleave', function() {
-            if (!this.classList.contains('selected')) {
-                this.style.backgroundColor = '#f8f9fa';
-                this.style.transform = 'scale(1)';
-            }
-        });
-        
-        // CRITICAL FIX: Add click event listener properly
+        // Add click event listener
         candyElement.addEventListener('click', function() {
             console.log('Candy clicked:', candy);
             selectPoison(candy, index, this);
@@ -441,15 +570,10 @@ function selectPoison(candy, index, element) {
     // Remove previous selection
     document.querySelectorAll('#poison-candy-grid .poison-option').forEach(item => {
         item.classList.remove('selected');
-        item.style.border = '2px solid #ddd';
-        item.style.backgroundColor = '#f8f9fa';
     });
     
     // Select new poison
     element.classList.add('selected');
-    element.style.border = '3px solid #28a745';
-    element.style.backgroundColor = '#d4edda';
-    element.style.boxShadow = '0 0 10px rgba(40, 167, 69, 0.5)';
     gameState.selectedPoison = candy;
     
     // Update display
@@ -517,11 +641,8 @@ async function confirmPoison() {
             
             // Small delay for notification to show, then start game
             setTimeout(() => {
-                // Go to the game screen
-                showScreen('page3');
-                
-                // Use the existing beautiful page3 interface - just populate it with candies
-                initializeGameBoardInPage();
+                // Navigate to the enhanced game board
+                navigateToEnhancedGameBoard();
                 
                 console.log('✅ Game is now playable!');
             }, 500);
@@ -577,10 +698,11 @@ async function confirmPoison() {
                 showScreen('page3'); // Show the Dubai game screen
                 initializeGameBoardInPage(); // Initialize the game board properly
             
-            // Start timer for online/friends modes
-            if (gameState.gameMode === 'online' || gameState.gameMode === 'friends') {
-                startTurnTimer();
-            }
+                // Start non-blocking timer for online/friends modes
+                if (gameState.gameMode === 'online' || gameState.gameMode === 'friends') {
+                    console.log('🎮 Starting online game with non-blocking timer');
+                    startTurnTimer();
+                }
             }, 500);
         } else {
             throw new Error(result.message || 'Failed to set poison');
@@ -712,49 +834,52 @@ function updateGameBoard() {
         const isAvailable = gameState.gameMode === 'offline' || gameState.gameMode === 'ai' ? 
             !gameState.opponentCollection.includes(candy) : availableCandies.includes(candy);
         
-        // Apply base styling to all candy elements
+        // Apply subtle base styling to match left side design
         candyElement.style.padding = '12px';
         candyElement.style.margin = '4px';
         candyElement.style.borderRadius = '8px';
-        candyElement.style.fontSize = '24px';
+        candyElement.style.fontSize = '20px';
         candyElement.style.textAlign = 'center';
-        candyElement.style.border = '2px solid transparent';
+        candyElement.style.border = '2px solid #e9ecef';
+        candyElement.style.background = '#f8f9fa';
         candyElement.style.transition = 'all 0.2s ease';
         candyElement.style.userSelect = 'none';
-        candyElement.style.fontWeight = 'bold';
+        candyElement.style.fontWeight = 'normal';
+        candyElement.style.color = '#6c757d';
         
         if (gameState.isPlayerTurn && !gameState.gameEnded && isAvailable) {
-            // Clickable candy styling
+            // Subtle clickable candy styling to match left side
             candyElement.style.cursor = 'pointer';
-            candyElement.style.backgroundColor = '#f8f9fa';
-            candyElement.style.border = '2px solid #28a745';
-            candyElement.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+            candyElement.style.backgroundColor = '#ffffff';
+            candyElement.style.border = '2px solid #ced4da';
+            candyElement.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+            candyElement.style.color = '#495057';
             candyElement.title = 'Click to collect this candy!';
             
             candyElement.addEventListener('click', () => {
                 console.log('Candy clicked:', candy);
-                candyElement.style.backgroundColor = '#28a745';
-                candyElement.style.color = 'white';
+                candyElement.style.backgroundColor = '#e9ecef';
+                candyElement.style.color = '#495057';
                 candyElement.style.transform = 'scale(0.95)';
                 pickCandy(candy, index, candyElement);
             });
             
-            // Add hover effect
+            // Add subtle hover effect
             candyElement.addEventListener('mouseenter', () => {
                 if (!gameState.gameEnded && gameState.isPlayerTurn) {
-                    candyElement.style.backgroundColor = '#e8f5e8';
-                    candyElement.style.border = '2px solid #20c997';
-                    candyElement.style.transform = 'scale(1.05)';
-                    candyElement.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                    candyElement.style.backgroundColor = '#e9ecef';
+                    candyElement.style.border = '2px solid #adb5bd';
+                    candyElement.style.transform = 'scale(1.02)';
+                    candyElement.style.boxShadow = '0 2px 4px rgba(0,0,0,0.15)';
                 }
             });
             
             candyElement.addEventListener('mouseleave', () => {
                 if (!gameState.gameEnded && gameState.isPlayerTurn) {
-                    candyElement.style.backgroundColor = '#f8f9fa';
-                    candyElement.style.border = '2px solid #28a745';
+                    candyElement.style.backgroundColor = '#ffffff';
+                    candyElement.style.border = '2px solid #ced4da';
                     candyElement.style.transform = 'scale(1)';
-                    candyElement.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                    candyElement.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
                 }
             });
         } else {
@@ -1261,6 +1386,7 @@ function handleGameEnd(result) {
     gameState.gameEnded = true;
     
     let playerWon = false;
+    let isDraw = false;
     let message = "";
     
     switch(result) {
@@ -1273,14 +1399,142 @@ function handleGameEnd(result) {
             message = "You lost! Better luck next time.";
             break;
         case "draw":
-            playerWon = false; // Treat draw as not winning for stats
-            message = "It's a draw!";
+            playerWon = false;
+            isDraw = true;
+            message = "It's a draw! Both players collected 11 candies!";
             break;
         default:
             message = "Game ended.";
     }
     
-    endGame(playerWon, message);
+    endGame(playerWon, message, isDraw);
+}
+
+function endGame(playerWon, message, isDraw = false) {
+    console.log('Game ended. Player won:', playerWon, 'Message:', message, 'Is draw:', isDraw);
+    
+    // Stop any timers
+    stopTurnTimer();
+    
+    gameState.gameEnded = true;
+    
+    // Only record result if not a draw
+    if (!isDraw) {
+        gameState.recordGameResult(playerWon);
+    }
+    
+    // Update result screen elements
+    const resultIcon = document.getElementById('result-icon');
+    const resultTitle = document.getElementById('result-title');
+    const resultMessage = document.getElementById('result-message');
+    const finalPlayerScore = document.getElementById('final-player-score');
+    const finalOpponentScore = document.getElementById('final-opponent-score');
+    
+    if (resultIcon) {
+        resultIcon.textContent = isDraw ? '🤝' : (playerWon ? '🏆' : '💔');
+    }
+    
+    if (resultTitle) {
+        resultTitle.textContent = isDraw ? 'Draw!' : (playerWon ? 'Victory!' : 'Defeat!');
+        resultTitle.className = `text-3xl font-display font-bold mb-4 ${isDraw ? 'text-warning' : (playerWon ? 'text-success' : 'text-danger')}`;
+    }
+    
+    if (resultMessage) {
+        resultMessage.textContent = message;
+    }
+    
+    if (finalPlayerScore) {
+        finalPlayerScore.textContent = gameState.playerCollection.length;
+    }
+    
+    if (finalOpponentScore) {
+        finalOpponentScore.textContent = gameState.opponentCollection.length;
+    }
+    
+    // Show result screen
+    showScreen('page5');
+    
+    // Create appropriate modal based on result
+    if (isDraw) {
+        // Draw modal with new round option
+        setTimeout(() => {
+            createModal(
+                '🤝 Draw Game!',
+                `<div class="text-center">
+                    <div class="text-6xl mb-4">⚖️</div>
+                    <p class="text-lg mb-4">${message}</p>
+                    <div class="bg-warning bg-opacity-10 rounded-lg p-4 mb-4">
+                        <p class="text-warning font-bold">Final Score: ${gameState.playerCollection.length} - ${gameState.opponentCollection.length}</p>
+                        <p class="text-warning">Both players avoided poison and collected 11 candies!</p>
+                    </div>
+                    <p class="text-gray-600">Ready for a tiebreaker round?</p>
+                </div>`,
+                [
+                    { text: 'New Round', action: () => { closeModal(); startNewRound(); }, class: 'btn-primary' },
+                    { text: 'Main Menu', action: () => { closeModal(); showScreen('page1'); }, class: 'btn-secondary' }
+                ]
+            );
+        }, 1000);
+    } else if (playerWon) {
+        // Victory modal
+        setTimeout(() => {
+            createModal(
+                '🎉 Congratulations!',
+                `<div class="text-center">
+                    <div class="text-6xl mb-4">🏆</div>
+                    <p class="text-lg mb-4">${message}</p>
+                    <div class="bg-success bg-opacity-10 rounded-lg p-4">
+                        <p class="text-success font-bold">+${gameState.playerCollection.length * 10} XP</p>
+                        <p class="text-success">+${gameState.playerCollection.length * 5} Coins</p>
+                    </div>
+                </div>`,
+                [
+                    { text: 'Play Again', action: () => { closeModal(); startNewGameNew(); }, class: 'btn-primary' },
+                    { text: 'Main Menu', action: () => { closeModal(); showScreen('page1'); }, class: 'btn-secondary' }
+                ]
+            );
+        }, 1000);
+    } else {
+        // Loss modal
+        setTimeout(() => {
+            createModal(
+                '💔 Game Over',
+                `<div class="text-center">
+                    <div class="text-6xl mb-4">😞</div>
+                    <p class="text-lg mb-4">${message}</p>
+                    <div class="bg-danger bg-opacity-10 rounded-lg p-4">
+                        <p class="text-danger">Better luck next time!</p>
+                        <p class="text-danger">Final Score: ${gameState.playerCollection.length}/11</p>
+                    </div>
+                </div>`,
+                [
+                    { text: 'Try Again', action: () => { closeModal(); startNewGameNew(); }, class: 'btn-primary' },
+                    { text: 'Main Menu', action: () => { closeModal(); showScreen('page1'); }, class: 'btn-secondary' }
+                ]
+            );
+        }, 1000);
+    }
+}
+
+// Function to start a new round after a draw
+function startNewRound() {
+    console.log('🔄 Starting new round after draw...');
+    
+    // Reset game state for new round
+    gameState.gameEnded = false;
+    gameState.gameStarted = false;
+    gameState.playerCollection = [];
+    gameState.opponentCollection = [];
+    gameState.selectedPoison = null;
+    gameState.opponentPoison = null;
+    gameState.isPlayerTurn = true;
+    gameState.round = 1;
+    
+    // Show notification
+    showNotification('🔄 Starting new round!', 'info', 2000);
+    
+    // Start a new game
+    startNewGameNew();
 }
 
 async function aiTurn() {
@@ -1370,68 +1624,6 @@ async function aiTurn() {
         if (gameState.gameMode === 'online' || gameState.gameMode === 'friends') {
             startTurnTimer();
         }
-    }
-}
-
-function endGame(playerWon, message) {
-    console.log('Game ended. Player won:', playerWon, 'Message:', message);
-    
-    // Stop any timers
-    stopTurnTimer();
-    
-    gameState.gameEnded = true;
-    gameState.recordGameResult(playerWon);
-    
-    // Update result screen elements
-    const resultIcon = document.getElementById('result-icon');
-    const resultTitle = document.getElementById('result-title');
-    const resultMessage = document.getElementById('result-message');
-    const finalPlayerScore = document.getElementById('final-player-score');
-    const finalOpponentScore = document.getElementById('final-opponent-score');
-    
-    if (resultIcon) {
-        resultIcon.textContent = playerWon ? '🏆' : '💔';
-    }
-    
-    if (resultTitle) {
-        resultTitle.textContent = playerWon ? 'Victory!' : 'Defeat!';
-        resultTitle.className = `text-3xl font-display font-bold mb-4 ${playerWon ? 'text-success' : 'text-danger'}`;
-    }
-    
-    if (resultMessage) {
-        resultMessage.textContent = message;
-    }
-    
-    if (finalPlayerScore) {
-        finalPlayerScore.textContent = gameState.playerCollection.length;
-    }
-    
-    if (finalOpponentScore) {
-        finalOpponentScore.textContent = gameState.opponentCollection.length;
-    }
-    
-    // Show result screen
-    showScreen('page5');
-    
-    // Create a celebration modal for wins
-    if (playerWon) {
-        setTimeout(() => {
-            createModal(
-                '🎉 Congratulations!',
-                `<div class="text-center">
-                    <div class="text-6xl mb-4">🏆</div>
-                    <p class="text-lg mb-4">${message}</p>
-                    <div class="bg-success bg-opacity-10 rounded-lg p-4">
-                        <p class="text-success font-bold">+${gameState.playerCollection.length * 10} XP</p>
-                        <p class="text-success">+${gameState.playerCollection.length * 5} Coins</p>
-                    </div>
-                </div>`,
-                [
-                    { text: 'Play Again', action: () => { closeModal(); startNewGameNew(); }, class: 'btn-primary' },
-                    { text: 'Main Menu', action: () => { closeModal(); showScreen('page1'); }, class: 'btn-secondary' }
-                ]
-            );
-        }, 1000);
     }
 }
 
@@ -1808,9 +2000,19 @@ function createModal(title, content, buttons = []) {
         </div>
         <div>${content}</div>
         <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
-            ${buttons.length > 0 ? buttons.map(btn => `<button class="btn ${btn.class || 'btn-secondary'}" onclick="${btn.onclick}">${btn.text}</button>`).join('') : '<button class="btn btn-primary" onclick="closeModal()">Close</button>'}
+            ${buttons.length > 0 ? buttons.map((btn, index) => `<button class="btn ${btn.class || 'btn-secondary'}" id="modal-btn-${index}">${btn.text}</button>`).join('') : '<button class="btn btn-primary" onclick="closeModal()">Close</button>'}
         </div>
     `;
+    
+    // Add event listeners for buttons after creating the modal
+    if (buttons.length > 0) {
+        buttons.forEach((btn, index) => {
+            const buttonElement = modalContent.querySelector(`#modal-btn-${index}`);
+            if (buttonElement && btn.action) {
+                buttonElement.addEventListener('click', btn.action);
+            }
+        });
+    }
     
     modal.appendChild(modalContent);
     document.body.appendChild(modal);
@@ -1848,11 +2050,26 @@ function startAIGame(difficulty) {
     gameState.aiDifficulty = difficulty;
     gameState.playerName = 'Player';
     
-    // Create candy arrays immediately
-    gameState.playerCandies = ['🍭', '🍪', '🍫', '🧁', '🍰', '🍯', '🍮', '🍬', '🍩', '🎂', '🍊', '🍎'];
-    gameState.opponentCandies = ['🍇', '🍓', '🥭', '🍌', '🍒', '🥝', '🍑', '🍈', '🍉', '🍐', '🥥', '🍍'];
+    // CRITICAL FIX: Generate completely unique candy sets using the new system
+    try {
+        const uniqueCandySets = generateUniqueGameCandies();
+        gameState.playerCandies = uniqueCandySets.playerCandies;
+        gameState.opponentCandies = uniqueCandySets.opponentCandies;
+        console.log('✅ Successfully generated unique candy sets for AI game');
+    } catch (error) {
+        console.error('❌ Error generating candies:', error);
+        // Fallback: create simple unique arrays
+        const shuffled = [...CANDY_TYPES].sort(() => Math.random() - 0.5);
+        gameState.playerCandies = shuffled.slice(0, 12);
+        gameState.opponentCandies = shuffled.slice(12, 24);
+        console.log('✅ Used fallback candy generation');
+    }
     gameState.playerCollection = [];
     gameState.opponentCollection = [];
+    
+    console.log('✅ Generated unique candies for AI game:');
+    console.log('   Player:', gameState.playerCandies);
+    console.log('   Opponent:', gameState.opponentCandies);
     
     // Reset game state
     gameState.selectedPoison = null; // User must select
@@ -1948,19 +2165,62 @@ function createOfflineGameInterface() {
             
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 20px;">
                 <div>
-                    <h4 style="text-align: center; color: #333; margin-bottom: 15px;">🎯 Opponent's Candies</h4>
-                    <div style="text-align: center; margin-bottom: 10px;">
-                        <small style="color: #666;">Pick from here - avoid the poison!</small>
-                    </div>
-                    <div id="opponent-candy-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 15px; background: #f8f9fa; border-radius: 8px; min-height: 200px;"></div>
+                    <h3 style="
+                        text-align: center; 
+                        color: #495057; 
+                        margin-bottom: 20px; 
+                        font-size: 20px;
+                        font-weight: 600;
+                    ">🎯 Opponent's Candies</h3>
+                    <p style="
+                        text-align: center; 
+                        color: #6c757d; 
+                        margin-bottom: 20px; 
+                        font-weight: 600;
+                    ">Pick from here - avoid the poison!</p>
+                    <div id="opponent-candy-grid" style="
+                        display: grid; 
+                        grid-template-columns: repeat(4, 1fr); 
+                        gap: 12px; 
+                        min-height: 220px;
+                    "></div>
+                    <p style="
+                        text-align: center; 
+                        color: #495057; 
+                        font-size: 16px; 
+                        margin-top: 15px; 
+                        font-weight: bold;
+                    ">🍬 Remaining: <span id="opponent-remaining-count" style="color: #495057;">12</span></p>
                 </div>
                 
                 <div>
-                    <h4 style="text-align: center; color: #333; margin-bottom: 15px;">🏠 Your Candies</h4>
+                    <h3 style="
+                        text-align: center; 
+                        color: #495057; 
+                        margin-bottom: 20px; 
+                        font-size: 20px;
+                        font-weight: 600;
+                    ">�� Your Candies</h3>
                     <div style="text-align: center; margin-bottom: 10px;">
                         <small style="color: #666;">AI will pick from here</small>
                     </div>
-                    <div id="player-candy-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 15px; background: #fff3cd; border-radius: 8px; min-height: 200px;"></div>
+                    <div id="player-candy-grid" style="
+                        display: grid; 
+                        grid-template-columns: repeat(4, 1fr); 
+                        gap: 12px; 
+                        min-height: 220px;
+                        position: relative;
+                        z-index: 2;
+                    "></div>
+                    <p style="
+                        text-align: center; 
+                        color: #495057; 
+                        font-size: 16px; 
+                        margin-top: 15px; 
+                        font-weight: bold;
+                        position: relative;
+                        z-index: 2;
+                    ">🍭 Remaining: <span id="player-remaining-count" style="color: #495057;">12</span></p>
                 </div>
             </div>
             
@@ -2054,8 +2314,11 @@ function initializeFriendsGame(roomCode = null) {
     }
     
     // Initialize game data for friends mode
-    gameState.playerCandies = getRandomCandies(12);
-    gameState.opponentCandies = getRandomCandies(12);
+    // Generate completely unique candy sets using new system
+    const uniqueCandySets = generateUniqueGameCandies();
+    gameState.playerCandies = uniqueCandySets.playerCandies;
+    gameState.opponentCandies = uniqueCandySets.opponentCandies;
+    
     gameState.playerCollection = [];
     gameState.opponentCollection = [];
     gameState.isPlayerTurn = true;
@@ -2341,6 +2604,14 @@ async function confirmPoisonInGame() {
 
 function initializeGameBoardInPage() {
     console.log('🎮 Initializing game board in page3...');
+    
+    // **CRITICAL FIX: Ensure timer overlay is hidden at game start**
+    const timerOverlay = document.getElementById('turn-timer-overlay');
+    if (timerOverlay) {
+        timerOverlay.style.display = 'none';
+        console.log('✅ Timer overlay hidden at game start');
+    }
+    
     console.log('Player candies:', gameState.playerCandies);
     console.log('Opponent candies:', gameState.opponentCandies);
     console.log('Player collection:', gameState.playerCollection);
@@ -2348,15 +2619,20 @@ function initializeGameBoardInPage() {
     
     // CRITICAL: Ensure candy arrays exist - if not, generate them
     if (!gameState.playerCandies || gameState.playerCandies.length === 0) {
-        console.warn('⚠️ Player candies missing! Generating new ones...');
-        gameState.playerCandies = getRandomCandies(12);
-        console.log('✅ Generated player candies:', gameState.playerCandies);
-    }
-    
-    if (!gameState.opponentCandies || gameState.opponentCandies.length === 0) {
+        console.warn('⚠️ Player candies missing! Generating new unique sets...');
+        // Generate completely unique candy sets using new system
+        const uniqueCandySets = generateUniqueGameCandies();
+        gameState.playerCandies = uniqueCandySets.playerCandies;
+        gameState.opponentCandies = uniqueCandySets.opponentCandies;
+        console.log('✅ Generated unique player candies:', gameState.playerCandies);
+        console.log('✅ Generated unique opponent candies:', gameState.opponentCandies);
+    } else if (!gameState.opponentCandies || gameState.opponentCandies.length === 0) {
         console.warn('⚠️ Opponent candies missing! Generating new ones...');
-        gameState.opponentCandies = getRandomCandies(12);
-        console.log('✅ Generated opponent candies:', gameState.opponentCandies);
+        // Generate opponent candies ensuring no overlap with player
+        const usedCandies = new Set(gameState.playerCandies);
+        const availableCandies = CANDY_TYPES.filter(candy => !usedCandies.has(candy));
+        gameState.opponentCandies = availableCandies.slice(0, 12);
+        console.log('✅ Generated unique opponent candies:', gameState.opponentCandies);
     }
     
     // Initialize collections if they don't exist
@@ -2375,13 +2651,13 @@ function initializeGameBoardInPage() {
         playerCandyGrid.innerHTML = '';
         console.log('🏠 Populating player candy grid with', gameState.playerCandies.length, 'candies');
     
-        gameState.playerCandies.forEach((candy, index) => {
+    gameState.playerCandies.forEach((candy, index) => {
             // **FIXED: No need to skip - we show what's actually in player's pool**
             // (AI picks from this pool, so it shrinks as AI picks candies)
             
-            const candyElement = document.createElement('div');
-            candyElement.className = 'candy-item';
-            candyElement.textContent = candy;
+        const candyElement = document.createElement('div');
+        candyElement.className = 'candy-item';
+        candyElement.textContent = candy;
             candyElement.dataset.candy = candy;
             candyElement.dataset.index = index;
             candyElement.style.cursor = 'default';
@@ -2404,13 +2680,13 @@ function initializeGameBoardInPage() {
             `;
             
             // Highlight poison candy
-            if (candy === gameState.selectedPoison) {
+        if (candy === gameState.selectedPoison) {
                 candyElement.classList.add('bg-danger', 'bg-opacity-20', 'border-danger');
                 candyElement.style.border = '3px solid #EF4444';
                 candyElement.style.background = 'linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%)';
                 candyElement.style.boxShadow = '0 3px 15px rgba(239, 68, 68, 0.5)';
                 candyElement.style.fontWeight = 'bold';
-                candyElement.title = 'Your Poison ☠️';
+            candyElement.title = 'Your Poison ☠️';
                 
                 // Add pulsing animation for poison
                 const poisonGlow = setInterval(() => {
@@ -2434,52 +2710,52 @@ function initializeGameBoardInPage() {
         opponentCandyGrid.innerHTML = '';
         console.log('🎯 Populating opponent candy grid with', gameState.opponentCandies.length, 'candies');
     
-        gameState.opponentCandies.forEach((candy, index) => {
+    gameState.opponentCandies.forEach((candy, index) => {
             // **FIXED: No need to skip - we show what's actually in opponent's pool**
             // (Player picks from this pool, so it shrinks as player picks candies)
             
-            const candyElement = document.createElement('div');
-            candyElement.className = 'candy-item';
-            candyElement.textContent = candy;
-            candyElement.dataset.candy = candy;
-            candyElement.dataset.index = index;
-            
-            // Enhanced styling for opponent candies (only for remaining ones)
+        const candyElement = document.createElement('div');
+        candyElement.className = 'candy-item';
+        candyElement.textContent = candy;
+        candyElement.dataset.candy = candy;
+        candyElement.dataset.index = index;
+        
+            // Subtle styling for opponent candies to match left side design
             candyElement.style.cssText = `
-                padding: 18px;
-                font-size: 32px;
+                padding: 12px;
+                font-size: 20px;
                 text-align: center;
-                background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-                border: 3px solid #F59E0B;
-                border-radius: 15px;
+                background: #ffffff;
+                border: 2px solid #ced4da;
+                border-radius: 8px;
                 cursor: pointer;
-                transition: all 0.3s ease;
+                transition: all 0.2s ease;
                 user-select: none;
-                font-weight: bold;
-                text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-                box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+                font-weight: normal;
+                color: #495057;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
                 margin: 4px;
                 position: relative;
             `;
             
             if (gameState.isPlayerTurn && !gameState.gameEnded) {
-                // Available for clicking
+            // Available for clicking
                 candyElement.style.cursor = 'pointer';
                 
-                // Add enhanced hover effects
+                // Add subtle hover effects to match left side design
                 candyElement.addEventListener('mouseenter', function() {
-                    this.style.background = 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)';
-                    this.style.borderColor = '#D97706';
-                    this.style.transform = 'scale(1.15) translateY(-2px)';
-                    this.style.boxShadow = '0 8px 25px rgba(245, 158, 11, 0.5)';
-                    this.style.zIndex = '10';
+                    this.style.background = '#e9ecef';
+                    this.style.borderColor = '#adb5bd';
+                    this.style.transform = 'scale(1.02)';
+                    this.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.15)';
+                    this.style.zIndex = '2';
                 });
                 
                 candyElement.addEventListener('mouseleave', function() {
-                    this.style.background = 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)';
-                    this.style.borderColor = '#F59E0B';
-                    this.style.transform = 'scale(1) translateY(0)';
-                    this.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.3)';
+                    this.style.background = '#ffffff';
+                    this.style.borderColor = '#ced4da';
+                    this.style.transform = 'scale(1)';
+                    this.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
                     this.style.zIndex = '1';
                 });
                 
@@ -2487,15 +2763,15 @@ function initializeGameBoardInPage() {
                 if (gameState.gameMode === 'offline') {
                     candyElement.addEventListener('click', () => handleOfflineCandyPick(candy, index));
                 } else {
-                    candyElement.addEventListener('click', () => pickCandyFromOpponent(candy, index, candyElement));
+            candyElement.addEventListener('click', () => pickCandyFromOpponent(candy, index, candyElement));
                 }
-            } else {
-                // Not player's turn
+        } else {
+            // Not player's turn
                 candyElement.style.opacity = '0.75';
                 candyElement.style.cursor = 'not-allowed';
-                candyElement.title = 'Not your turn';
-            }
-            
+            candyElement.title = 'Not your turn';
+        }
+        
             opponentCandyGrid.appendChild(candyElement);
         });
         
@@ -2790,7 +3066,7 @@ if (document.readyState === 'loading') {
 
 // ===== TURN TIMER FUNCTIONALITY =====
 function startTurnTimer() {
-    // Only show timer for online and friends modes
+    // Use non-blocking timer for online and friends modes
     if (gameState.gameMode !== 'online' && gameState.gameMode !== 'friends') {
         return;
     }
@@ -2800,35 +3076,44 @@ function startTurnTimer() {
         return;
     }
     
-    console.log('Starting turn timer for', gameState.gameMode, 'mode');
+    console.log('Starting non-blocking turn timer for', gameState.gameMode, 'mode');
     
-    gameState.turnTimeRemaining = 10;
+    gameState.turnTimeRemaining = 30; // Give players 30 seconds instead of 10
     
-    // Show timer displays
+    // Show ONLY the small timer display (not the blocking overlay)
     const timerDisplay = document.getElementById('turn-timer-display');
-    const timerOverlay = document.getElementById('turn-timer-overlay');
     const timerSeconds = document.getElementById('turn-timer-seconds');
-    const timerCountdown = document.getElementById('timer-countdown');
     
     if (timerDisplay) timerDisplay.style.display = 'block';
-    if (timerOverlay) timerOverlay.style.display = 'flex';
-    if (timerCountdown) timerCountdown.style.display = 'block';
+    if (timerSeconds) timerSeconds.textContent = gameState.turnTimeRemaining;
+    
+    // NEVER show the blocking overlay for online mode
+    const timerOverlay = document.getElementById('turn-timer-overlay');
+    if (timerOverlay) timerOverlay.style.display = 'none';
     
     // Clear any existing timer
     if (gameState.turnTimer) {
         clearInterval(gameState.turnTimer);
     }
-    if (gameState.turnCountdown) {
-        clearInterval(gameState.turnCountdown);
-    }
     
-    // Update display
-    updateTimerDisplay();
+    // Show initial notification (non-blocking)
+    showNotification(`⏰ Your turn! ${gameState.turnTimeRemaining} seconds to pick a candy`, 'info', 3000);
     
     // Start countdown
     gameState.turnTimer = setInterval(() => {
         gameState.turnTimeRemaining--;
-        updateTimerDisplay();
+        
+        // Update small timer display
+        if (timerSeconds) {
+            timerSeconds.textContent = gameState.turnTimeRemaining;
+        }
+        
+        // Show warnings at key intervals (non-blocking notifications)
+        if (gameState.turnTimeRemaining === 10) {
+            showNotification('⚠️ 10 seconds remaining!', 'warning', 2000);
+        } else if (gameState.turnTimeRemaining === 5) {
+            showNotification('🚨 5 seconds left!', 'error', 2000);
+        }
         
         if (gameState.turnTimeRemaining <= 0) {
             handleTimerExpired();
@@ -2857,6 +3142,8 @@ function updateTimerDisplay() {
 }
 
 function stopTurnTimer() {
+    console.log('Stopping turn timer and ensuring overlay is hidden');
+    
     // Clear timers
     if (gameState.turnTimer) {
         clearInterval(gameState.turnTimer);
@@ -2873,19 +3160,28 @@ function stopTurnTimer() {
     const timerCountdown = document.getElementById('timer-countdown');
     
     if (timerDisplay) timerDisplay.style.display = 'none';
-    if (timerOverlay) timerOverlay.style.display = 'none';
+    if (timerOverlay) {
+        timerOverlay.style.display = 'none';
+        console.log('✅ Timer overlay hidden');
+    }
     if (timerCountdown) timerCountdown.style.display = 'none';
+    
+    // Reset timer values
+    gameState.turnTimeRemaining = 0;
 }
 
 function handleTimerExpired() {
-    console.log('Turn timer expired');
+    console.log('Turn timer expired for online mode');
     stopTurnTimer();
     
-    // Force end turn or make random move
+    // For online games, end the game instead of making random moves
     if (gameState.gameMode === 'online' || gameState.gameMode === 'friends') {
-        // For online games, forfeit or make random move
-        alert('Time expired! Making random move...');
-        makeRandomMove();
+        showNotification('⏰ Time expired! You lose this round.', 'error', 4000);
+        
+        // End the game with a loss due to timeout
+        setTimeout(() => {
+            endGame(false, '⏰ You ran out of time! Game Over.');
+        }, 1000);
     }
 }
 
@@ -3272,6 +3568,383 @@ function initializeOfflineGameBoard() {
     console.log('✅ Game interface is ready and playable!');
 }
 
+// ===== ENHANCED GAME BOARD FUNCTIONS =====
+
+// Initialize Enhanced Game Board (Page 8)
+function initializeEnhancedGameBoard() {
+    console.log('🎮 Initializing Enhanced Game Board...');
+    
+    // Update player candy grid
+    const playerCandyGrid = document.getElementById('player-candy-grid-enhanced');
+    if (playerCandyGrid) {
+        playerCandyGrid.innerHTML = '';
+        
+        gameState.playerCandies.forEach((candy, index) => {
+            const candyElement = document.createElement('div');
+            candyElement.className = 'candy-item-enhanced';
+            candyElement.textContent = candy;
+            candyElement.dataset.candy = candy;
+            candyElement.dataset.index = index;
+            
+            // Highlight poison
+            if (candy === gameState.selectedPoison) {
+                candyElement.style.borderColor = '#dc3545';
+                candyElement.style.background = '#f8d7da';
+                candyElement.title = 'Your Poison ☠️';
+            }
+            
+            playerCandyGrid.appendChild(candyElement);
+        });
+    }
+    
+    // Update opponent candy grid (clickable)
+    const opponentCandyGrid = document.getElementById('opponent-candy-grid-enhanced');
+    if (opponentCandyGrid) {
+        opponentCandyGrid.innerHTML = '';
+        
+        gameState.opponentCandies.forEach((candy, index) => {
+            const candyElement = document.createElement('div');
+            candyElement.className = 'candy-item-enhanced clickable';
+            candyElement.textContent = candy;
+            candyElement.dataset.candy = candy;
+            candyElement.dataset.index = index;
+            
+            // CRITICAL FIX: ALWAYS make candies clickable when it's player's turn
+            candyElement.addEventListener('click', () => {
+                console.log(`🍭 Candy clicked: ${candy} (Player turn: ${gameState.isPlayerTurn}, Game ended: ${gameState.gameEnded})`);
+                handleEnhancedCandyPick(candy, index);
+            });
+            
+            // CRITICAL FIX: Only apply visual restrictions, not functional restrictions
+            if (!gameState.isPlayerTurn || gameState.gameEnded) {
+                candyElement.classList.add('disabled');
+                candyElement.style.opacity = '0.6';
+                candyElement.style.cursor = 'not-allowed';
+            } else {
+                candyElement.classList.remove('disabled');
+                candyElement.style.opacity = '1';
+                candyElement.style.cursor = 'pointer';
+            }
+            
+            // CRITICAL FIX: Apply subtle styling to match left side design
+            candyElement.style.cssText = `
+                ${candyElement.style.cssText}
+                padding: 12px;
+                font-size: 20px;
+                text-align: center;
+                background: #ffffff;
+                border: 2px solid #ced4da;
+                border-radius: 8px;
+                transition: all 0.2s ease;
+                user-select: none;
+                font-weight: normal;
+                color: #495057;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                margin: 4px;
+                position: relative;
+            `;
+            
+            opponentCandyGrid.appendChild(candyElement);
+        });
+        
+        console.log(`✅ Created ${gameState.opponentCandies.length} clickable opponent candies`);
+    }
+    
+    // Update counters
+    updateEnhancedCounters();
+    
+    // Update round display
+    const roundDisplay = document.getElementById('round-display');
+    if (roundDisplay) {
+        roundDisplay.textContent = gameState.round || 1;
+    }
+    
+    // Update game status
+    updateEnhancedGameStatus();
+    
+    // Start circular timer only for player turns
+    if (gameState.isPlayerTurn) {
+        setTimeout(() => {
+            startCircularTimer();
+        }, 500);
+    }
+    
+    console.log('✅ Enhanced Game Board initialized');
+}
+
+// Handle Enhanced Candy Pick
+function handleEnhancedCandyPick(candy, index) {
+    console.log(`🍭 Enhanced candy pick: ${candy}`);
+    
+    // Same logic as handleOfflineCandyPick but with enhanced UI updates
+    if (gameState.gameEnded || !gameState.isPlayerTurn) {
+        console.log('❌ Not player turn or game ended');
+        return;
+    }
+    
+    // Check if already collected
+    if (gameState.playerCollection.includes(candy)) {
+        console.log('❌ Candy already collected');
+        return;
+    }
+    
+    // Check if it's poison
+    if (candy === gameState.opponentPoison) {
+        endGame(false, `💀 You picked the poison ${candy}! AI wins!`);
+        return;
+    }
+    
+    // Add to collection
+    gameState.playerCollection.push(candy);
+    
+    // Remove from opponent's pool
+    const candyIndexInOpponentPool = gameState.opponentCandies.indexOf(candy);
+    if (candyIndexInOpponentPool !== -1) {
+        gameState.opponentCandies.splice(candyIndexInOpponentPool, 1);
+    }
+    
+    // Update round counter
+    const totalMoves = gameState.playerCollection.length + gameState.opponentCollection.length;
+    gameState.round = Math.ceil(totalMoves / 2);
+    
+    // Show pickup animation
+    showNotification(`✅ You picked: ${candy}`, 'success', 2000);
+    
+    // Check win condition
+    if (gameState.playerCollection.length >= 11) {
+        endGame(true, '🎉 You collected 11 different candies! You win!');
+        return;
+    }
+    
+    // Switch to AI turn
+    gameState.isPlayerTurn = false;
+    
+    // Stop player timer
+    stopCircularTimer();
+    
+    // Update the enhanced board
+    initializeEnhancedGameBoard();
+    
+    // AI turn after delay
+    setTimeout(() => {
+        handleEnhancedAITurn();
+    }, 1500);
+}
+
+// Handle Enhanced AI Turn
+function handleEnhancedAITurn() {
+    if (gameState.gameEnded || gameState.isPlayerTurn) {
+        console.log('❌ Not AI turn or game ended');
+        return;
+    }
+    
+    console.log('🤖 Enhanced AI turn...');
+    
+    // AI picks strategically
+    const availableCandies = gameState.playerCandies.filter(candy => candy !== gameState.selectedPoison);
+    
+    if (availableCandies.length === 0) {
+        endGame(true, `🎉 AI picked your poison ${gameState.selectedPoison}! You win!`);
+        return;
+    }
+    
+    // Pick random candy from safe options
+    const randomIndex = Math.floor(Math.random() * availableCandies.length);
+    const pickedCandy = availableCandies[randomIndex];
+    
+    // Check if AI picked poison
+    if (pickedCandy === gameState.selectedPoison) {
+        endGame(true, `🎉 AI picked your poison ${pickedCandy}! You win!`);
+        return;
+    }
+    
+    // Remove from player's pool
+    const candyIndexInPlayerPool = gameState.playerCandies.indexOf(pickedCandy);
+    if (candyIndexInPlayerPool !== -1) {
+        gameState.playerCandies.splice(candyIndexInPlayerPool, 1);
+    }
+    
+    // Add to AI collection
+    if (!gameState.opponentCollection.includes(pickedCandy)) {
+        gameState.opponentCollection.push(pickedCandy);
+    }
+    
+    // Update round counter
+    const totalMoves = gameState.playerCollection.length + gameState.opponentCollection.length;
+    gameState.round = Math.ceil(totalMoves / 2);
+    
+    // Check AI win condition
+    if (gameState.opponentCollection.length >= 11) {
+        endGame(false, `💔 AI collected 11 different candies! AI wins!`);
+        return;
+    }
+    
+    console.log(`🤖 AI picked ${pickedCandy}. Collection: ${gameState.opponentCollection.length}/11`);
+    
+    // Switch back to player turn
+    gameState.isPlayerTurn = true;
+    
+    // Update the enhanced board
+    initializeEnhancedGameBoard();
+    
+    // Start timer for player's next turn
+    setTimeout(() => {
+        startCircularTimer();
+    }, 1000);
+    
+    // Show AI pick notification
+    showNotification(`🤖 AI picked: ${pickedCandy}`, 'info', 2000);
+}
+
+// Update Enhanced Counters
+function updateEnhancedCounters() {
+    // Update candy counters
+    const playerCandyCount = document.getElementById('player-candy-count');
+    if (playerCandyCount) {
+        playerCandyCount.textContent = `${gameState.playerCandies.length} left`;
+    }
+    
+    const opponentCandyCount = document.getElementById('opponent-candy-count');
+    if (opponentCandyCount) {
+        opponentCandyCount.textContent = `${gameState.opponentCandies.length} left`;
+    }
+    
+    // Update collection status
+    const collectionStatus = document.getElementById('collection-status');
+    if (collectionStatus) {
+        collectionStatus.textContent = `${gameState.playerCollection.length}/11 collected`;
+    }
+}
+
+// Update Enhanced Game Status
+function updateEnhancedGameStatus() {
+    const statusText = document.getElementById('game-status-text-enhanced');
+    if (statusText) {
+        if (gameState.gameEnded) {
+            statusText.textContent = '🎮 Game Over';
+        } else if (gameState.isPlayerTurn) {
+            statusText.textContent = '🎯 Your Turn - Pick a candy!';
+        } else {
+            statusText.textContent = '⏳ AI Turn - Please wait...';
+        }
+    }
+}
+
+// Enhanced Circular Timer with Proper Game Logic
+let currentTimerInterval = null;
+let currentTimerTimeout = null;
+
+function startCircularTimer() {
+    console.log('🕒 Starting circular timer for player:', gameState.isPlayerTurn ? 'Player 1' : 'Player 2/AI');
+    
+    // Stop any existing timer
+    stopCircularTimer();
+    
+    const player1Progress = document.getElementById('player1-timer-progress');
+    const player2Progress = document.getElementById('player2-timer-progress');
+    
+    if (!player1Progress || !player2Progress) return;
+    
+    const circumference = 2 * Math.PI * 36; // radius = 36
+    const duration = 30; // 30 seconds
+    
+    // Reset both timers to empty state
+    player1Progress.style.strokeDasharray = circumference;
+    player1Progress.style.strokeDashoffset = circumference;
+    player1Progress.classList.remove('warning', 'danger');
+    player2Progress.style.strokeDasharray = circumference;
+    player2Progress.style.strokeDashoffset = circumference;
+    player2Progress.classList.remove('warning', 'danger');
+    
+    // Determine active player
+    const activeProgress = gameState.isPlayerTurn ? player1Progress : player2Progress;
+    
+    // For AI turns, don't show timer (AI moves automatically)
+    if (!gameState.isPlayerTurn && (gameState.gameMode === 'offline' || gameState.gameMode === 'ai')) {
+        console.log('🤖 AI turn - no timer needed');
+        return;
+    }
+    
+    // Start the circular timer animation
+    activeProgress.style.transition = 'none';
+    activeProgress.style.strokeDashoffset = 0; // Full circle
+    
+    // Animate the timer countdown
+    setTimeout(() => {
+        activeProgress.style.transition = `stroke-dashoffset ${duration}s linear`;
+        activeProgress.style.strokeDashoffset = circumference; // Empty circle
+    }, 50);
+    
+    let timeRemaining = duration;
+    
+    // Update timer colors based on time remaining
+    currentTimerInterval = setInterval(() => {
+        timeRemaining--;
+        
+        if (timeRemaining <= 15 && timeRemaining > 10) {
+            activeProgress.classList.add('warning');
+        } else if (timeRemaining <= 10) {
+            activeProgress.classList.remove('warning');
+            activeProgress.classList.add('danger');
+        }
+        
+        if (timeRemaining <= 0) {
+            handleTimerExpiry();
+        }
+    }, 1000);
+    
+    // Auto-timeout after duration
+    currentTimerTimeout = setTimeout(() => {
+        handleTimerExpiry();
+    }, duration * 1000);
+}
+
+function stopCircularTimer() {
+    if (currentTimerInterval) {
+        clearInterval(currentTimerInterval);
+        currentTimerInterval = null;
+    }
+    if (currentTimerTimeout) {
+        clearTimeout(currentTimerTimeout);
+        currentTimerTimeout = null;
+    }
+}
+
+function handleTimerExpiry() {
+    console.log('⏰ Timer expired!');
+    stopCircularTimer();
+    
+    if (gameState.isPlayerTurn) {
+        // Player timeout - END GAME instead of making random move
+        showNotification('⏰ Time expired! Game Over!', 'error', 3000);
+        endGame(false, '⏰ You ran out of time! Game Over.');
+    } else {
+        // AI timeout - Player wins
+        showNotification('⏰ AI took too long! You win!', 'success', 3000);
+        endGame(true, '⏰ Your opponent ran out of time! You win!');
+    }
+}
+
+function makeRandomPlayerMove() {
+    const availableCandies = gameState.opponentCandies;
+    if (availableCandies.length > 0) {
+        const randomCandy = availableCandies[Math.floor(Math.random() * availableCandies.length)];
+        const randomIndex = gameState.opponentCandies.indexOf(randomCandy);
+        handleEnhancedCandyPick(randomCandy, randomIndex);
+    }
+}
+
+// Navigate to Enhanced Game Board after poison selection
+function navigateToEnhancedGameBoard() {
+    console.log('🎮 Navigating to Enhanced Game Board...');
+    showScreen('page8');
+    
+    // Small delay to ensure DOM is ready
+    setTimeout(() => {
+        initializeEnhancedGameBoard();
+    }, 100);
+}
+
 // Update counters to show remaining candies
 function updateRemainingCandyCounters() {
     const playerCount = document.getElementById('player-collection-count');
@@ -3491,13 +4164,12 @@ function createWorkingGameInterface() {
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 40px;">
             <!-- Opponent's Candies Section -->
             <div style="
-                background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+                background: #f8f9fa;
                 padding: 25px;
-                border-radius: 20px;
-                border: 3px solid #F59E0B;
-                box-shadow: 0 10px 30px rgba(245, 158, 11, 0.3);
+                border-radius: 12px;
+                border: 2px solid #ced4da;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
                 position: relative;
-                overflow: hidden;
             ">
                 <div style="position: absolute; top: -50%; right: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%); pointer-events: none;"></div>
                 <h3 style="
@@ -3512,7 +4184,7 @@ function createWorkingGameInterface() {
                 ">🎯 Opponent's Candies</h3>
                 <p style="
                     text-align: center; 
-                    color: #A0612A; 
+                    color: #6c757d; 
                     margin-bottom: 20px; 
                     font-weight: 600;
                     position: relative;
@@ -3534,18 +4206,17 @@ function createWorkingGameInterface() {
                     font-weight: bold;
                     position: relative;
                     z-index: 2;
-                ">🍬 Remaining: <span id="opponent-remaining-count" style="color: #F59E0B;">12</span></p>
+                ">🍬 Remaining: <span id="opponent-remaining-count" style="color: #495057;">12</span></p>
             </div>
             
             <!-- Player's Candies Section -->
             <div style="
-                background: linear-gradient(135deg, #d4edda 0%, #a3d9a4 100%);
+                background: #f8f9fa;
                 padding: 25px;
-                border-radius: 20px;
-                border: 3px solid #22C55E;
-                box-shadow: 0 10px 30px rgba(34, 197, 94, 0.3);
+                border-radius: 12px;
+                border: 2px solid #ced4da;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
                 position: relative;
-                overflow: hidden;
             ">
                 <div style="position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%); pointer-events: none;"></div>
                 <h3 style="
@@ -3560,7 +4231,7 @@ function createWorkingGameInterface() {
                 ">🏠 Your Candies</h3>
                 <p style="
                     text-align: center; 
-                    color: #16A34A; 
+                    color: #6c757d; 
                     margin-bottom: 20px; 
                     font-weight: 600;
                     position: relative;
@@ -3576,102 +4247,92 @@ function createWorkingGameInterface() {
                 "></div>
                 <p style="
                     text-align: center; 
-                    color: #8B4513; 
+                    color: #495057; 
                     font-size: 16px; 
                     margin-top: 15px; 
                     font-weight: bold;
                     position: relative;
                     z-index: 2;
-                ">🍭 Remaining: <span id="player-remaining-count" style="color: #22C55E;">12</span></p>
+                ">🍭 Remaining: <span id="player-remaining-count" style="color: #495057;">12</span></p>
             </div>
         </div>
         
-        <!-- Progress Section with Colorful Cards -->
+        <!-- Progress Section with Consistent Subtle Design -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
             <!-- Player Progress -->
             <div style="
-                background: linear-gradient(135deg, #e7f3ff 0%, #b3d9ff 100%);
+                background: #f8f9fa;
                 padding: 25px;
-                border-radius: 20px;
-                border: 3px solid #3B82F6;
-                box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+                border-radius: 12px;
+                border: 2px solid #ced4da;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
                 text-align: center;
                 position: relative;
-                overflow: hidden;
             ">
-                <div style="position: absolute; top: 0; right: 0; width: 100px; height: 100px; background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%); pointer-events: none;"></div>
-                <h4 style="color: #8B4513; margin-bottom: 20px; font-size: 20px; font-weight: bold; position: relative; z-index: 2;">🏆 Your Progress</h4>
+                <h4 style="color: #495057; margin-bottom: 20px; font-size: 20px; font-weight: bold; position: relative; z-index: 2;">🏆 Your Progress</h4>
                 <div style="
                     font-size: 36px; 
                     font-weight: bold; 
-                    color: #3B82F6; 
+                    color: #495057; 
                     margin-bottom: 10px;
-                    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
                     position: relative;
                     z-index: 2;
                 " id="player-score">0/11</div>
-                <div style="color: #8B4513; font-size: 16px; font-weight: 600; position: relative; z-index: 2;">Candies Collected</div>
+                <div style="color: #6c757d; font-size: 16px; font-weight: 600; position: relative; z-index: 2;">Candies Collected</div>
             </div>
             
             <!-- AI Progress -->
             <div style="
-                background: linear-gradient(135deg, #ffe7e7 0%, #ffb3b3 100%);
+                background: #f8f9fa;
                 padding: 25px;
-                border-radius: 20px;
-                border: 3px solid #EF4444;
-                box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3);
+                border-radius: 12px;
+                border: 2px solid #ced4da;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
                 text-align: center;
                 position: relative;
-                overflow: hidden;
             ">
-                <div style="position: absolute; top: 0; left: 0; width: 100px; height: 100px; background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%); pointer-events: none;"></div>
-                <h4 style="color: #8B4513; margin-bottom: 20px; font-size: 20px; font-weight: bold; position: relative; z-index: 2;">🤖 AI Progress</h4>
+                <h4 style="color: #495057; margin-bottom: 20px; font-size: 20px; font-weight: bold; position: relative; z-index: 2;">🤖 AI Progress</h4>
                 <div style="
                     font-size: 36px; 
                     font-weight: bold; 
-                    color: #EF4444; 
+                    color: #495057; 
                     margin-bottom: 10px;
-                    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
                     position: relative;
                     z-index: 2;
                 " id="ai-score">0/11</div>
-                <div style="color: #8B4513; font-size: 16px; font-weight: 600; position: relative; z-index: 2;">Candies Collected</div>
+                <div style="color: #6c757d; font-size: 16px; font-weight: 600; position: relative; z-index: 2;">Candies Collected</div>
             </div>
         </div>
         
-        <!-- Action Buttons with Premium Styling -->
+        <!-- Action Buttons with Subtle Styling -->
         <div style="text-align: center; margin-top: 40px;">
             <button onclick="startNewGame()" style="
                 padding: 15px 30px;
-                background: linear-gradient(135deg, #6B7280 0%, #4B5563 100%);
+                background: #6c757d;
                 color: white;
                 border: none;
-                border-radius: 15px;
-                font-size: 18px;
-                font-weight: bold;
+                border-radius: 8px;
+                font-size: 16px;
+                font-weight: 600;
                 cursor: pointer;
                 margin-right: 20px;
-                box-shadow: 0 8px 25px rgba(107, 114, 128, 0.4);
-                transition: all 0.3s ease;
-                position: relative;
-                overflow: hidden;
-            " onmouseover="this.style.transform='translateY(-2px) scale(1.05)'; this.style.boxShadow='0 12px 35px rgba(107, 114, 128, 0.5)';" onmouseout="this.style.transform='translateY(0) scale(1)'; this.style.boxShadow='0 8px 25px rgba(107, 114, 128, 0.4)';">
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                transition: all 0.2s ease;
+            " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(0, 0, 0, 0.15)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 4px rgba(0, 0, 0, 0.1)';">
                 🔄 New Game
             </button>
             <button onclick="showScreen('page1')" style="
                 padding: 15px 30px;
-                background: linear-gradient(135deg, #8B4513 0%, #A0612A 100%);
+                background: #495057;
                 color: white;
                 border: none;
-                border-radius: 15px;
-                font-size: 18px;
-                font-weight: bold;
+                border-radius: 8px;
+                font-size: 16px;
+                font-weight: 600;
                 cursor: pointer;
-                box-shadow: 0 8px 25px rgba(139, 69, 19, 0.4);
-                transition: all 0.3s ease;
-                position: relative;
-                overflow: hidden;
-            " onmouseover="this.style.transform='translateY(-2px) scale(1.05)'; this.style.boxShadow='0 12px 35px rgba(139, 69, 19, 0.5)';" onmouseout="this.style.transform='translateY(0) scale(1)'; this.style.boxShadow='0 8px 25px rgba(139, 69, 19, 0.4)';">
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                transition: all 0.2s ease;
+            " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(0, 0, 0, 0.15)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 4px rgba(0, 0, 0, 0.1)';">
                 🏠 Main Menu
             </button>
         </div>
@@ -3702,13 +4363,20 @@ function populateGameGrids() {
     
     // CRITICAL: Ensure candy arrays exist
     if (!gameState.playerCandies || gameState.playerCandies.length === 0) {
-        console.warn('⚠️ Player candies missing! Generating new ones...');
-        gameState.playerCandies = getRandomCandies(12);
-    }
-    
-    if (!gameState.opponentCandies || gameState.opponentCandies.length === 0) {
+        console.warn('⚠️ Player candies missing! Generating new unique sets...');
+        // Generate completely unique candy sets using new system
+        const uniqueCandySets = generateUniqueGameCandies();
+        gameState.playerCandies = uniqueCandySets.playerCandies;
+        gameState.opponentCandies = uniqueCandySets.opponentCandies;
+        console.log('✅ Generated unique player candies:', gameState.playerCandies);
+        console.log('✅ Generated unique opponent candies:', gameState.opponentCandies);
+    } else if (!gameState.opponentCandies || gameState.opponentCandies.length === 0) {
         console.warn('⚠️ Opponent candies missing! Generating new ones...');
-        gameState.opponentCandies = getRandomCandies(12);
+        // Generate opponent candies ensuring no overlap with player
+        const usedCandies = new Set(gameState.playerCandies);
+        const availableCandies = CANDY_TYPES.filter(candy => !usedCandies.has(candy));
+        gameState.opponentCandies = availableCandies.slice(0, 12);
+        console.log('✅ Generated unique opponent candies:', gameState.opponentCandies);
     }
     
     // Initialize collections if they don't exist
@@ -3738,35 +4406,35 @@ function populateGameGrids() {
             candyElement.dataset.candy = candy;
             candyElement.dataset.index = index;
             candyElement.style.cssText = `
-                padding: 18px;
-                font-size: 32px;
+                padding: 12px;
+                font-size: 20px;
                 text-align: center;
-                background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-                border: 3px solid #F59E0B;
-                border-radius: 15px;
+                background: #ffffff;
+                border: 2px solid #ced4da;
+                border-radius: 8px;
                 cursor: pointer;
-                transition: all 0.3s ease;
+                transition: all 0.2s ease;
                 user-select: none;
                 position: relative;
-                font-weight: bold;
-                text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-                box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+                font-weight: normal;
+                color: #495057;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             `;
             
-            // Add enhanced hover effects
+            // Add subtle hover effects to match left side design
             candyElement.onmouseenter = () => {
-                candyElement.style.background = 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)';
-                candyElement.style.borderColor = '#D97706';
-                candyElement.style.transform = 'scale(1.15) translateY(-2px)';
-                candyElement.style.boxShadow = '0 8px 25px rgba(245, 158, 11, 0.5)';
-                candyElement.style.zIndex = '10';
+                candyElement.style.background = '#e9ecef';
+                candyElement.style.borderColor = '#adb5bd';
+                candyElement.style.transform = 'scale(1.02)';
+                candyElement.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.15)';
+                candyElement.style.zIndex = '2';
             };
             
             candyElement.onmouseleave = () => {
-                candyElement.style.background = 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)';
-                candyElement.style.borderColor = '#F59E0B';
-                candyElement.style.transform = 'scale(1) translateY(0)';
-                candyElement.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.3)';
+                candyElement.style.background = '#ffffff';
+                candyElement.style.borderColor = '#ced4da';
+                candyElement.style.transform = 'scale(1)';
+                candyElement.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
                 candyElement.style.zIndex = '1';
             };
             
@@ -3774,17 +4442,18 @@ function populateGameGrids() {
             candyElement.onclick = () => {
                 console.log(`🍭 Player picked: ${candy}`);
                 
-                // Visual feedback on click
-                candyElement.style.background = 'linear-gradient(135deg, #10B981 0%, #059669 100%)';
-                candyElement.style.borderColor = '#047857';
-                candyElement.style.color = 'white';
-                candyElement.style.transform = 'scale(0.9)';
+                // Subtle visual feedback on click
+                candyElement.style.background = '#e9ecef';
+                candyElement.style.borderColor = '#adb5bd';
+                candyElement.style.color = '#495057';
+                candyElement.style.transform = 'scale(0.95)';
                 
                 // Check if it's the poison
                 if (candy === gameState.opponentPoison) {
                     setTimeout(() => {
-                        candyElement.style.background = 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)';
-                        candyElement.style.borderColor = '#B91C1C';
+                        candyElement.style.background = '#f8d7da';
+                        candyElement.style.borderColor = '#dc3545';
+                        candyElement.style.color = '#721c24';
                         setTimeout(() => {
                             alert(`💀 You picked the poison ${candy}! You lose!`);
                             gameState.gameEnded = true;

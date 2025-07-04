@@ -264,16 +264,40 @@ class PoisonedCandyDuel:
                 current_player.collected_candies.append(candy)
                 print(f"🍬 Added {candy} to {current_player.name}'s collection")
             
-            # Check win condition (11 different candies)
-            if len(current_player.collected_candies) >= 11:
+            # Check for final round scenario before declaring winner
+            all_collected = set(game.player1.collected_candies + game.player2.collected_candies)
+            player1_remaining = len(game.player1.owned_candies - all_collected)
+            player2_remaining = len(game.player2.owned_candies - all_collected)
+            
+            print(f"🎲 Game state: P1={len(current_player.collected_candies) if current_player == game.player1 else len(opponent_player.collected_candies)}/11, P2={len(opponent_player.collected_candies) if current_player == game.player1 else len(current_player.collected_candies)}/11")
+            print(f"🎲 Remaining candies: P1={player1_remaining}, P2={player2_remaining}")
+            
+            # Check if we're in final round (both players have exactly 1 candy left - their poison)
+            if (len(current_player.collected_candies) == 11 and 
+                len(opponent_player.collected_candies) == 11):
+                # Both players reached 11 candies - this is a DRAW
                 game.state = GameState.FINISHED
-                game.result = (
-                    GameResult.PLAYER1_WIN if current_player == game.player1 
-                    else GameResult.PLAYER2_WIN
-                )
-                print(f"🏆 Player wins by collecting 11 candies! Winner: {game.result}")
+                game.result = GameResult.DRAW
+                print(f"🤝 Both players collected 11 candies! Draw!")
+            elif len(current_player.collected_candies) == 11:
+                # Current player reached 11 candies
+                # Check if opponent can also reach 11 (final round scenario)
+                if (len(opponent_player.collected_candies) == 10 and 
+                    player1_remaining == 1 and player2_remaining == 1):
+                    # Final round: opponent still has a chance to also reach 11
+                    print(f"🎯 Final round: {current_player.name} has 11, {opponent_player.name} gets final chance")
+                    # Don't end game yet - let opponent make their final move
+                    game.current_turn += 1
+                else:
+                    # Normal win - opponent can't reach 11
+                    game.state = GameState.FINISHED
+                    game.result = (
+                        GameResult.PLAYER1_WIN if current_player == game.player1 
+                        else GameResult.PLAYER2_WIN
+                    )
+                    print(f"🏆 Player wins by collecting 11 candies! Winner: {game.result}")
             else:
-                # Advance turn
+                # Game continues normally
                 game.current_turn += 1
                 print(f"🔄 Turn advanced to: {game.current_turn}")
         
@@ -286,7 +310,7 @@ class PoisonedCandyDuel:
                 result_str = "player1_win"
             elif game.result == GameResult.PLAYER2_WIN:
                 result_str = "player2_win"
-            else:
+            elif game.result == GameResult.DRAW:
                 result_str = "draw"
         
         print(f"🎯 Move completed. Result: {result_str}")
@@ -298,7 +322,8 @@ class PoisonedCandyDuel:
             "game_state": self._get_game_state(game),
             "winner": game.player1.id if game.result == GameResult.PLAYER1_WIN 
                      else game.player2.id if game.result == GameResult.PLAYER2_WIN 
-                     else None
+                     else None,
+            "is_draw": game.result == GameResult.DRAW
         }
     
     def _check_game_end(
