@@ -2313,72 +2313,15 @@ function startOnlineGame(city, cost) {
         // Store the selection and payment info
         gameState.selectedCity = city;
         gameState.gameCost = cost;
-        gameState.gameMode = 'online'; // Set game mode
         
         // Show city-specific info with payment confirmation
         const prizeAmount = getPrizeAmount(cost);
         showNotification(`✅ ${city} Arena: Entry paid! Prize pool: ${prizeAmount.toLocaleString()} coins`, 'success', 3000);
         
-        // CRITICAL FIX: Initialize the online game properly with backend before poison selection
-        console.log('🔧 Creating online game via backend...');
-        setTimeout(async () => {
-            try {
-                // Initialize player name if not set
-                if (!gameState.playerName) {
-                    gameState.playerName = 'Player';
-                }
-                
-                // Create game via backend API to get candy data
-                const response = await fetch('http://localhost:8000/games', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        player1_name: gameState.playerName,
-                        player2_name: 'Online Opponent'
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to create online game: ${response.status}`);
-                }
-                
-                const result = await response.json();
-                if (!result.success) {
-                    throw new Error(result.message || 'Failed to create online game');
-                }
-                
-                // Set up game state from backend response
-                const gameData = result.data;
-                gameState.gameId = gameData.game_id;
-                gameState.playerId = gameData.game_state.player1.id;
-                gameState.opponentId = gameData.game_state.player2.id;
-                gameState.currentGameState = gameData.game_state;
-                gameState.playerCandies = Array.from(gameData.game_state.player1.owned_candies);
-                gameState.opponentCandies = Array.from(gameData.game_state.player2.owned_candies);
-                
-                console.log('✅ Online game created successfully:', {
-                    gameId: gameState.gameId,
-                    playerCandies: gameState.playerCandies.length,
-                    opponentCandies: gameState.opponentCandies.length
-                });
-                
-                // Now go to poison selection with proper candy data
-                showScreen('page4');
-                initializePoisonSelection();
-                
-            } catch (error) {
-                console.error('❌ Failed to create online game:', error);
-                showNotification('Failed to start online game. Please try again.', 'error', 5000);
-                
-                // Fallback to offline mode
-                gameState.gameMode = 'offline';
-                const uniqueCandySets = generateUniqueGameCandies();
-                gameState.playerCandies = uniqueCandySets.playerCandies;
-                gameState.opponentCandies = uniqueCandySets.opponentCandies;
-                
-                showScreen('page4');
-                initializePoisonSelection();
-            }
+        // Go to poison selection
+        setTimeout(() => {
+            showScreen('page4');
+            initializePoisonSelection();
         }, 500);
         
         return;
@@ -5445,7 +5388,7 @@ function updateGameScores() {
 }
 
 // Update game status message
-function updateGameStatusMessage(message) {
+function updateGameStatus(message) {
     // Update both old interface and new offline-style interface
     const statusElement = document.getElementById('game-instructions');
     if (statusElement) {
@@ -6026,23 +5969,13 @@ class UnifiedCandyPicker {
         const totalMoves = gameState.playerCollection.length + gameState.opponentCollection.length;
         gameState.round = Math.ceil(totalMoves / 2);
 
-        // FIXED: Check win condition properly - ensure both players get fair chance
-        const winCondition = checkGameWinCondition(gameState);
-        if (winCondition.hasWinner) {
+        // Check win condition
+        if (gameState.playerCollection.length >= 11) {
             return {
                 success: false,
                 isWin: true,
-                message: winCondition.message,
-                endGame: { won: winCondition.winner === 'player', message: winCondition.message }
-            };
-        }
-        
-        if (winCondition.isDraw) {
-            return {
-                success: false,
-                isDraw: true,
-                message: winCondition.message,
-                endGame: { won: false, message: winCondition.message, isDraw: true }
+                message: '🎉 You collected 11 different candies! You win!',
+                endGame: { won: true, message: '🎉 You collected 11 different candies! You win!' }
             };
         }
 

@@ -123,55 +123,162 @@
                         </svg>
                         Back
                     </button>
-                    <h2 class="text-2xl font-display font-bold text-primary">Select Destination</h2>
+                    <h2 class="text-2xl font-display font-bold text-primary">Select Your Arena</h2>
                     <div class="w-20"></div> <!-- Spacer for centering -->
                 </header>
 
-                <!-- Premium city cards -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div class="card card-premium cursor-pointer hover:scale-105 transition-all duration-300" onclick="startOnlineGameNew('dubai', 500)">
+                <!-- Player Balance Display -->
+                <div class="card card-premium text-center p-4 max-w-md mx-auto mb-8">
+                    <div class="flex items-center justify-center space-x-4">
+                        <div class="text-2xl">💰</div>
+                        <div>
+                            <div class="text-sm text-gray-600">Your Balance</div>
+                            <div class="text-xl font-bold text-primary" id="player-balance">1000</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- City Selection -->
+                <div class="subtitle text-center mb-8">
+                    <p class="text-gray-600">Choose your battlefield and stake your coins</p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <!-- Dubai Arena -->
+                    <div class="card card-premium hover:shadow-lg transition-shadow duration-300">
                         <div class="p-6 text-center">
                             <div class="text-6xl mb-4">🏙️</div>
-                            <h3 class="text-xl font-display font-bold text-primary mb-2">Dubai</h3>
-                            <p class="text-gray-600 mb-4">Luxurious gaming experience</p>
-                            <div class="flex items-center justify-center space-x-2 bg-warning bg-opacity-10 rounded-lg p-3">
-                                <svg class="w-5 h-5 text-warning" fill="currentColor" viewBox="0 0 24 24">
-                                    <circle cx="12" cy="12" r="3"/>
-                                    <path d="M12 1l3.09 6.26L22 9l-5.91 3.07L19 22l-7-3.64L5 22l2.91-9.93L2 9l6.91-1.74L12 1z"/>
-                                </svg>
-                                <span class="font-mono font-bold text-warning">500 coins</span>
+                            <h3 class="text-xl font-display font-bold text-primary mb-2">Dubai Arena</h3>
+                            <p class="text-gray-600 mb-4">Luxury Desert Gaming</p>
+                            
+                            <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                                <div class="text-sm text-gray-600 mb-2">Entry Cost</div>
+                                <div class="text-2xl font-bold text-primary">500 Coins</div>
+                                <div class="text-sm text-gray-500">Winner gets 950 coins</div>
                             </div>
+                            
+                            <div class="bg-blue-50 rounded-lg p-3 mb-4">
+                                <div class="text-sm text-blue-700">⏰ Turn Timer: 30 seconds</div>
+                            </div>
+                            
+                            <button class="btn btn-primary w-full" onclick="startOnlineGame('Dubai', 500)">
+                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                </svg>
+                                Enter Dubai Arena
+                            </button>
                         </div>
                     </div>
 
-                    <div class="card card-premium cursor-pointer hover:scale-105 transition-all duration-300" onclick="startOnlineGameNew('cairo', 1000)">
+                    <!-- Cairo Arena -->
+                    <div class="card card-premium hover:shadow-lg transition-shadow duration-300">
                         <div class="p-6 text-center">
                             <div class="text-6xl mb-4">🏛️</div>
-                            <h3 class="text-xl font-display font-bold text-primary mb-2">Cairo</h3>
-                            <p class="text-gray-600 mb-4">Ancient mysteries await</p>
-                            <div class="flex items-center justify-center space-x-2 bg-primary bg-opacity-10 rounded-lg p-3">
-                                <svg class="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 24 24">
-                                    <circle cx="12" cy="12" r="3"/>
-                                    <path d="M12 1l3.09 6.26L22 9l-5.91 3.07L19 22l-7-3.64L5 22l2.91-9.93L2 9l6.91-1.74L12 1z"/>
-                                </svg>
-                                <span class="font-mono font-bold text-primary">1000 coins</span>
+                            <h3 class="text-xl font-display font-bold text-primary mb-2">Cairo Temple</h3>
+                            <p class="text-gray-600 mb-4">Ancient Pharaoh Gaming</p>
+                            
+                            <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                                <div class="text-sm text-gray-600 mb-2">Entry Cost</div>
+                                <div class="text-2xl font-bold text-orange-600">1000 Coins</div>
+                                <div class="text-sm text-gray-500">Winner gets 1900 coins</div>
                             </div>
+                            
+                            <div class="bg-orange-50 rounded-lg p-3 mb-4">
+                                <div class="text-sm text-orange-700">⏰ Turn Timer: 20 seconds</div>
+                            </div>
+                            
+                            <button class="btn btn-warning w-full" onclick="startOnlineGame('Cairo', 1000)">
+                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                </svg>
+                                Enter Cairo Temple
+                            </button>
                         </div>
                     </div>
 
-                    <div class="card card-premium cursor-pointer hover:scale-105 transition-all duration-300" onclick="startOnlineGameNew('oslo', 5000)">
+                    <!-- Oslo Arena -->
+                    <div class="card card-premium hover:shadow-lg transition-shadow duration-300">
                         <div class="p-6 text-center">
                             <div class="text-6xl mb-4">🏔️</div>
-                            <h3 class="text-xl font-display font-bold text-primary mb-2">Oslo</h3>
-                            <p class="text-gray-600 mb-4">Elite competition level</p>
-                            <div class="flex items-center justify-center space-x-2 bg-danger bg-opacity-10 rounded-lg p-3">
-                                <svg class="w-5 h-5 text-danger" fill="currentColor" viewBox="0 0 24 24">
-                                    <circle cx="12" cy="12" r="3"/>
-                                    <path d="M12 1l3.09 6.26L22 9l-5.91 3.07L19 22l-7-3.64L5 22l2.91-9.93L2 9l6.91-1.74L12 1z"/>
+                            <h3 class="text-xl font-display font-bold text-primary mb-2">Oslo Fjord</h3>
+                            <p class="text-gray-600 mb-4">Nordic Winter Gaming</p>
+                            
+                            <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                                <div class="text-sm text-gray-600 mb-2">Entry Cost</div>
+                                <div class="text-2xl font-bold text-blue-600">5000 Coins</div>
+                                <div class="text-sm text-gray-500">Winner gets 9500 coins</div>
+                            </div>
+                            
+                            <div class="bg-red-50 rounded-lg p-3 mb-4">
+                                <div class="text-sm text-red-700">⏰ Turn Timer: 10 seconds</div>
+                            </div>
+                            
+                            <button class="btn btn-danger w-full" onclick="startOnlineGame('Oslo', 5000)">
+                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                                 </svg>
-                                <span class="font-mono font-bold text-danger">5000 coins</span>
+                                Enter Oslo Fjord
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Matchmaking Section (for when matched players select city) -->
+                <div id="matchmaking-section" class="mb-8" style="display: none;">
+                    <div class="card card-premium text-center p-8 max-w-md mx-auto">
+                        <div class="text-6xl mb-4">🌍</div>
+                        <h3 class="text-2xl font-display font-bold text-primary mb-2">Find Random Player</h3>
+                        <p class="text-gray-600 mb-6">Connect with players from around the world</p>
+                        
+                        <!-- Matchmaking Status -->
+                        <div id="matchmaking-status" class="mb-6">
+                            <div id="matchmaking-idle" class="text-sm text-gray-500">
+                                Ready to find an opponent
+                            </div>
+                            <div id="matchmaking-searching" class="text-sm text-info animate-pulse" style="display: none;">
+                                🔍 Looking for players...
+                            </div>
+                            <div id="matchmaking-found" class="text-sm text-success" style="display: none;">
+                                ✅ Player found! Connecting...
                             </div>
                         </div>
+                        
+                        <!-- Matchmaking Button -->
+                        <div class="space-y-4">
+                            <button id="find-player-btn" class="btn btn-primary btn-lg w-full" onclick="findRandomPlayer()">
+                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                </svg>
+                                Find Random Player
+                            </button>
+                            <button id="cancel-matchmaking-btn" class="btn btn-secondary w-full" onclick="cancelMatchmaking()" style="display: none;">
+                                Cancel Search
+                            </button>
+                        </div>
+                        
+                        <!-- Queue Info -->
+                        <div id="queue-info" class="mt-4 text-xs text-gray-400" style="display: none;">
+                            <span id="queue-position">Position in queue: 1</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Online Gaming Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div class="card text-center p-4">
+                        <div class="text-3xl mb-2">🎯</div>
+                        <div class="text-sm text-gray-600">Players Online</div>
+                        <div class="text-xl font-bold text-primary" id="online-players-count">...</div>
+                    </div>
+                    <div class="card text-center p-4">
+                        <div class="text-3xl mb-2">⚡</div>
+                        <div class="text-sm text-gray-600">Avg Match Time</div>
+                        <div class="text-xl font-bold text-success">5s</div>
+                    </div>
+                    <div class="card text-center p-4">
+                        <div class="text-3xl mb-2">🏆</div>
+                        <div class="text-sm text-gray-600">Games Today</div>
+                        <div class="text-xl font-bold text-warning" id="games-today-count">...</div>
                     </div>
                 </div>
             </div>
@@ -625,15 +732,15 @@
                         <div class="space-y-3">
                             <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                                 <span>Day 1</span>
-                                <span class="text-warning font-bold">+50 coins</span>
+                                <span class="text-warning font-bold">+50 coins +1 💎</span>
                             </div>
                             <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                                 <span>Day 2</span>
-                                <span class="text-warning font-bold">+75 coins</span>
+                                <span class="text-warning font-bold">+75 coins +1 💎</span>
                             </div>
                             <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                                 <span>Day 3</span>
-                                <span class="text-warning font-bold">+100 coins</span>
+                                <span class="text-warning font-bold">+100 coins +2 💎</span>
                             </div>
                         </div>
                         <button class="btn btn-primary w-full mt-4" onclick="claimDailyReward()">
@@ -816,6 +923,36 @@
                             </div>
                             
                             <div class="card card-premium p-6">
+                                <h3 class="font-display font-bold text-primary mb-4">Premium Features</h3>
+                                <div class="space-y-4">
+                                    <button class="btn btn-success w-full" onclick="removeAds()">
+                                        <span class="icon">🚫</span>
+                                        <span class="text">
+                                            Remove Ads ($5)
+                                        </span>
+                                    </button>
+                                    <div class="flex items-center space-x-2 text-sm text-gray-600">
+                                        <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                                        </svg>
+                                        <span>Ad-free gaming experience</span>
+                                    </div>
+                                    <div class="flex items-center space-x-2 text-sm text-gray-600">
+                                        <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                                        </svg>
+                                        <span>Faster game loading</span>
+                                    </div>
+                                    <div class="flex items-center space-x-2 text-sm text-gray-600">
+                                        <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                                        </svg>
+                                        <span>Premium support</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card card-premium p-6">
                                 <h3 class="font-display font-bold text-primary mb-4">Settings</h3>
                                 <div class="space-y-3">
                                     <button class="btn btn-secondary w-full" onclick="toggleSound()">
@@ -856,6 +993,7 @@
     <script src="js/game-initializer.js"></script>
     <script src="js/button-manager.js"></script>
     <script src="js/game.js"></script>
+    <script src="js/matchmaking.js"></script>
     <script src="js/startup-test.js"></script>
     <script src="button-navigation-fix.js"></script>
     

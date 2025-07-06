@@ -2903,3 +2903,106 @@ input[type="text"]:focus, input[type="password"]:focus, input[type="email"]:focu
         padding: 0.75rem;
     }
 }
+
+/* ===== PROFILE-BASED FEEDBACK SYSTEM STYLES ===== */
+
+.profile-feedback {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.profile-feedback.yummy {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    animation: bounceIn 0.3s ease-out;
+}
+
+.profile-feedback.gotcha {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+    animation: victoryPulse 0.5s ease-out;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+}
+
+.profile-feedback.info {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+    animation: fadeInUp 0.3s ease-out;
+}
+
+/* Feedback animations */
+@keyframes bounceIn {
+    0% {
+        transform: translateY(0px) scale(0.5);
+        opacity: 0;
+    }
+    50% {
+        transform: translateY(-15px) scale(1.1);
+        opacity: 0.8;
+    }
+    100% {
+        transform: translateY(-10px) scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes victoryPulse {
+    0% {
+        transform: translateY(0px) scale(0.6);
+        opacity: 0;
+    }
+    25% {
+        transform: translateY(-15px) scale(1.2);
+        opacity: 0.9;
+    }
+    50% {
+        transform: translateY(-12px) scale(1.1);
+        opacity: 1;
+    }
+    75% {
+        transform: translateY(-14px) scale(1.15);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(-10px) scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeInUp {
+    0% {
+        transform: translateY(10px) scale(0.9);
+        opacity: 0;
+    }
+    100% {
+        transform: translateY(-10px) scale(1);
+        opacity: 1;
+    }
+}
+
+/* Enhanced profile feedback positioning */
+.player-profile {
+    position: relative;
+    z-index: 1;
+}
+
+.player-profile .profile-feedback {
+    position: absolute;
+    top: -45px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10002;
+}
+
+/* Responsive feedback */
+@media (max-width: 768px) {
+    .profile-feedback {
+        font-size: 12px !important;
+        padding: 6px 12px !important;
+        border-radius: 16px !important;
+    }
+    
+    .profile-feedback.gotcha {
+        font-size: 14px !important;
+    }
+}

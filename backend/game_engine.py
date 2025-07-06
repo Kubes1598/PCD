@@ -257,47 +257,67 @@ class PoisonedCandyDuel:
                 GameResult.PLAYER2_WIN if current_player == game.player1 
                 else GameResult.PLAYER1_WIN
             )
-            print(f"💀 Player picked poison! Game over. Winner: {game.result}")
+            print(f"💀 {current_player.name} picked poison! Game over. Winner: {opponent_player.name}")
         else:
             # Add candy to current player's collection if it's new
             if candy not in current_player.collected_candies:
                 current_player.collected_candies.append(candy)
                 print(f"🍬 Added {candy} to {current_player.name}'s collection")
             
-            # Check for final round scenario before declaring winner
+            # Calculate current game state
+            p1_count = len(game.player1.collected_candies)
+            p2_count = len(game.player2.collected_candies)
             all_collected = set(game.player1.collected_candies + game.player2.collected_candies)
-            player1_remaining = len(game.player1.owned_candies - all_collected)
-            player2_remaining = len(game.player2.owned_candies - all_collected)
+            total_pickable = len(game.player1.owned_candies) + len(game.player2.owned_candies) - len(all_collected)
             
-            print(f"🎲 Game state: P1={len(current_player.collected_candies) if current_player == game.player1 else len(opponent_player.collected_candies)}/11, P2={len(opponent_player.collected_candies) if current_player == game.player1 else len(current_player.collected_candies)}/11")
-            print(f"🎲 Remaining candies: P1={player1_remaining}, P2={player2_remaining}")
+            print(f"🎲 Game state: P1={p1_count}/11, P2={p2_count}/11, remaining={total_pickable}")
             
-            # Check if we're in final round (both players have exactly 1 candy left - their poison)
-            if (len(current_player.collected_candies) == 11 and 
-                len(opponent_player.collected_candies) == 11):
-                # Both players reached 11 candies - this is a DRAW
+            # CORRECTED WIN LOGIC
+            # Check if both players have reached 11 candies
+            if p1_count == 11 and p2_count == 11:
+                # Both players have 11 candies - immediate DRAW
                 game.state = GameState.FINISHED
                 game.result = GameResult.DRAW
-                print(f"🤝 Both players collected 11 candies! Draw!")
-            elif len(current_player.collected_candies) == 11:
-                # Current player reached 11 candies
-                # Check if opponent can also reach 11 (final round scenario)
-                if (len(opponent_player.collected_candies) == 10 and 
-                    player1_remaining == 1 and player2_remaining == 1):
-                    # Final round: opponent still has a chance to also reach 11
-                    print(f"🎯 Final round: {current_player.name} has 11, {opponent_player.name} gets final chance")
-                    # Don't end game yet - let opponent make their final move
+                print(f"🤝 Draw! Both players collected 11 candies!")
+            elif p1_count == 11 or p2_count == 11:
+                # One player has reached 11 candies
+                # Check if the other player can mathematically still reach 11
+                
+                current_player_count = len(current_player.collected_candies)
+                opponent_count = len(opponent_player.collected_candies)
+                
+                # Calculate how many more picks the opponent can potentially make
+                # Total picks made so far = p1_count + p2_count
+                total_picks_made = p1_count + p2_count
+                
+                # Each player gets alternating turns
+                # If it's currently turn N, how many more turns can the opponent get?
+                if current_player == game.player1:
+                    # P1 just picked, next turn is P2's
+                    # P2 can pick on turns: current_turn+1, current_turn+3, current_turn+5, etc.
+                    # until total_pickable candies are exhausted
+                    opponent_future_turns = (total_pickable + 1) // 2  # P2 gets every other turn
+                else:
+                    # P2 just picked, next turn is P1's  
+                    # P1 can pick on turns: current_turn+1, current_turn+3, current_turn+5, etc.
+                    opponent_future_turns = total_pickable // 2
+                
+                opponent_max_possible = opponent_count + opponent_future_turns
+                
+                if opponent_max_possible >= 11:
+                    # Opponent can still potentially reach 11 - continue game
+                    print(f"🔄 {current_player.name} has {current_player_count}, {opponent_player.name} can still reach 11 (currently {opponent_count}, max possible {opponent_max_possible})")
                     game.current_turn += 1
                 else:
-                    # Normal win - opponent can't reach 11
+                    # Opponent cannot possibly reach 11 - current player wins
+                    print(f"🏆 {current_player.name} wins! Opponent cannot reach 11 (currently {opponent_count}, max possible {opponent_max_possible})")
                     game.state = GameState.FINISHED
                     game.result = (
                         GameResult.PLAYER1_WIN if current_player == game.player1 
                         else GameResult.PLAYER2_WIN
                     )
-                    print(f"🏆 Player wins by collecting 11 candies! Winner: {game.result}")
             else:
-                # Game continues normally
+                # Neither player has reached 11 yet - continue game
                 game.current_turn += 1
                 print(f"🔄 Turn advanced to: {game.current_turn}")
         
