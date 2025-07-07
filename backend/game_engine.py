@@ -452,7 +452,64 @@ class PoisonedCandyDuel:
                 "player2_poison": game.player2.poison_choice
             }
         
+        # Add candy confirmation data if available
+        if hasattr(game, 'candy_confirmed_p1'):
+            state["player1"]["candy_confirmed"] = game.candy_confirmed_p1
+        if hasattr(game, 'candy_confirmed_p2'):
+            state["player2"]["candy_confirmed"] = game.candy_confirmed_p2
+        
+        # Add custom game status if available
+        if hasattr(game, 'custom_status'):
+            state["status"] = game.custom_status
+        
         return state
+    
+    def update_game_state(self, game_id: str, new_state: Dict[str, Any]) -> bool:
+        """Update game state with new data.
+        
+        Args:
+            game_id: The game ID
+            new_state: Dictionary containing updated game state
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if game_id not in self.games:
+            return False
+        
+        game = self.games[game_id]
+        
+        # Update player information if provided
+        if "player1" in new_state:
+            player1_data = new_state["player1"]
+            if "candy_confirmed" in player1_data:
+                # Store in game session for persistence
+                if not hasattr(game, 'candy_confirmed_p1'):
+                    game.candy_confirmed_p1 = player1_data["candy_confirmed"]
+                else:
+                    game.candy_confirmed_p1 = player1_data["candy_confirmed"]
+        
+        if "player2" in new_state:
+            player2_data = new_state["player2"]
+            if "candy_confirmed" in player2_data:
+                # Store in game session for persistence
+                if not hasattr(game, 'candy_confirmed_p2'):
+                    game.candy_confirmed_p2 = player2_data["candy_confirmed"]
+                else:
+                    game.candy_confirmed_p2 = player2_data["candy_confirmed"]
+        
+        # Update game status and other metadata
+        if "status" in new_state:
+            # Store custom status in game session
+            if not hasattr(game, 'custom_status'):
+                game.custom_status = new_state["status"]
+            else:
+                game.custom_status = new_state["status"]
+        
+        # Update timestamp
+        game.last_updated = time.time()
+        
+        return True
     
     def get_player_games(self, player_name: str) -> List[Dict[str, Any]]:
         """Get all games for a player.

@@ -1,206 +1,209 @@
-# Online Multiplayer Testing Guide
+# Product Requirements Document (PRD): Poison Candy Duel Game - Economy System Enhancements
 
-## 🎯 **How to Test Online Multiplayer**
 
-The PCD game now has full online multiplayer with automatic matchmaking. Here's how to test it thoroughly:
+---
 
-## 🚀 **Quick Start Testing**
+## 1. Overview
 
-### **Prerequisites**
-1. ✅ Backend running on `http://localhost:8000`
-2. ✅ Frontend running on `http://localhost:3002`
-3. ✅ Both servers are healthy
+### 1.1 Purpose
+This PRD outlines the requirements for enhancing the economy system (diamonds and coins) in the *Poison Candy Duel* game. The goal is to implement a robust currency system that integrates with all game modes, supports currency conversion, in-app purchases, and daily login rewards to improve user engagement and retention.
 
-### **Method 1: Two Browser Tabs (Easiest)**
+### 1.2 Scope
+The scope includes:
+- Initial currency allocation for new users.
+- Integration of currency balances across all game modes.
+- Currency conversion system (diamonds to coins).
+- In-app purchase system for buying diamonds with real currency (USD).
+- Daily login reward system with special rewards for consecutive logins.
 
-1. **Open Tab 1:**
-   ```
-   http://localhost:3002
-   ```
-   - Click "Play Online" 
-   - Click "Find Random Player"
-   - Should show "Looking for players..." with queue position
+### 1.3 Objectives
+- Increase player engagement through a rewarding economy system.
+- Provide clear incentives for gameplay, purchases, and consistent logins.
+- Ensure seamless integration of currency balances across all game modes.
+- Maintain fairness and transparency in currency management.
 
-2. **Open Tab 2:**
-   ```
-   http://localhost:3002  
-   ```
-   - Click "Play Online"
-   - Click "Find Random Player"
-   - **Both should automatically match within seconds!**
+---
 
-3. **Expected Result:**
-   - Both tabs should show "Player found! Starting game vs [opponent]"
-   - Both should navigate to the game board
-   - Players can take turns picking candies
-   - Profile feedback shows "Yummy! 😋" or "Got ya!!! 🎉"
+## 2. Requirements
 
-## 🔧 **Advanced Testing Methods**
+### 2.1 Initial Currency Allocation
+- **Feature**: New User Currency Allocation
+- **Description**: Every new user will receive an initial balance upon account creation.
+- **Details**:
+  - 500 diamonds
+  - 10,000 coins
+- **Implementation**:
+  - Allocate currencies when a user completes the registration process or first logs into the game.
+  - Store balances in the user’s profile in the game’s backend database.
+  - Display the initial balance in the user interface (UI) upon first login.
+- **Validation**:
+  - Ensure the correct amounts are credited only once per user.
+  - Verify balances are visible in the UI (e.g., in a wallet or profile section).
 
-### **Method 2: Different Browsers**
-- **Chrome**: `http://localhost:3002`
-- **Firefox/Safari**: `http://localhost:3002`
-- **Edge**: `http://localhost:3002`
+### 2.2 Currency Integration Across Game Modes
+- **Feature**: Unified Currency System
+- **Description**: Diamond and coin balances will be affected by gameplay outcomes across all game modes (e.g., single-player, multiplayer, tournaments).
+- **Details**:
+  - **Earning Currency**:
+    - Winning a game mode grants rewards (e.g., +50 coins for a standard win, +10 diamonds for a tournament win).
+    - Specific reward amounts for each game mode to be defined by the game design team (e.g., 10 coins for a single-player win, 100 coins for a multiplayer win, etc.).
+  - **Spending Currency**:
+    - Players can spend coins or diamonds to enter premium game modes, purchase in-game items (e.g., skins, power-ups), or unlock features.
+    - Example costs: 100 coins to enter a multiplayer match, 5 diamonds for a special power-up.
+  - **Balance Updates**:
+    - Real-time updates to diamond and coin balances after each game session.
+    - Deduct entry fees before the game starts and credit rewards after completion.
+- **Implementation**:
+  - Backend: Update user balance in the database after each game session.
+  - Frontend: Reflect updated balances in the UI immediately after transactions.
+  - Ensure synchronization to prevent discrepancies (e.g., use transactional updates to avoid race conditions).
+- **Validation**:
+  - Test balance updates for wins, losses, and draws in all game modes.
+  - Verify that negative balances are prevented (e.g., cannot enter a game without sufficient currency).
+  - Log all transactions for auditing and debugging.
 
-Each browser acts as a completely separate player.
+### 2.3 Currency Conversion (Diamonds to Coins)
+- **Feature**: Diamond-to-Coin Conversion
+- **Description**: Players can convert diamonds to coins at predefined rates to increase their coin balance for gameplay or purchases.
+- **Details**:
+  - Conversion rates:
+    - 600 diamonds = 15,000 coins
+    - 1,200 diamonds = 30,000 coins
+  - Conversion is one-way (diamonds to coins only; no coin-to-diamond conversion).
+  - Players must have sufficient diamonds to initiate conversion.
+- **Implementation**:
+  - Add a “Convert Currency” option in the game’s wallet or shop UI.
+  - Display conversion rates clearly to the user.
+  - Backend: Deduct diamonds and credit coins in a single transaction to ensure atomicity.
+  - Frontend: Prompt user to confirm conversion to prevent accidental transactions.
+- **Validation**:
+  - Test conversion for both rates (600 and 1,200 diamonds).
+  - Verify that insufficient diamond balance prevents conversion.
+  - Ensure UI updates reflect new balances post-conversion.
+  - Log conversions for tracking and analytics.
 
-### **Method 3: Incognito/Private Windows**
-- **Regular Window**: Normal browsing session
-- **Private/Incognito Window**: Separate session
-- Different localStorage = Different players
+### 2.4 In-App Purchase System
+- **Feature**: Purchase Diamonds with USD
+- **Description**: Players can buy diamonds using real currency (USD) through in-app purchases.
+- **Details**:
+  - Purchase option: $5 = 2,000 diamonds.
+  - Additional purchase tiers (e.g., $10 for 4,500 diamonds, $20 for 10,000 diamonds) may be added later based on analytics.
+  - Purchases processed via platform-specific payment systems (e.g., Apple App Store, Google Play Store).
+- **Implementation**:
+  - Integrate with platform payment APIs (e.g., Apple In-App Purchase, Google Play Billing).
+  - Add a “Buy Diamonds” section in the shop UI, clearly displaying the $5 = 2,000 diamonds offer.
+  - Backend: Credit diamonds to the user’s account upon successful payment confirmation.
+  - Provide a transaction receipt or confirmation in the UI.
+- **Validation**:
+  - Test purchase flow on all supported platforms (iOS, Android, web).
+  - Verify correct diamond crediting after purchase.
+  - Ensure failed payments do not credit diamonds.
+  - Comply with platform-specific refund and error-handling policies.
 
-### **Method 4: Multiple Devices**
-- **Computer**: `http://localhost:3002`
-- **Phone**: `http://your-computer-ip:3002` (if on same network)
-- **Tablet**: `http://your-computer-ip:3002`
+### 2.5 Daily Login Rewards
+- **Feature**: Daily Login Reward System
+- **Description**: Players receive rewards for logging into the game daily, with special rewards for consecutive logins.
+- **Details**:
+  - **Standard Reward**: 100 coins for each daily login.
+  - **Special Reward**: 50 diamonds on the 10th consecutive login, repeating every 10th login (e.g., day 10, 20, 30, etc.).
+  - Consecutive login streak resets to 0 if a player misses a day.
+  - Rewards are credited only once per day (based on a 24-hour cycle, e.g., UTC or local time zone).
+- **Implementation**:
+  - Backend: Track login timestamps and streak count in the user’s profile.
+  - Credit rewards automatically upon login, with a notification in the UI.
+  - Frontend: Display a “Daily Login” UI component showing the current streak, next reward, and a progress tracker (e.g., a calendar or streak bar).
+  - Notify players of their streak status and upcoming 10th-day rewards.
+- **Validation**:
+  - Test reward crediting for daily logins (100 coins).
+  - Verify 50-diamond reward on the 10th consecutive login.
+  - Ensure streak resets correctly after a missed day.
+  - Test edge cases (e.g., logins near midnight, time zone changes).
+  - Confirm UI accurately reflects streak and reward status.
 
-## 🛠 **Debug Testing Tools**
+---
 
-### **Console Commands** (Open Browser DevTools → Console)
+## 3. Technical Requirements
 
-```javascript
-// Check matchmaking status
-showMatchmakingDebugInfo();
+### 3.1 Backend
+- **Database**:
+  - Store user balances (diamonds, coins) in a secure, scalable database (e.g., MongoDB, PostgreSQL).
+  - Add fields for login streak and last login timestamp.
+  - Log all currency transactions (gameplay, conversions, purchases, rewards) for auditing.
+- **APIs**:
+  - GET /user/balance: Retrieve current diamond and coin balances.
+  - POST /user/convert: Handle diamond-to-coin conversions.
+  - POST /user/purchase: Process diamond purchases and credit diamonds.
+  - POST /user/login-reward: Credit daily login rewards and update streak.
+  - PATCH /user/balance: Update balances after gameplay (wins/losses).
+- **Security**:
+  - Use transactional updates to prevent race conditions in balance changes.
+  - Validate all inputs to prevent exploits (e.g., negative conversions, duplicate rewards).
+  - Encrypt sensitive data (e.g., payment information) per platform requirements.
+- **Scalability**:
+  - Handle high concurrency for login rewards and gameplay updates.
+  - Optimize database queries for balance checks and updates.
 
-// Simulate a second player for testing
-simulateSecondPlayer();
+### 3.2 Frontend
+- **UI Components**:
+  - Wallet/Shop UI: Display diamond and coin balances, conversion options, and purchase options.
+  - Daily Login UI: Show streak progress, next reward, and claim button.
+  - Gameplay UI: Show balance changes (e.g., entry fees, rewards) after each session.
+- **Animations & Feedback**:
+  - Visual feedback for successful transactions (e.g., coin/diamond animations).
+  - Confirmation prompts for conversions and purchases.
+  - Notifications for daily login rewards and streak milestones.
+- **Platforms**:
+  - Support iOS, Android, and web (via grok.com and x.com).
+  - Ensure consistent UI/UX across platforms.
 
-// Check backend health
-fetch('http://localhost:8000/health').then(r => r.json()).then(console.log);
+### 3.3 Integration
+- Integrate with xAI’s Grok 3 API for any AI-driven features (e.g., personalized reward suggestions, if applicable).
+- Use platform-specific payment systems for in-app purchases.
+- Sync with game servers for real-time balance updates during gameplay.
 
-// Check matchmaking queue
-fetch('http://localhost:8000/matchmaking/status').then(r => r.json()).then(console.log);
-```
+---
 
-### **Expected Console Output**
-```
-🔍 MATCHMAKING DEBUG INFO:
-- Player ID: player_1699123456789_abc123def
-- Player Name: Anonymous
-- Is Searching: true
-- WebSocket State: 1 (OPEN)
-- Game Mode: online
-- Queue Size: 2
-- Waiting Players: [...]
-```
+## 4. User Stories
 
-## 🎮 **Complete Testing Checklist**
+1. **As a new player**, I want to receive 500 diamonds and 10,000 coins upon signing up so that I can start playing immediately.
+2. **As a player**, I want my diamond and coin balances to update based on my gameplay outcomes across all modes so that I can track my progress.
+3. **As a player**, I want to convert 600 or 1,200 diamonds to 15,000 or 30,000 coins, respectively, so that I can use coins for gameplay or purchases.
+4. **As a player**, I want to buy 2,000 diamonds for $5 so that I can acquire more premium currency.
+5. **As a player**, I want to receive 100 coins for logging in daily and 50 diamonds every 10th consecutive login so that I’m rewarded for my loyalty.
 
-### **Connection Testing**
-- [ ] Player can click "Find Random Player"
-- [ ] "Looking for players..." appears
-- [ ] Queue position updates (Position in queue: 1)
-- [ ] Players can cancel search
-- [ ] Match found notification appears
-- [ ] Both players navigate to game board
+---
 
-### **Gameplay Testing**
-- [ ] Both players see opponent's name
-- [ ] Turn-based gameplay works
-- [ ] Player 1 can pick candies from Player 2's grid
-- [ ] Player 2 can pick candies from Player 1's grid
-- [ ] Candy collection updates in real-time
-- [ ] Profile feedback shows "Yummy! 😋" when picking candy
-- [ ] Profile feedback shows "Got ya!!! 🎉" when someone picks poison
-- [ ] Win/lose conditions work correctly
-- [ ] Game ends properly for both players
+## 5. Success Metrics
+- **Engagement**: Increase daily active users (DAU) by 10% within 3 months of implementation.
+- **Retention**: Improve 7-day retention rate by 5% due to daily login rewards.
+- **Revenue**: Achieve a 5% conversion rate for in-app diamond purchases within 6 months.
+- **Economy Balance**: Monitor average diamond/coin balances to ensure the economy remains sustainable (e.g., no hyperinflation or scarcity).
 
-### **Profile Feedback Testing**
-- [ ] "Yummy! 😋" appears on picker's profile
-- [ ] "Got ya!!! 🎉" appears on winner's profile when poison picked
-- [ ] Feedback animates smoothly
-- [ ] Multiple feedbacks don't conflict
-- [ ] Feedback appears above correct player profiles
+---
 
-### **Network Testing**
-- [ ] Connection survives brief network interruption
-- [ ] Reconnection works if WebSocket drops
-- [ ] Error handling for backend downtime
-- [ ] Graceful degradation when matchmaking fails
+## 6. Risks and Mitigation
+- **Risk**: Players exploit the system to gain free currency (e.g., manipulating login streaks).
+  - **Mitigation**: Implement server-side validation and logging for all transactions.
+- **Risk**: Payment processing errors lead to uncredited diamonds.
+  - **Mitigation**: Test payment flows thoroughly and provide customer support for refunds.
+- **Risk**: Unbalanced economy (e.g., too many coins/diamonds awarded).
+  - **Mitigation**: Monitor economy metrics and adjust reward rates via server-side configuration.
 
-## 🚨 **Troubleshooting Common Issues**
+---
 
-### **"Unable to connect to matchmaking server"**
-```bash
-# Check if backend is running
-curl http://localhost:8000/health
+## 7. Timeline
+- **Week 1-2**: Design UI/UX mockups and finalize reward structures.
+- **Week 3-4**: Develop backend APIs and database schema.
+- **Week 5-6**: Implement frontend UI and integrate with backend.
+- **Week 7**: Test all features (gameplay, conversions, purchases, login rewards).
+- **Week 8**: Fix bugs, optimize performance, and deploy to production.
 
-# Check if matchmaking endpoint works
-curl http://localhost:8000/matchmaking/status
-```
+---
 
-### **"Failed to start matchmaking"**
-- Check browser console for errors
-- Ensure WebSocket connection is not blocked
-- Try refreshing the page
+## 8. Dependencies
+- Platform payment systems (Apple, Google).
+- Game server infrastructure for real-time balance updates.
+- Analytics tools for tracking engagement and economy metrics.
 
-### **Players don't get matched**
-```javascript
-// Check queue status in console
-showMatchmakingDebugInfo();
-```
+---
 
-### **Game doesn't start after match**
-- Check if both players navigated to game screen
-- Verify game state is properly initialized
-- Check for JavaScript errors in console
-
-## 🎯 **Manual Testing Scenarios**
-
-### **Scenario 1: Basic Matchmaking**
-1. Two players search for game
-2. Automatic matching occurs
-3. Game starts successfully
-4. Players take turns
-5. Game ends with winner
-
-### **Scenario 2: Poison Pick**
-1. Players take turns normally
-2. One player picks opponent's poison
-3. Winner gets "Got ya!!! 🎉" feedback
-4. Game ends immediately
-5. Proper win/lose message
-
-### **Scenario 3: Network Interruption**
-1. Start online game
-2. Temporarily disconnect one player's internet
-3. Reconnect network
-4. Verify game continues or handles gracefully
-
-### **Scenario 4: Multiple Simultaneous Games**
-1. Open 4+ browser tabs
-2. Start matchmaking in pairs
-3. Verify multiple games run simultaneously
-4. Check backend handles concurrent connections
-
-## 📊 **Performance Testing**
-
-### **Load Testing**
-```javascript
-// Simulate multiple players
-for(let i = 0; i < 10; i++) {
-    setTimeout(() => simulateSecondPlayer(), i * 1000);
-}
-```
-
-### **WebSocket Health**
-- Monitor WebSocket connections in DevTools → Network
-- Check for proper handshake
-- Verify message exchange during gameplay
-
-## ✅ **Success Criteria**
-
-A successful online multiplayer test should achieve:
-
-1. **< 5 seconds** match time with 2 players
-2. **Real-time** move synchronization  
-3. **Contextual feedback** on player profiles
-4. **Graceful error handling**
-5. **Proper game state management**
-6. **Clean session cleanup**
-
-## 🎉 **Ready to Test!**
-
-The system is now ready for comprehensive testing. Start with Method 1 (two browser tabs) for the quickest verification, then proceed to more advanced scenarios.
-
-**Pro Tip**: Keep browser DevTools open during testing to monitor WebSocket connections and catch any errors! 

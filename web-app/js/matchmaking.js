@@ -78,6 +78,9 @@ class AutomaticMatchmakingManager {
             case 'queue_status':
                 this.updateQueueStatus(data);
                 break;
+            case 'matchmaking_timeout':
+                this.handleMatchmakingTimeout(data);
+                break;
             case 'pong':
                 // Keep-alive response
                 break;
@@ -144,26 +147,22 @@ class AutomaticMatchmakingManager {
         // Set a flag to indicate this is a matchmaking game
         if (typeof gameState !== 'undefined') {
             gameState.isMatchmakingGame = true;
+            gameState.matchData = matchData;
+            gameState.city = matchData.city || 'dubai'; // Store city from match data
+            gameState.opponentName = matchData.opponent.name;
         }
         
-        // For matchmaking games, go to city selection first
+        // For PRD compliance: Go to candy selection confirmation first
         if (typeof showScreen === 'function') {
-            showScreen('page2');
+            showScreen('page4b');
         }
         
-        // Update city selection header to show it's for matchmaking
-        const cityHeader = document.querySelector('#page2 h2');
-        if (cityHeader) {
-            cityHeader.textContent = '🌍 Choose Your Battle Arena';
+        // Initialize candy selection confirmation
+        if (typeof initializeCandySelectionConfirmation === 'function') {
+            initializeCandySelectionConfirmation(matchData);
         }
         
-        // Add matchmaking context to city selection
-        const citySubtitle = document.querySelector('#page2 .subtitle');
-        if (citySubtitle) {
-            citySubtitle.textContent = 'Select your preferred city for this matched game';
-        }
-        
-        console.log('✅ Matchmaking game ready for city selection');
+        console.log('✅ Matchmaking game ready for candy selection confirmation');
     }
     
     async startSearch() {
@@ -286,9 +285,17 @@ class AutomaticMatchmakingManager {
     }
     
     handleDisconnection() {
+        console.log('🎮 WebSocket disconnected');
+        
         if (this.isSearching && this.reconnectAttempts < this.maxReconnectAttempts) {
             console.log(`🎮 Attempting to reconnect (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
             this.reconnectAttempts++;
+            
+            // Show reconnection attempt notification
+            if (typeof showNotification === 'function') {
+                showNotification(`Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`, 'info', 2000);
+            }
+            
             setTimeout(() => this.connectToMatchmaking(), 2000);
         } else {
             this.isSearching = false;
@@ -296,20 +303,68 @@ class AutomaticMatchmakingManager {
             this.stopQueueUpdates();
             
             if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+                console.log('❌ Max reconnection attempts reached');
                 if (typeof showNotification === 'function') {
                     showNotification('Lost connection to matchmaking server. Please try again.', 'error');
                 }
+                
+                // Reset for next attempt
+                this.reconnectAttempts = 0;
             }
         }
     }
     
     handleConnectionError() {
+        console.log('❌ WebSocket connection error');
+        
         this.isSearching = false;
         this.updateMatchmakingUI('idle');
         this.stopQueueUpdates();
+        
         if (typeof showNotification === 'function') {
-            showNotification('Unable to connect to matchmaking server. Please check your connection.', 'error');
+            showNotification('Unable to connect to matchmaking server. Please check your connection and try again.', 'error');
         }
+        
+        // Update city matchmaking UI if applicable
+        const cityStatusElement = document.getElementById('city-matchmaking-status');
+        if (cityStatusElement) {
+            cityStatusElement.innerHTML = `
+                <div class="text-danger mb-4">
+                    <div class="text-4xl mb-2">❌</div>
+                    <div class="font-bold">Connection Failed</div>
+                    <div class="text-sm">Please check your internet connection</div>
+                </div>
+                <button class="btn btn-primary" onclick="location.reload()">Retry</button>
+            `;
+        }
+    }
+    
+    handleMatchmakingTimeout(data) {
+        console.log('⏰ Matchmaking timeout received:', data);
+        
+        this.isSearching = false;
+        this.updateMatchmakingUI('idle');
+        this.stopQueueUpdates();
+        
+        // Show timeout message with city-specific text
+        if (typeof showNotification === 'function') {
+            showNotification(data.message || 'No players found. Try again or select another city.', 'warning', 5000);
+        }
+        
+        // Update city matchmaking UI if on city matchmaking screen
+        const cityStatusElement = document.getElementById('city-matchmaking-status');
+        if (cityStatusElement) {
+            cityStatusElement.innerHTML = `
+                <div class="text-warning mb-4">
+                    <div class="text-4xl mb-2">⏰</div>
+                    <div class="font-bold">No Players Found</div>
+                    <div class="text-sm">Try again or select another city</div>
+                </div>
+                <button class="btn btn-primary" onclick="location.reload()">Try Again</button>
+            `;
+        }
+        
+        console.log('✅ Matchmaking timeout handled');
     }
     
     disconnect() {

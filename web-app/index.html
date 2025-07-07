@@ -3,22 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PCD Unified Game - Desktop Version</title>
-    <link rel="stylesheet" href="css/main.css">
+    <title>Poison Candy Duel - Ultimate Gaming Experience</title>
+    <meta name="description" content="Play Poison Candy Duel - A thrilling strategy game where you pick candies and avoid the poison. Challenge AI, friends, or players worldwide!">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍭</text></svg>">
+    
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
     <!-- Connection Status Indicator -->
     <div id="connection-status" class="connection-status connected">
-        🟢 Connected
+        <span class="connection-dot"></span>
+        <span class="connection-text">Connected</span>
+    </div>
+    
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-container">
+            <div class="game-logo">
+                <h1>🍭 Poison Candy Duel</h1>
+                <p>Ultimate Gaming Experience</p>
+            </div>
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading your game...</div>
+        </div>
     </div>
 
     <!-- Premium Main Menu Container -->
     <div class="min-h-screen bg-gradient-to-br from-secondary-light to-white">
         <!-- Page 1: Premium Main Menu -->
-        <div id="page1" class="screen active">
+        <div id="page1" class="screen">
             <div class="container mx-auto px-4 py-8">
                 <!-- Enhanced header with profile info -->
                 <header class="flex justify-between items-center mb-12">
@@ -55,59 +76,111 @@
                     </button>
                 </header>
 
-                <!-- Premium menu cards grid -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Welcome Section -->
+                <div class="text-center mb-8">
+                    <h2 class="text-3xl font-display font-bold text-primary mb-4">Welcome to Poison Candy Duel</h2>
+                    <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+                        Challenge your strategy skills in this thrilling candy-picking game. 
+                        Collect 11 candies while avoiding the deadly poison. Choose your game mode below!
+                    </p>
+                </div>
+
+                <!-- Game Mode Selection -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-8">
+                    <!-- Online Play -->
                     <div class="menu-card" onclick="showScreen('page2')">
                         <div class="menu-card-icon">
                             <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
                             </svg>
                         </div>
-                        <h3 class="menu-card-title">Play Online</h3>
-                        <p class="menu-card-subtitle">Compete globally</p>
+                        <h3 class="menu-card-title">🌍 Play Online</h3>
+                        <p class="menu-card-subtitle">
+                            Compete against players worldwide in different arenas. 
+                            Win coins and climb the leaderboard!
+                        </p>
+                        <div class="mt-4 text-sm text-gray-500">
+                            • Dubai, Cairo, Oslo arenas<br>
+                            • Entry fees: 500-5000 coins<br>
+                            • Competitive matchmaking
+                        </div>
                     </div>
 
-                    <div class="menu-card menu-card-offline" onclick="showScreen('page7')">
+                    <!-- Practice Mode -->
+                    <div class="menu-card" onclick="showScreen('page7')">
                         <div class="menu-card-icon">
                             <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M20,15.5C18.25,15.5 16.5,15.42 14.75,15.25L13.5,17L9.5,13L13.5,9L14.75,10.75C16.5,10.58 18.25,10.5 20,10.5V15.5Z"/>
+                                <path d="M9 11H7v9h2v-9zm4 0h-2v9h2v-9zm4 0h-2v9h2v-9zm2-7v2H4V4h3V2h10v2h3zm-2 4H5v16h14V8z"/>
                             </svg>
                         </div>
-                        <h3 class="menu-card-title">Play Offline</h3>
-                        <p class="menu-card-subtitle">Practice against AI</p>
+                        <h3 class="menu-card-title">🤖 Practice Mode</h3>
+                        <p class="menu-card-subtitle">
+                            Perfect your skills against AI opponents. 
+                            No risk, just pure strategy training!
+                        </p>
+                        <div class="mt-4 text-sm text-gray-500">
+                            • Easy, Medium, Hard AI<br>
+                            • No entry fees<br>
+                            • Earn practice rewards
+                        </div>
                     </div>
 
-                    <div class="menu-card menu-card-friends" onclick="showScreen('page6')">
+                    <!-- Friends Mode -->
+                    <div class="menu-card" onclick="showScreen('page6')">
                         <div class="menu-card-icon">
                             <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M16 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zm4 18v-6h2.5l-2.54-7.63c-.34-1.02-1.3-1.74-2.39-1.74-.34 0-.68.07-1 .2L13 8.5V7c0-.56-.45-1-1-1s-1 .44-1 1v3.5c0 .45.3.84.74.96L15 12.5v6H4l1.54-4.63c.34-1.02 1.3-1.74 2.39-1.74H9v-2H7.93c-.81 0-1.58.36-2.12 1L3 18.5V22h18v-2h-1z"/>
                             </svg>
                         </div>
-                        <h3 class="menu-card-title">Play with Friends</h3>
-                        <p class="menu-card-subtitle">Private matches</p>
+                        <h3 class="menu-card-title">👥 Play with Friends</h3>
+                        <p class="menu-card-subtitle">
+                            Create private rooms and challenge your friends. 
+                            Share room codes for instant matches!
+                        </p>
+                        <div class="mt-4 text-sm text-gray-500">
+                            • Create/Join private rooms<br>
+                            • Real-time P2P connection<br>
+                            • No entry fees
+                        </div>
                     </div>
 
-                    <div class="menu-card menu-card-rankings" onclick="showScreen('page10')">
+                    <!-- Stats & Progress -->
+                    <div class="menu-card" onclick="showScreen('page10')">
                         <div class="menu-card-icon">
                             <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 2l3.09 6.26L22 9l-5.91 3.07L19 22l-7-3.64L5 22l2.91-9.93L2 9l6.91-1.74L12 2z"/>
+                                <path d="M16,11V3H8v6H2v12h20V11H16z M10,5h4v14h-4V5z M4,11h4v8H4V11z M20,19h-4v-6h4V19z"/>
                             </svg>
                         </div>
-                        <h3 class="menu-card-title">Rankings</h3>
-                        <p class="menu-card-subtitle">View leaderboard</p>
-                    </div>
-
-                    <div class="menu-card menu-card-rewards" onclick="showScreen('page9')">
-                        <div class="menu-card-icon">
-                            <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                            </svg>
+                        <h3 class="menu-card-title">📊 Stats & Rankings</h3>
+                        <p class="menu-card-subtitle">
+                            Track your progress, view leaderboards, 
+                            and collect daily rewards!
+                        </p>
+                        <div class="mt-4 text-sm text-gray-500">
+                            • Global leaderboards<br>
+                            • Personal statistics<br>
+                            • Daily rewards system
                         </div>
-                        <h3 class="menu-card-title">Rewards</h3>
-                        <p class="menu-card-subtitle">Claim prizes</p>
                     </div>
-                    
+                </div>
 
+                <!-- Quick Stats -->
+                <div class="grid grid-cols-3 gap-4 max-w-lg mx-auto mb-8">
+                    <div class="card text-center p-4">
+                        <div class="text-2xl mb-2">🎮</div>
+                        <div class="text-sm text-gray-600">Games Played</div>
+                        <div class="text-xl font-bold text-primary" id="total-games">0</div>
+                    </div>
+                    <div class="card text-center p-4">
+                        <div class="text-2xl mb-2">🏆</div>
+                        <div class="text-sm text-gray-600">Win Rate</div>
+                        <div class="text-xl font-bold text-success" id="win-rate">0%</div>
+                    </div>
+                    <div class="card text-center p-4">
+                        <div class="text-2xl mb-2">⭐</div>
+                        <div class="text-sm text-gray-600">Rank</div>
+                        <div class="text-xl font-bold text-warning">Beginner</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -115,16 +188,28 @@
         <!-- Page 2: Premium City Selection -->
         <div id="page2" class="screen">
             <div class="container mx-auto px-4 py-8">
+                <!-- Breadcrumb Navigation -->
+                <nav class="breadcrumb mb-6">
+                    <ol class="flex items-center space-x-2 text-sm">
+                        <li><a href="#" onclick="showScreen('page1')" class="text-primary hover:text-primary-dark">🏠 Home</a></li>
+                        <li class="text-gray-400">›</li>
+                        <li class="text-gray-600">🌍 Online Arenas</li>
+                    </ol>
+                </nav>
+
                 <!-- Enhanced header -->
                 <header class="flex items-center justify-between mb-8">
                     <button class="btn btn-secondary" onclick="showScreen('page1')">
                         <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
                         </svg>
-                        Back
+                        Back to Menu
                     </button>
-                    <h2 class="text-2xl font-display font-bold text-primary">Select Your Arena</h2>
-                    <div class="w-20"></div> <!-- Spacer for centering -->
+                    <div class="text-center">
+                        <h2 class="text-2xl font-display font-bold text-primary">Select Your Arena</h2>
+                        <p class="text-sm text-gray-600">Choose your battlefield and stake your coins</p>
+                    </div>
+                    <div class="w-32"></div> <!-- Spacer for centering -->
                 </header>
 
                 <!-- Player Balance Display -->
@@ -137,31 +222,29 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- City Selection -->
-                <div class="subtitle text-center mb-8">
-                    <p class="text-gray-600">Choose your battlefield and stake your coins</p>
-                </div>
                 
+                <!-- Arena Selection Cards with improved UX -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <!-- Dubai Arena -->
-                    <div class="card card-premium hover:shadow-lg transition-shadow duration-300">
+                    <div class="arena-card" data-arena="dubai">
                         <div class="p-6 text-center">
                             <div class="text-6xl mb-4">🏙️</div>
                             <h3 class="text-xl font-display font-bold text-primary mb-2">Dubai Arena</h3>
                             <p class="text-gray-600 mb-4">Luxury Desert Gaming</p>
                             
-                            <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                            <div class="arena-stats bg-gray-50 rounded-lg p-4 mb-4">
                                 <div class="text-sm text-gray-600 mb-2">Entry Cost</div>
                                 <div class="text-2xl font-bold text-primary">500 Coins</div>
                                 <div class="text-sm text-gray-500">Winner gets 950 coins</div>
                             </div>
                             
-                            <div class="bg-blue-50 rounded-lg p-3 mb-4">
+                            <div class="arena-timer bg-blue-50 rounded-lg p-3 mb-4">
                                 <div class="text-sm text-blue-700">⏰ Turn Timer: 30 seconds</div>
                             </div>
                             
-                            <button class="btn btn-primary w-full" onclick="startOnlineGame('Dubai', 500)">
+                            <button class="btn btn-primary w-full arena-btn" 
+                                    onclick="enterArena('Dubai', 500, 950, 30)"
+                                    data-cost="500">
                                 <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                                 </svg>
@@ -171,23 +254,25 @@
                     </div>
 
                     <!-- Cairo Arena -->
-                    <div class="card card-premium hover:shadow-lg transition-shadow duration-300">
+                    <div class="arena-card" data-arena="cairo">
                         <div class="p-6 text-center">
                             <div class="text-6xl mb-4">🏛️</div>
                             <h3 class="text-xl font-display font-bold text-primary mb-2">Cairo Temple</h3>
                             <p class="text-gray-600 mb-4">Ancient Pharaoh Gaming</p>
                             
-                            <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                            <div class="arena-stats bg-gray-50 rounded-lg p-4 mb-4">
                                 <div class="text-sm text-gray-600 mb-2">Entry Cost</div>
                                 <div class="text-2xl font-bold text-orange-600">1000 Coins</div>
                                 <div class="text-sm text-gray-500">Winner gets 1900 coins</div>
                             </div>
                             
-                            <div class="bg-orange-50 rounded-lg p-3 mb-4">
+                            <div class="arena-timer bg-orange-50 rounded-lg p-3 mb-4">
                                 <div class="text-sm text-orange-700">⏰ Turn Timer: 20 seconds</div>
                             </div>
                             
-                            <button class="btn btn-warning w-full" onclick="startOnlineGame('Cairo', 1000)">
+                            <button class="btn btn-warning w-full arena-btn" 
+                                    onclick="enterArena('Cairo', 1000, 1900, 20)"
+                                    data-cost="1000">
                                 <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                                 </svg>
@@ -197,23 +282,25 @@
                     </div>
 
                     <!-- Oslo Arena -->
-                    <div class="card card-premium hover:shadow-lg transition-shadow duration-300">
+                    <div class="arena-card" data-arena="oslo">
                         <div class="p-6 text-center">
                             <div class="text-6xl mb-4">🏔️</div>
                             <h3 class="text-xl font-display font-bold text-primary mb-2">Oslo Fjord</h3>
                             <p class="text-gray-600 mb-4">Nordic Winter Gaming</p>
                             
-                            <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                            <div class="arena-stats bg-gray-50 rounded-lg p-4 mb-4">
                                 <div class="text-sm text-gray-600 mb-2">Entry Cost</div>
                                 <div class="text-2xl font-bold text-blue-600">5000 Coins</div>
                                 <div class="text-sm text-gray-500">Winner gets 9500 coins</div>
                             </div>
                             
-                            <div class="bg-red-50 rounded-lg p-3 mb-4">
+                            <div class="arena-timer bg-red-50 rounded-lg p-3 mb-4">
                                 <div class="text-sm text-red-700">⏰ Turn Timer: 10 seconds</div>
                             </div>
                             
-                            <button class="btn btn-danger w-full" onclick="startOnlineGame('Oslo', 5000)">
+                            <button class="btn btn-danger w-full arena-btn" 
+                                    onclick="enterArena('Oslo', 5000, 9500, 10)"
+                                    data-cost="5000">
                                 <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                                 </svg>
@@ -234,7 +321,7 @@
                         <div id="matchmaking-status" class="mb-6">
                             <div id="matchmaking-idle" class="text-sm text-gray-500">
                                 Ready to find an opponent
-                            </div>
+                </div>
                             <div id="matchmaking-searching" class="text-sm text-info animate-pulse" style="display: none;">
                                 🔍 Looking for players...
                             </div>
@@ -471,6 +558,82 @@
             </div>
         </div>
 
+        <!-- Page 4b: Candy Selection Confirmation Screen (PRD Requirement) -->
+        <div id="page4b" class="screen">
+            <div class="container mx-auto px-4 py-8">
+                <header class="flex items-center justify-between mb-8">
+                    <button class="btn btn-secondary" onclick="showScreen('page1')">
+                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                        </svg>
+                        Back
+                    </button>
+                    <h2 class="text-2xl font-display font-bold text-primary">🍬 Confirm Your Candies</h2>
+                    <div class="w-20"></div>
+                </header>
+                
+                <div class="max-w-4xl mx-auto">
+                    <div class="card card-premium p-8">
+                        <div class="text-center mb-8">
+                            <div class="text-6xl mb-4">🍬</div>
+                            <h3 class="text-xl font-display font-bold text-primary mb-4">Review Your Candy Collection</h3>
+                            <p class="text-gray-600 mb-4">These are the candies you'll be playing with. Confirm your selection to continue.</p>
+                            
+                            <div class="bg-info bg-opacity-10 rounded-lg p-4 mb-6">
+                                <div class="text-info font-bold mb-2">⏳ Waiting for Opponent</div>
+                                <div class="text-sm text-gray-600">Game will start when both players confirm their candy collections</div>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <!-- Your Candies -->
+                            <div class="text-center">
+                                <h4 class="font-display font-bold text-primary mb-4">Your Candies</h4>
+                                <div id="player-candy-confirmation-grid" class="grid grid-cols-4 gap-3 mb-6">
+                                    <!-- Populated by JavaScript -->
+                                </div>
+                                <div class="text-sm text-gray-600">
+                                    <div>Total: <span id="player-candy-count">0</span> candies</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Opponent Status -->
+                            <div class="text-center">
+                                <h4 class="font-display font-bold text-secondary mb-4">Opponent Status</h4>
+                                <div class="bg-gray-50 rounded-lg p-6 mb-6">
+                                    <div id="opponent-status-display" class="text-gray-600">
+                                        <div class="text-4xl mb-2">⏳</div>
+                                        <div>Waiting for opponent to confirm...</div>
+                                    </div>
+                                </div>
+                                <div class="text-sm text-gray-600">
+                                    <div>Opponent: <span id="opponent-name-display">Unknown</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center mt-8">
+                            <div id="candy-confirmation-status" class="mb-6">
+                                <div class="text-sm text-gray-600 mb-2">Are you ready to play with these candies?</div>
+                                <div class="text-xs text-gray-400">You have 20 seconds to confirm</div>
+                            </div>
+                            
+                            <button id="confirm-candy-selection-btn" class="btn btn-primary btn-large" onclick="confirmCandySelection()">
+                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                                </svg>
+                                Confirm My Candies
+                            </button>
+                            
+                            <div id="candy-confirmation-timer" class="mt-4 text-sm text-gray-500">
+                                <!-- Timer will show here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Page 5: Game Results Screen -->
         <div id="page5" class="screen">
             <div class="container mx-auto px-4 py-8">
@@ -512,7 +675,7 @@
             </div>
         </div>
 
-        <!-- Page 6: Play with Friends -->
+        <!-- Page 6: Play with Friends (Room-Based P2P) -->
         <div id="page6" class="screen">
             <div class="container mx-auto px-4 py-8">
                 <header class="flex items-center justify-between mb-8">
@@ -526,74 +689,256 @@
                     <div class="w-20"></div>
                 </header>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                    <!-- Create Room Section -->
                     <div class="card card-premium p-8 text-center">
-                        <div class="text-6xl mb-4">🔗</div>
-                        <h3 class="text-xl font-display font-bold text-primary mb-4">Create Private Room</h3>
-                        <p class="text-gray-600 mb-6">Create a private game room and share the code with your friend</p>
-                        <button class="btn btn-primary w-full" onclick="createPrivateRoom()">
+                        <div class="text-6xl mb-4">🏠</div>
+                        <h3 class="text-xl font-display font-bold text-primary mb-4">Create Room</h3>
+                        <p class="text-gray-600 mb-6">Create a private room and share the code with your friend</p>
+                        
+                        <div class="bg-primary bg-opacity-10 rounded-lg p-4 mb-6">
+                            <div class="text-sm text-primary font-bold mb-2">How it works:</div>
+                            <div class="text-sm text-gray-600 space-y-1">
+                                <div>1. Click "Create Room" to get a room code</div>
+                                <div>2. Share the code with your friend</div>
+                                <div>3. Start playing when both are ready!</div>
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-primary w-full mb-4" onclick="createPrivateRoom()">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                            </svg>
                             Create Room
                         </button>
+                        
+                        <div class="text-xs text-gray-400">
+                            <div>🔒 Private room with 6-character code</div>
+                            <div>👥 Direct P2P connection</div>
+                        </div>
                     </div>
-                    
+
+                    <!-- Join Room Section -->
                     <div class="card card-premium p-8 text-center">
-                        <div class="text-6xl mb-4">🎯</div>
-                        <h3 class="text-xl font-display font-bold text-primary mb-4">Join Private Room</h3>
-                        <p class="text-gray-600 mb-4">Enter your friend's room code to join their game</p>
-                        <input type="text" placeholder="Enter room code" class="w-full p-3 border rounded-lg mb-4" id="room-code-input">
-                        <button class="btn btn-primary w-full" onclick="joinPrivateRoom()">
+                        <div class="text-6xl mb-4">🚪</div>
+                        <h3 class="text-xl font-display font-bold text-primary mb-4">Join Room</h3>
+                        <p class="text-gray-600 mb-6">Enter your friend's room code to join their game</p>
+                        
+                        <div class="bg-secondary-light bg-opacity-50 rounded-lg p-4 mb-6">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Room Code</label>
+                            <input type="text" 
+                                   id="room-code-input" 
+                                   class="w-full p-3 border rounded-lg text-center text-2xl font-bold uppercase tracking-widest" 
+                                   placeholder="ABC123" 
+                                   maxlength="6"
+                                   style="text-transform: uppercase;">
+                            <div class="text-xs text-gray-500 mt-2">Enter the 6-character code from your friend</div>
+                        </div>
+                        
+                        <button class="btn btn-success w-full mb-4" onclick="joinPrivateRoom()">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                            </svg>
                             Join Room
                         </button>
+                        
+                        <div class="text-xs text-gray-400">
+                            <div>⚡ Instant connection</div>
+                            <div>🎮 Start playing immediately</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Friends Gaming Info -->
+                <div class="card mt-8 max-w-2xl mx-auto">
+                    <div class="p-6 text-center">
+                        <h4 class="font-display font-bold text-primary mb-4">Friends Gaming Features</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                            <div class="flex items-center space-x-2">
+                                <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                                </svg>
+                                <span>Free to play</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                                </svg>
+                                <span>Private rooms</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                                </svg>
+                                <span>Real-time gameplay</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Page 7: Play Offline (AI) -->
+        <!-- Page 7: Enhanced Practice Mode -->
         <div id="page7" class="screen">
             <div class="container mx-auto px-4 py-8">
+                <!-- Breadcrumb Navigation -->
+                <nav class="breadcrumb mb-6">
+                    <ol class="flex items-center space-x-2 text-sm">
+                        <li><a href="#" onclick="showScreen('page1')" class="text-primary hover:text-primary-dark">🏠 Home</a></li>
+                        <li class="text-gray-400">›</li>
+                        <li class="text-gray-600">🤖 Practice Mode</li>
+                    </ol>
+                </nav>
+
+                <!-- Enhanced Header -->
                 <header class="flex items-center justify-between mb-8">
                     <button class="btn btn-secondary" onclick="showScreen('page1')">
                         <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
                         </svg>
-                        Back
+                        Back to Menu
                     </button>
-                    <h2 class="text-2xl font-display font-bold text-primary">Practice vs AI</h2>
-                    <div class="w-20"></div>
+                    <div class="text-center">
+                        <h2 class="text-2xl font-display font-bold text-primary">Practice Mode</h2>
+                        <p class="text-sm text-gray-600">Perfect your skills against AI opponents</p>
+                    </div>
+                    <div class="w-32"></div>
                 </header>
-                
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="card card-premium cursor-pointer hover:scale-105 transition-all duration-300" onclick="startAIGameNew('easy')">
+
+                <!-- Practice Benefits -->
+                <div class="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-6 mb-8">
+                    <div class="text-center">
+                        <h3 class="text-xl font-bold text-gray-900 mb-2">🎯 Why Practice?</h3>
+                        <p class="text-gray-700 mb-4">Master your strategy without risking coins!</p>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div class="bg-white rounded-lg p-3">
+                                <div class="text-2xl mb-1">🧠</div>
+                                <div class="font-semibold">Learn Strategy</div>
+                                <div class="text-gray-600">Understand AI patterns</div>
+                            </div>
+                            <div class="bg-white rounded-lg p-3">
+                                <div class="text-2xl mb-1">⚡</div>
+                                <div class="font-semibold">Improve Speed</div>
+                                <div class="text-gray-600">Practice quick decisions</div>
+                            </div>
+                            <div class="bg-white rounded-lg p-3">
+                                <div class="text-2xl mb-1">🎁</div>
+                                <div class="font-semibold">Earn Rewards</div>
+                                <div class="text-gray-600">Get practice coins</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Difficulty Selection -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <!-- Easy AI -->
+                    <div class="arena-card" data-difficulty="easy">
                         <div class="p-6 text-center">
-                            <div class="text-6xl mb-4">🤖</div>
+                            <div class="text-6xl mb-4">🟢</div>
                             <h3 class="text-xl font-display font-bold text-success mb-2">Easy AI</h3>
                             <p class="text-gray-600 mb-4">Perfect for beginners</p>
-                            <div class="flex items-center justify-center space-x-2 bg-success bg-opacity-10 rounded-lg p-3">
-                                <span class="font-mono font-bold text-success">Free Practice</span>
+                            
+                            <div class="arena-stats bg-green-50 rounded-lg p-4 mb-4">
+                                <div class="text-sm text-green-700 mb-2">Difficulty Stats</div>
+                                <div class="text-xs text-green-600 space-y-1">
+                                    <div>• Slow decision making</div>
+                                    <div>• Predictable patterns</div>
+                                    <div>• 70% win rate for players</div>
+                                </div>
                             </div>
+                            
+                            <div class="arena-timer bg-green-100 rounded-lg p-3 mb-4">
+                                <div class="text-sm text-green-700">🎁 Reward: 10-25 coins</div>
+                            </div>
+                            
+                            <button class="btn btn-success w-full" onclick="startPracticeMode('easy')">
+                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                                Start Easy Practice
+                            </button>
                         </div>
                     </div>
-                    
-                    <div class="card card-premium cursor-pointer hover:scale-105 transition-all duration-300" onclick="startAIGameNew('medium')">
+
+                    <!-- Medium AI -->
+                    <div class="arena-card" data-difficulty="medium">
                         <div class="p-6 text-center">
-                            <div class="text-6xl mb-4">🧠</div>
+                            <div class="text-6xl mb-4">🟡</div>
                             <h3 class="text-xl font-display font-bold text-warning mb-2">Medium AI</h3>
                             <p class="text-gray-600 mb-4">Balanced challenge</p>
-                            <div class="flex items-center justify-center space-x-2 bg-warning bg-opacity-10 rounded-lg p-3">
-                                <span class="font-mono font-bold text-warning">Free Practice</span>
+                            
+                            <div class="arena-stats bg-yellow-50 rounded-lg p-4 mb-4">
+                                <div class="text-sm text-yellow-700 mb-2">Difficulty Stats</div>
+                                <div class="text-xs text-yellow-600 space-y-1">
+                                    <div>• Moderate decision speed</div>
+                                    <div>• Some strategic thinking</div>
+                                    <div>• 50% win rate for players</div>
+                                </div>
                             </div>
+                            
+                            <div class="arena-timer bg-yellow-100 rounded-lg p-3 mb-4">
+                                <div class="text-sm text-yellow-700">🎁 Reward: 25-50 coins</div>
+                            </div>
+                            
+                            <button class="btn btn-warning w-full" onclick="startPracticeMode('medium')">
+                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                                Start Medium Practice
+                            </button>
                         </div>
                     </div>
-                    
-                    <div class="card card-premium cursor-pointer hover:scale-105 transition-all duration-300" onclick="startAIGameNew('hard')">
+
+                    <!-- Hard AI -->
+                    <div class="arena-card" data-difficulty="hard">
                         <div class="p-6 text-center">
-                            <div class="text-6xl mb-4">🔥</div>
+                            <div class="text-6xl mb-4">🔴</div>
                             <h3 class="text-xl font-display font-bold text-danger mb-2">Hard AI</h3>
                             <p class="text-gray-600 mb-4">Ultimate challenge</p>
-                            <div class="flex items-center justify-center space-x-2 bg-danger bg-opacity-10 rounded-lg p-3">
-                                <span class="font-mono font-bold text-danger">Free Practice</span>
+                            
+                            <div class="arena-stats bg-red-50 rounded-lg p-4 mb-4">
+                                <div class="text-sm text-red-700 mb-2">Difficulty Stats</div>
+                                <div class="text-xs text-red-600 space-y-1">
+                                    <div>• Fast decision making</div>
+                                    <div>• Advanced strategies</div>
+                                    <div>• 30% win rate for players</div>
+                                </div>
                             </div>
+                            
+                            <div class="arena-timer bg-red-100 rounded-lg p-3 mb-4">
+                                <div class="text-sm text-red-700">🎁 Reward: 50-100 coins</div>
+                            </div>
+                            
+                            <button class="btn btn-danger w-full" onclick="startPracticeMode('hard')">
+                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                                Start Hard Practice
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Practice Statistics -->
+                <div class="card bg-gray-50 p-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-4">📊 Your Practice Statistics</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                        <div>
+                            <div class="text-2xl font-bold text-success" id="practice-easy-wins">0</div>
+                            <div class="text-sm text-gray-600">Easy Wins</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-warning" id="practice-medium-wins">0</div>
+                            <div class="text-sm text-gray-600">Medium Wins</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-danger" id="practice-hard-wins">0</div>
+                            <div class="text-sm text-gray-600">Hard Wins</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-primary" id="practice-total-coins">0</div>
+                            <div class="text-sm text-gray-600">Coins Earned</div>
                         </div>
                     </div>
                 </div>
@@ -971,6 +1316,140 @@
                 </div>
             </div>
         </div>
+
+        <!-- Page 12: Global Matchmaking (Before City Selection) -->
+        <div id="page12" class="screen">
+            <div class="container mx-auto px-4 py-8">
+                <!-- Enhanced header -->
+                <header class="flex items-center justify-between mb-8">
+                    <button class="btn btn-secondary" onclick="showScreen('page1')">
+                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                        </svg>
+                        Back
+                    </button>
+                    <h2 class="text-2xl font-display font-bold text-primary">Global Matchmaking</h2>
+                    <div class="w-20"></div> <!-- Spacer for centering -->
+                </header>
+
+                <!-- Global Matchmaking Interface -->
+                <div class="max-w-2xl mx-auto">
+                    <!-- Player Balance Display -->
+                    <div class="card card-premium text-center p-4 mb-8">
+                        <div class="flex items-center justify-center space-x-4">
+                            <div class="text-2xl">💰</div>
+                            <div>
+                                <div class="text-sm text-gray-600">Your Balance</div>
+                                <div class="text-xl font-bold text-primary" id="player-balance-matchmaking">10000</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main Matchmaking Section -->
+                    <div class="card card-premium text-center p-8 mb-8">
+                        <div class="text-8xl mb-6">🌍</div>
+                        <h3 class="text-3xl font-display font-bold text-primary mb-4">Find Your Opponent</h3>
+                        <p class="text-lg text-gray-600 mb-8">Connect with players from around the world for competitive candy duels</p>
+                        
+                        <!-- Matchmaking Status -->
+                        <div id="matchmaking-status-page" class="mb-8">
+                            <div id="matchmaking-idle-page" class="space-y-4">
+                                <div class="bg-blue-50 rounded-lg p-6">
+                                    <div class="text-4xl mb-2">🎯</div>
+                                    <div class="text-lg font-semibold text-blue-800">Ready to Find Match</div>
+                                    <div class="text-sm text-blue-600">Click below to start searching for opponents</div>
+                                </div>
+                            </div>
+                            
+                            <div id="matchmaking-searching-page" class="space-y-4" style="display: none;">
+                                <div class="bg-orange-50 rounded-lg p-6">
+                                    <div class="text-4xl mb-2 animate-pulse">🔍</div>
+                                    <div class="text-lg font-semibold text-orange-800">Searching for Players...</div>
+                                    <div class="text-sm text-orange-600">Finding the perfect opponent for you</div>
+                                    <div class="mt-4">
+                                        <div class="animate-spin inline-block w-8 h-8 border-4 border-current border-t-transparent text-orange-600 rounded-full"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="matchmaking-found-page" class="space-y-4" style="display: none;">
+                                <div class="bg-green-50 rounded-lg p-6">
+                                    <div class="text-4xl mb-2">✅</div>
+                                    <div class="text-lg font-semibold text-green-800">Opponent Found!</div>
+                                    <div class="text-sm text-green-600">Connecting to your match...</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Matchmaking Buttons -->
+                        <div class="space-y-4">
+                            <button id="find-player-btn-page" class="btn btn-primary btn-lg w-full text-lg py-4" onclick="startGlobalMatchmaking()">
+                                <svg class="w-6 h-6 mr-3" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                </svg>
+                                Find Random Player
+                            </button>
+                            
+                            <button id="cancel-matchmaking-btn-page" class="btn btn-secondary w-full" onclick="cancelGlobalMatchmaking()" style="display: none;">
+                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                                </svg>
+                                Cancel Search
+                            </button>
+                        </div>
+                        
+                        <!-- Queue Information -->
+                        <div id="queue-info-page" class="mt-6 p-4 bg-gray-50 rounded-lg" style="display: none;">
+                            <div class="text-sm text-gray-600">
+                                <div id="queue-position-page" class="font-semibold">Position in queue: 1</div>
+                                <div class="text-xs mt-1">Average wait time: 5-10 seconds</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Online Gaming Stats -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                        <div class="card text-center p-4">
+                            <div class="text-3xl mb-2">🎯</div>
+                            <div class="text-sm text-gray-600">Players Online</div>
+                            <div class="text-xl font-bold text-primary" id="online-players-count-page">247</div>
+                        </div>
+                        <div class="card text-center p-4">
+                            <div class="text-3xl mb-2">⚡</div>
+                            <div class="text-sm text-gray-600">Avg Match Time</div>
+                            <div class="text-xl font-bold text-success">8s</div>
+                        </div>
+                        <div class="card text-center p-4">
+                            <div class="text-3xl mb-2">🏆</div>
+                            <div class="text-sm text-gray-600">Games Today</div>
+                            <div class="text-xl font-bold text-warning" id="games-today-count-page">1,847</div>
+                        </div>
+                    </div>
+
+                    <!-- How It Works -->
+                    <div class="card card-premium p-6">
+                        <h3 class="text-xl font-display font-bold text-primary mb-4">How Global Matchmaking Works</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="text-center">
+                                <div class="text-3xl mb-2">🔍</div>
+                                <div class="text-sm font-semibold text-gray-800">1. Find Player</div>
+                                <div class="text-xs text-gray-600">Search for opponents worldwide</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-3xl mb-2">🏙️</div>
+                                <div class="text-sm font-semibold text-gray-800">2. Choose Arena</div>
+                                <div class="text-xs text-gray-600">Select Dubai, Cairo, or Oslo</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-3xl mb-2">⚔️</div>
+                                <div class="text-sm font-semibold text-gray-800">3. Battle!</div>
+                                <div class="text-xs text-gray-600">Compete for coins and glory</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         
     </div>
 
@@ -988,14 +1467,18 @@
     </div>
 
     <!-- Scripts -->
+    <script src="js/ux-improvements.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/api.js"></script>
+    <script src="js/webrtc-p2p-manager.js"></script>
+    <script src="js/timer-sync-manager.js"></script>
+    <script src="js/prd-p2p-integration.js"></script>
     <script src="js/game-initializer.js"></script>
     <script src="js/button-manager.js"></script>
     <script src="js/game.js"></script>
     <script src="js/matchmaking.js"></script>
     <script src="js/startup-test.js"></script>
-    <script src="button-navigation-fix.js"></script>
+
     
     <!-- Complete Navigation Test Script -->
     <script>

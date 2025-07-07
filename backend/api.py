@@ -62,62 +62,124 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# Matchmaking system
-class MatchmakingQueue:
-    """Manages the automatic matchmaking queue for online players."""
+# City-specific matchmaking system
+class CityMatchmakingQueue:
+    """Manages city-specific matchmaking queues for online players."""
     
     def __init__(self):
-        self.waiting_players: List[Dict[str, Any]] = []
+        # Separate queues for each city
+        self.city_queues = {
+            "dubai": [],
+            "cairo": [],
+            "oslo": []
+        }
         self.active_connections: Dict[str, WebSocket] = {}
+        self.player_cities: Dict[str, str] = {}  # Track which city each player is in
+        self.player_timers: Dict[str, Any] = {}  # Track timeout timers for each player
     
-    async def add_player(self, player_id: str, player_name: str, websocket: WebSocket):
-        """Add a player to the matchmaking queue."""
+    async def add_player(self, player_id: str, player_name: str, city: str, websocket: WebSocket):
+        """Add a player to a city-specific matchmaking queue."""
+        city_lower = city.lower()
+        if city_lower not in self.city_queues:
+            raise ValueError(f"Invalid city: {city}. Valid cities: dubai, cairo, oslo")
+        
         player = {
             "id": player_id,
             "name": player_name,
+            "city": city_lower,
             "joined_at": asyncio.get_event_loop().time(),
             "websocket": websocket
         }
         
-        self.waiting_players.append(player)
+        self.city_queues[city_lower].append(player)
         self.active_connections[player_id] = websocket
+        self.player_cities[player_id] = city_lower
         
-        print(f"🎮 Player {player_name} joined matchmaking queue. Queue size: {len(self.waiting_players)}")
+        print(f"🎮 Player {player_name} joined {city} matchmaking queue. Queue size: {len(self.city_queues[city_lower])}")
         
-        # Try to match players immediately
-        await self.try_match_players()
+        # Set up 30-second timeout
+        loop = asyncio.get_event_loop()
+        timer = loop.call_later(30.0, lambda: asyncio.create_task(self.handle_matchmaking_timeout(player_id, city_lower)))
+        self.player_timers[player_id] = timer
+        
+        # Try to match players immediately within the same city
+        await self.try_match_players(city_lower)
     
     def remove_player(self, player_id: str):
-        """Remove a player from the matchmaking queue."""
-        self.waiting_players = [p for p in self.waiting_players if p["id"] != player_id]
+        """Remove a player from their city's matchmaking queue."""
+        if player_id in self.player_cities:
+            city = self.player_cities[player_id]
+            self.city_queues[city] = [p for p in self.city_queues[city] if p["id"] != player_id]
+            del self.player_cities[player_id]
+            print(f"🎮 Player {player_id} left {city} matchmaking queue. Queue size: {len(self.city_queues[city])}")
+        
         if player_id in self.active_connections:
             del self.active_connections[player_id]
-        print(f"🎮 Player {player_id} left matchmaking queue. Queue size: {len(self.waiting_players)}")
-    
-    async def try_match_players(self):
-        """Try to match players in the queue."""
-        if len(self.waiting_players) >= 2:
-            # Get first two players
-            player1 = self.waiting_players.pop(0)
-            player2 = self.waiting_players.pop(0)
             
-            # Remove from active connections
+        # Cancel timeout timer
+        if player_id in self.player_timers:
+            self.player_timers[player_id].cancel()
+            del self.player_timers[player_id]
+    
+    async def handle_matchmaking_timeout(self, player_id: str, city: str):
+        """Handle 30-second matchmaking timeout."""
+        print(f"⏰ Matchmaking timeout for player {player_id} in {city}")
+        
+        if player_id in self.active_connections:
+            try:
+                # Send timeout message
+                await self.active_connections[player_id].send_text(json.dumps({
+                    "type": "matchmaking_timeout",
+                    "message": f"No players found in {city.title()}. Try again or select another city.",
+                    "city": city
+                }))
+            except Exception as e:
+                print(f"Error sending timeout message: {e}")
+            
+            # Remove player from queue
+            self.remove_player(player_id)
+    
+    async def try_match_players(self, city: str):
+        """Try to match players in a specific city's queue."""
+        if len(self.city_queues[city]) >= 2:
+            # Get first two players from the city queue
+            player1 = self.city_queues[city].pop(0)
+            player2 = self.city_queues[city].pop(0)
+            
+            # Cancel their timeout timers since they found a match
+            for player in [player1, player2]:
+                if player["id"] in self.player_timers:
+                    self.player_timers[player["id"]].cancel()
+                    del self.player_timers[player["id"]]
+            
+            # Remove from active connections and player cities
             if player1["id"] in self.active_connections:
                 del self.active_connections[player1["id"]]
             if player2["id"] in self.active_connections:
                 del self.active_connections[player2["id"]]
+            if player1["id"] in self.player_cities:
+                del self.player_cities[player1["id"]]
+            if player2["id"] in self.player_cities:
+                del self.player_cities[player2["id"]]
             
-            # Create game
+            # Create game with city information
             game_id = game_engine.create_game(player1["name"], player2["name"])
             game_state = game_engine.get_game_state(game_id)
             
-            print(f"🎮 Matched players: {player1['name']} vs {player2['name']} (Game: {game_id})")
+            # Add city information to game state
+            game_state["city"] = city
+            game_state["entry_cost"] = self.get_city_entry_cost(city)
+            game_state["prize_pool"] = self.get_city_prize_pool(city)
+            game_state["turn_timer"] = self.get_city_turn_timer(city)
+            
+            print(f"🎮 Matched {city} players: {player1['name']} vs {player2['name']} (Game: {game_id})")
             
             # Notify both players
             match_data = {
                 "type": "match_found",
                 "game_id": game_id,
                 "game_state": game_state,
+                "city": city,
                 "opponent": {
                     "name": player2["name"] if player1 else player1["name"]
                 }
@@ -137,32 +199,55 @@ class MatchmakingQueue:
             except Exception as e:
                 print(f"Error notifying players of match: {e}")
             
-            # Save game to database
+            # Save game to database with city information
             try:
                 await db_service.create_game({
                     "id": game_id,
                     "player1_name": player1["name"],
                     "player2_name": player2["name"],
                     "game_state": game_state,
-                    "status": "waiting_for_poison"
+                    "status": "waiting_for_candy_selection",
+                    "city": city
                 })
             except Exception as e:
                 print(f"Database error creating matched game: {e}")
     
+    def get_city_entry_cost(self, city: str) -> int:
+        """Get entry cost for a specific city."""
+        costs = {"dubai": 500, "cairo": 1000, "oslo": 5000}
+        return costs.get(city.lower(), 500)
+    
+    def get_city_prize_pool(self, city: str) -> int:
+        """Get prize pool for a specific city."""
+        prizes = {"dubai": 950, "cairo": 1900, "oslo": 9500}
+        return prizes.get(city.lower(), 950)
+    
+    def get_city_turn_timer(self, city: str) -> int:
+        """Get turn timer for a specific city."""
+        timers = {"dubai": 30, "cairo": 20, "oslo": 10}
+        return timers.get(city.lower(), 30)
+    
     async def notify_queue_status(self, player_id: str):
         """Notify a player about their queue status."""
-        if player_id in self.active_connections:
+        if player_id in self.active_connections and player_id in self.player_cities:
+            city = self.player_cities[player_id]
             try:
+                position = next((i for i, p in enumerate(self.city_queues[city]) if p["id"] == player_id), -1) + 1
                 await self.active_connections[player_id].send_text(json.dumps({
                     "type": "queue_status",
-                    "position": next((i for i, p in enumerate(self.waiting_players) if p["id"] == player_id), -1) + 1,
-                    "total_waiting": len(self.waiting_players)
+                    "city": city,
+                    "position": position,
+                    "total_waiting": len(self.city_queues[city])
                 }))
             except Exception as e:
                 print(f"Error sending queue status: {e}")
+    
+    def get_queue_stats(self) -> Dict[str, int]:
+        """Get statistics for all city queues."""
+        return {city: len(queue) for city, queue in self.city_queues.items()}
 
-# Global matchmaking queue
-matchmaking_queue = MatchmakingQueue()
+# Global city-specific matchmaking queue
+matchmaking_queue = CityMatchmakingQueue()
 
 # Pydantic models for API requests
 class CreateGameRequest(BaseModel):
@@ -211,6 +296,22 @@ class ArenaStatsUpdate(BaseModel):
     prize_amount: int
     service_fee: int
 
+class CandySelectionRequest(BaseModel):
+    """Request model for candy selection."""
+    player_id: str
+    candy_id: str
+    game_id: str
+
+class GameStartRequest(BaseModel):
+    """Request model for game start synchronization."""
+    game_id: str
+    player_id: str
+
+class JoinMatchmakingCityRequest(BaseModel):
+    """Request model for joining city-specific matchmaking queue."""
+    player_name: str
+    city: str
+
 # API Endpoints
 
 @app.get("/")
@@ -237,6 +338,17 @@ async def health_check():
             "supabase_connected": False,
             "error": str(e)
         }
+
+# PRD: Timer synchronization endpoint
+@app.get("/api/time")
+async def get_server_time():
+    """PRD: Get precise server timestamp for synchronization."""
+    import time
+    return {
+        "timestamp": int(time.time() * 1000),  # Milliseconds
+        "timezone": "UTC",
+        "server_id": "pcd-game-server-1"
+    }
 
 @app.post("/games", response_model=GameResponse)
 async def create_game(request: CreateGameRequest):
@@ -394,7 +506,7 @@ async def delete_game(game_id: str):
 # Matchmaking endpoints
 @app.websocket("/matchmaking/ws/{player_id}")
 async def matchmaking_websocket(websocket: WebSocket, player_id: str):
-    """WebSocket endpoint for matchmaking."""
+    """WebSocket endpoint for city-specific matchmaking."""
     await websocket.accept()
     print(f"🎮 WebSocket connected for player {player_id}")
     
@@ -406,7 +518,8 @@ async def matchmaking_websocket(websocket: WebSocket, player_id: str):
             
             if message.get("type") == "join_queue":
                 player_name = message.get("player_name", "Anonymous")
-                await matchmaking_queue.add_player(player_id, player_name, websocket)
+                city = message.get("city", "dubai")  # Default to Dubai if not specified
+                await matchmaking_queue.add_player(player_id, player_name, city, websocket)
                 
             elif message.get("type") == "leave_queue":
                 matchmaking_queue.remove_player(player_id)
@@ -423,17 +536,27 @@ async def matchmaking_websocket(websocket: WebSocket, player_id: str):
 
 @app.get("/matchmaking/status")
 async def get_matchmaking_status():
-    """Get current matchmaking queue status."""
+    """Get current city-specific matchmaking queue status."""
+    queue_stats = matchmaking_queue.get_queue_stats()
+    detailed_queues = {}
+    
+    for city, queue in matchmaking_queue.city_queues.items():
+        detailed_queues[city] = {
+            "total_waiting": len(queue),
+            "waiting_players": [
+                {
+                    "id": p["id"],
+                    "name": p["name"],
+                    "waiting_time": asyncio.get_event_loop().time() - p["joined_at"]
+                }
+                for p in queue
+            ]
+        }
+    
     return {
-        "queue_size": len(matchmaking_queue.waiting_players),
-        "waiting_players": [
-            {
-                "id": p["id"],
-                "name": p["name"],
-                "waiting_time": asyncio.get_event_loop().time() - p["joined_at"]
-            }
-            for p in matchmaking_queue.waiting_players
-        ]
+        "total_players": sum(queue_stats.values()),
+        "queue_stats": queue_stats,
+        "detailed_queues": detailed_queues
     }
 
 @app.post("/matchmaking/leave/{player_id}")
@@ -487,7 +610,7 @@ async def get_player_balance(request: PlayerBalanceRequest):
             data={
                 "player_name": request.player_name,
                 "coin_balance": 10000,
-                "diamonds_balance": 50
+                "diamonds_balance": 500  # PRD: 500 diamonds for new players
             }
         )
         
@@ -503,7 +626,7 @@ async def process_coin_transaction(request: CoinTransactionRequest):
     try:
         # Get current balance or create player if not exists
         current_balance = 10000  # Default
-        current_diamonds = 50    # Default
+        current_diamonds = 500   # Default - PRD: 500 diamonds for new players
         
         if hasattr(db_service, 'supabase'):
             # Check if player exists
@@ -519,7 +642,7 @@ async def process_coin_transaction(request: CoinTransactionRequest):
                 new_player = {
                     "name": request.player_name,
                     "coin_balance": 10000,
-                    "diamonds_balance": 50,
+                    "diamonds_balance": 500,  # PRD: 500 diamonds for new players
                     "total_coins_earned": 0,
                     "total_coins_spent": 0
                 }
@@ -702,6 +825,335 @@ async def get_arena_economics():
             "success": False,
             "message": f"Failed to get arena economics: {str(e)}"
         }
+
+@app.post("/matchmaking/join", response_model=GameResponse)
+async def join_matchmaking_queue(request: JoinMatchmakingCityRequest):
+    """Join a city-specific matchmaking queue via REST API."""
+    try:
+        # Validate city
+        valid_cities = ["dubai", "cairo", "oslo"]
+        if request.city.lower() not in valid_cities:
+            return GameResponse(
+                success=False,
+                message=f"Invalid city. Valid cities: {', '.join(valid_cities)}"
+            )
+        
+        # Generate a temporary player ID for REST API users
+        import uuid
+        temp_player_id = str(uuid.uuid4())
+        
+        # Note: This would typically require a WebSocket connection for real-time updates
+        # For now, we'll return success with instructions to use WebSocket
+        return GameResponse(
+            success=True,
+            message="Use WebSocket endpoint /matchmaking/ws/{player_id} for real-time matchmaking",
+            data={
+                "city": request.city,
+                "player_name": request.player_name,
+                "websocket_endpoint": f"/matchmaking/ws/{temp_player_id}",
+                "entry_cost": matchmaking_queue.get_city_entry_cost(request.city),
+                "prize_pool": matchmaking_queue.get_city_prize_pool(request.city),
+                "turn_timer": matchmaking_queue.get_city_turn_timer(request.city)
+            }
+        )
+    except Exception as e:
+        return GameResponse(
+            success=False,
+            message=f"Failed to join matchmaking: {str(e)}"
+        )
+
+@app.post("/candy/select", response_model=GameResponse)
+async def select_candy(request: CandySelectionRequest):
+    """Submit candy selection for confirmation."""
+    try:
+        game_state = game_engine.get_game_state(request.game_id)
+        if not game_state:
+            return GameResponse(
+                success=False,
+                message="Game not found"
+            )
+        
+        # Update game state with candy selection
+        if request.player_id == game_state.get("player1", {}).get("id"):
+            game_state["player1"]["selected_candy"] = request.candy_id
+            game_state["player1"]["candy_confirmed"] = True
+        elif request.player_id == game_state.get("player2", {}).get("id"):
+            game_state["player2"]["selected_candy"] = request.candy_id
+            game_state["player2"]["candy_confirmed"] = True
+        else:
+            return GameResponse(
+                success=False,
+                message="Player not found in game"
+            )
+        
+        # Update game status
+        game_engine.update_game_state(request.game_id, game_state)
+        
+        # Check if both players have confirmed their candy selection
+        both_confirmed = (
+            game_state.get("player1", {}).get("candy_confirmed", False) and
+            game_state.get("player2", {}).get("candy_confirmed", False)
+        )
+        
+        if both_confirmed:
+            game_state["status"] = "ready_for_game_start"
+            game_engine.update_game_state(request.game_id, game_state)
+        
+        return GameResponse(
+            success=True,
+            message="Candy selection confirmed",
+            data={
+                "game_id": request.game_id,
+                "player_id": request.player_id,
+                "candy_id": request.candy_id,
+                "both_players_ready": both_confirmed,
+                "game_status": game_state.get("status", "waiting_for_candy_selection")
+            }
+        )
+        
+    except Exception as e:
+        return GameResponse(
+            success=False,
+            message=f"Failed to select candy: {str(e)}"
+        )
+
+@app.get("/game/status/{game_id}")
+async def get_game_status(game_id: str):
+    """Check game status including opponent's readiness."""
+    try:
+        game_state = game_engine.get_game_state(game_id)
+        if not game_state:
+            return GameResponse(
+                success=False,
+                message="Game not found"
+            )
+        
+        # Get player statuses
+        player1_status = {
+            "id": game_state.get("player1", {}).get("id"),
+            "name": game_state.get("player1", {}).get("name"),
+            "candy_confirmed": game_state.get("player1", {}).get("candy_confirmed", False),
+            "on_gameplay_screen": game_state.get("player1", {}).get("on_gameplay_screen", False),
+            "ready_for_game_start": game_state.get("player1", {}).get("ready_for_game_start", False)
+        }
+        
+        player2_status = {
+            "id": game_state.get("player2", {}).get("id"),
+            "name": game_state.get("player2", {}).get("name"),
+            "candy_confirmed": game_state.get("player2", {}).get("candy_confirmed", False),
+            "on_gameplay_screen": game_state.get("player2", {}).get("on_gameplay_screen", False),
+            "ready_for_game_start": game_state.get("player2", {}).get("ready_for_game_start", False)
+        }
+        
+        return GameResponse(
+            success=True,
+            message="Game status retrieved",
+            data={
+                "game_id": game_id,
+                "status": game_state.get("status", "unknown"),
+                "city": game_state.get("city", "dubai"),
+                "player1": player1_status,
+                "player2": player2_status,
+                "game_started": game_state.get("game_started", False),
+                "timer_started": game_state.get("timer_started", False)
+            }
+        )
+        
+    except Exception as e:
+        return GameResponse(
+            success=False,
+            message=f"Failed to get game status: {str(e)}"
+        )
+
+@app.post("/game/start", response_model=GameResponse)
+async def start_game(request: GameStartRequest):
+    """Signal game start and timer initialization."""
+    try:
+        game_state = game_engine.get_game_state(request.game_id)
+        if not game_state:
+            return GameResponse(
+                success=False,
+                message="Game not found"
+            )
+        
+        # Verify player is in the game
+        player_in_game = (
+            request.player_id == game_state.get("player1", {}).get("id") or
+            request.player_id == game_state.get("player2", {}).get("id")
+        )
+        
+        if not player_in_game:
+            return GameResponse(
+                success=False,
+                message="Player not in this game"
+            )
+        
+        # Mark player as ready for game start
+        if request.player_id == game_state.get("player1", {}).get("id"):
+            game_state["player1"]["ready_for_game_start"] = True
+        elif request.player_id == game_state.get("player2", {}).get("id"):
+            game_state["player2"]["ready_for_game_start"] = True
+        
+        # Check if both players are ready
+        both_ready = (
+            game_state.get("player1", {}).get("ready_for_game_start", False) and
+            game_state.get("player2", {}).get("ready_for_game_start", False)
+        )
+        
+        if both_ready and not game_state.get("game_started", False):
+            # Start the game with synchronized timer
+            import time
+            game_state["game_started"] = True
+            game_state["timer_started"] = True
+            game_state["game_start_time"] = time.time()
+            game_state["status"] = "active"
+            
+            # Set turn timer based on city
+            city = game_state.get("city", "dubai")
+            game_state["turn_timer_seconds"] = matchmaking_queue.get_city_turn_timer(city)
+            
+            print(f"🎮 Game {request.game_id} started with synchronized timer for city {city}")
+        
+        # Update game state
+        game_engine.update_game_state(request.game_id, game_state)
+        
+        return GameResponse(
+            success=True,
+            message="Game start signal processed",
+            data={
+                "game_id": request.game_id,
+                "player_ready": True,
+                "both_players_ready": both_ready,
+                "game_started": game_state.get("game_started", False),
+                "timer_started": game_state.get("timer_started", False),
+                "game_start_time": game_state.get("game_start_time"),
+                "turn_timer_seconds": game_state.get("turn_timer_seconds")
+            }
+        )
+        
+    except Exception as e:
+        return GameResponse(
+            success=False,
+            message=f"Failed to start game: {str(e)}"
+        )
+
+# PRD: WebSocket signaling endpoint for P2P connections
+@app.websocket("/signaling/{player_id}")
+async def websocket_signaling(websocket: WebSocket, player_id: str):
+    """WebSocket endpoint for P2P signaling (WebRTC)."""
+    await websocket.accept()
+    print(f"🔗 P2P signaling connected for player {player_id}")
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            # Handle different signaling message types
+            message_type = message.get("type")
+            
+            if message_type == "find-peer":
+                # Player requesting peer in specific city
+                city = message.get("city", "dubai").lower()
+                player_name = message.get("player_name", "Anonymous")
+                
+                # Try to find another player in the same city
+                await handle_p2p_matchmaking(player_id, player_name, city, websocket)
+                
+            elif message_type in ["offer", "answer", "ice-candidate"]:
+                # Forward P2P signaling messages to target peer
+                target_id = message.get("to")
+                if target_id:
+                    await forward_signaling_message(target_id, message)
+                
+            elif message_type == "reconnect-request":
+                # Handle reconnection requests
+                remote_peer_id = message.get("remotePeerId")
+                if remote_peer_id:
+                    await handle_p2p_reconnection(player_id, remote_peer_id, websocket)
+                
+    except WebSocketDisconnect:
+        print(f"🔗 P2P signaling disconnected for player {player_id}")
+        await cleanup_p2p_connection(player_id)
+
+# P2P matchmaking storage
+p2p_waiting_players = {}  # city -> list of players
+p2p_signaling_connections = {}  # player_id -> websocket
+
+async def handle_p2p_matchmaking(player_id: str, player_name: str, city: str, websocket: WebSocket):
+    """Handle P2P matchmaking for a specific city."""
+    global p2p_waiting_players, p2p_signaling_connections
+    
+    p2p_signaling_connections[player_id] = websocket
+    
+    if city not in p2p_waiting_players:
+        p2p_waiting_players[city] = []
+    
+    # Check if there's another player waiting in this city
+    if p2p_waiting_players[city]:
+        # Match with waiting player
+        waiting_player = p2p_waiting_players[city].pop(0)
+        
+        # Notify both players they found each other
+        await websocket.send_text(json.dumps({
+            "type": "peer-found",
+            "peerId": waiting_player["id"],
+            "isHost": False,
+            "city": city
+        }))
+        
+        if waiting_player["id"] in p2p_signaling_connections:
+            await p2p_signaling_connections[waiting_player["id"]].send_text(json.dumps({
+                "type": "peer-found",
+                "peerId": player_id,
+                "isHost": True,
+                "city": city
+            }))
+        
+        print(f"🔗 P2P matched in {city}: {waiting_player['name']} vs {player_name}")
+        
+    else:
+        # Add to waiting list
+        p2p_waiting_players[city].append({
+            "id": player_id,
+            "name": player_name,
+            "websocket": websocket,
+            "city": city
+        })
+        print(f"🔗 Player {player_name} waiting for P2P match in {city}")
+
+async def forward_signaling_message(target_id: str, message: dict):
+    """Forward signaling message to target peer."""
+    if target_id in p2p_signaling_connections:
+        try:
+            await p2p_signaling_connections[target_id].send_text(json.dumps(message))
+        except Exception as e:
+            print(f"Failed to forward signaling to {target_id}: {e}")
+
+async def handle_p2p_reconnection(player_id: str, remote_peer_id: str, websocket: WebSocket):
+    """Handle P2P reconnection requests."""
+    # Notify remote peer about reconnection attempt
+    if remote_peer_id in p2p_signaling_connections:
+        try:
+            await p2p_signaling_connections[remote_peer_id].send_text(json.dumps({
+                "type": "reconnect-attempt",
+                "from": player_id,
+                "message": "Peer attempting to reconnect"
+            }))
+        except Exception as e:
+            print(f"Failed to notify reconnection to {remote_peer_id}: {e}")
+
+async def cleanup_p2p_connection(player_id: str):
+    """Clean up P2P connection data."""
+    global p2p_waiting_players, p2p_signaling_connections
+    
+    # Remove from signaling connections
+    if player_id in p2p_signaling_connections:
+        del p2p_signaling_connections[player_id]
+    
+    # Remove from waiting players
+    for city, players in p2p_waiting_players.items():
+        p2p_waiting_players[city] = [p for p in players if p["id"] != player_id]
 
 if __name__ == "__main__":
     import uvicorn

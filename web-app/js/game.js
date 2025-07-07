@@ -70,19 +70,40 @@ class GameState {
     }
 }
 
-// ===== CRITICAL GAME LOGIC FIX =====
-// Proper win condition check that ensures fair gameplay
+// ===== UNIVERSAL GAME LOGIC FOR ALL MODES =====
+// New simplified game logic that ensures fair play for both players
+// Rule: After a player picks the 11th candy, give the second player a chance to also reach 11
+// If second player doesn't pick poison and reaches 11, it's a draw
 function checkGameWinCondition(gameState) {
     const playerCount = gameState.playerCollection.length;
     const opponentCount = gameState.opponentCollection.length;
     
-    // Neither player has reached 11 yet
-    if (playerCount < 11 && opponentCount < 11) {
-        return { hasWinner: false, canContinue: true };
+    console.log(`🎮 Universal game logic check: Player: ${playerCount}/11, Opponent: ${opponentCount}/11, Turn: ${gameState.isPlayerTurn ? 'Player' : 'Opponent'}`);
+    
+    // Initialize game progress tracking if not exists
+    if (!gameState.gameProgress) {
+        gameState.gameProgress = {
+            playerReached11First: false,
+            opponentReached11First: false,
+            playerGotChance: false,
+            opponentGotChance: false,
+            gamePhase: 'normal' // 'normal', 'player_reached_11', 'opponent_reached_11', 'both_reached_11'
+        };
     }
     
-    // Both players have reached 11 - this is a DRAW
+    // Case 1: Neither player has reached 11 yet - normal game continues
+    if (playerCount < 11 && opponentCount < 11) {
+        gameState.gameProgress.gamePhase = 'normal';
+        return { 
+            hasWinner: false, 
+            canContinue: true,
+            message: "Game continues..."
+        };
+    }
+    
+    // Case 2: Both players have reached 11 - DRAW
     if (playerCount === 11 && opponentCount === 11) {
+        gameState.gameProgress.gamePhase = 'both_reached_11';
         return { 
             hasWinner: false, 
             canContinue: false, 
@@ -91,66 +112,103 @@ function checkGameWinCondition(gameState) {
         };
     }
     
-    // One player has 11, check if opponent can mathematically catch up
-    if (playerCount === 11 || opponentCount === 11) {
-        // Calculate remaining candies and potential turns
-        const totalCandiesPicked = playerCount + opponentCount;
-        const totalCandiesAvailable = gameState.playerCandies.length + gameState.opponentCandies.length;
-        const remainingCandies = totalCandiesAvailable - totalCandiesPicked;
-        
-        // In turn-based game, calculate maximum possible collections
-        // Each player gets alternating turns, so:
-        let playerFutureTurns, opponentFutureTurns;
-        
-        if (gameState.isPlayerTurn) {
-            // Player gets next turn
-            playerFutureTurns = Math.ceil(remainingCandies / 2);
-            opponentFutureTurns = Math.floor(remainingCandies / 2);
-        } else {
-            // Opponent gets next turn  
-            opponentFutureTurns = Math.ceil(remainingCandies / 2);
-            playerFutureTurns = Math.floor(remainingCandies / 2);
+    // Case 3: Player reached 11 first, opponent hasn't
+    if (playerCount === 11 && opponentCount < 11) {
+        if (!gameState.gameProgress.playerReached11First) {
+            // Player just reached 11 - mark it and give opponent a chance
+            gameState.gameProgress.playerReached11First = true;
+            gameState.gameProgress.gamePhase = 'player_reached_11';
+            console.log("🎯 Player reached 11 first! Giving opponent final chance...");
+            
+            // If it's currently player's turn, they just picked the 11th candy
+            // Switch to opponent for their final chance
+            if (gameState.isPlayerTurn) {
+                return { 
+                    hasWinner: false, 
+                    canContinue: true,
+                    switchToOpponent: true,
+                    message: "🎉 You reached 11 candies! Opponent gets final chance..."
+                };
+            }
         }
         
-        const playerMaxPossible = playerCount + playerFutureTurns;
-        const opponentMaxPossible = opponentCount + opponentFutureTurns;
-        
-        // Check if both can still reach 11
-        if (playerMaxPossible >= 11 && opponentMaxPossible >= 11) {
-            return { hasWinner: false, canContinue: true };
-        }
-        
-        // One player wins because opponent can't reach 11
-        if (playerCount === 11 && opponentMaxPossible < 11) {
+        // Player has 11, opponent had their chance
+        if (gameState.gameProgress.playerReached11First && !gameState.isPlayerTurn) {
+            // Currently opponent's turn - they're getting their chance
+            gameState.gameProgress.opponentGotChance = true;
+            return { 
+                hasWinner: false, 
+                canContinue: true,
+                message: "Opponent's final chance..."
+            };
+        } else if (gameState.gameProgress.opponentGotChance || gameState.isPlayerTurn) {
+            // Opponent already had their chance and didn't reach 11, or it's back to player's turn
             return { 
                 hasWinner: true, 
                 winner: 'player',
-                message: `🎉 You win! Opponent can't reach 11 candies (max possible: ${opponentMaxPossible})`
-            };
-        }
-        
-        if (opponentCount === 11 && playerMaxPossible < 11) {
-            const opponentLabel = gameState.gameMode === 'friends' ? 'Friend' : 'AI';
-            return { 
-                hasWinner: true, 
-                winner: 'opponent',
-                message: `💔 ${opponentLabel} wins! You can't reach 11 candies (max possible: ${playerMaxPossible})`
+                message: "🎉 You win! You collected 11 candies first!"
             };
         }
     }
     
-    return { hasWinner: false, canContinue: true };
+    // Case 4: Opponent reached 11 first, player hasn't
+    if (opponentCount === 11 && playerCount < 11) {
+        if (!gameState.gameProgress.opponentReached11First) {
+            // Opponent just reached 11 - mark it and give player a chance
+            gameState.gameProgress.opponentReached11First = true;
+            gameState.gameProgress.gamePhase = 'opponent_reached_11';
+            console.log("🎯 Opponent reached 11 first! Giving player final chance...");
+            
+            // If it's currently opponent's turn, they just picked the 11th candy
+            // Switch to player for their final chance
+            if (!gameState.isPlayerTurn) {
+                return { 
+                    hasWinner: false, 
+                    canContinue: true,
+                    switchToPlayer: true,
+                    message: "💔 Opponent reached 11 candies! You get final chance..."
+                };
+            }
+        }
+        
+        // Opponent has 11, player had their chance
+        if (gameState.gameProgress.opponentReached11First && gameState.isPlayerTurn) {
+            // Currently player's turn - they're getting their chance
+            gameState.gameProgress.playerGotChance = true;
+            return { 
+                hasWinner: false, 
+                canContinue: true,
+                message: "Your final chance..."
+            };
+        } else if (gameState.gameProgress.playerGotChance || !gameState.isPlayerTurn) {
+            // Player already had their chance and didn't reach 11, or it's back to opponent's turn
+            const opponentLabel = gameState.gameMode === 'friends' ? 'Friend' : 'Opponent';
+            return { 
+                hasWinner: true, 
+                winner: 'opponent',
+                message: `💔 ${opponentLabel} wins! They collected 11 candies first!`
+            };
+        }
+    }
+    
+    // Default case - continue game
+    return { 
+        hasWinner: false, 
+        canContinue: true,
+        message: "Game continues..."
+    };
 }
 
 // ===== CANDY DEFINITIONS =====
+// User-specified candy set to avoid repetition and ensure consistency
 const CANDY_TYPES = [
-    '🍏', '🍋', '🍇', '🍒', '🍎', '🍓', '🍑', '🍐', '🍌', '🫐', 
-    '🥭', '🍊', '🍉', '🍈', '🍍', '🥥', '🥑', '🥒', '🥕', '🥝', 
-    '🫛', '🌶️', '🫒', '🍅', '🥦', '🫑', '🧄', '🍆', '🥬', '🌽', 
-    '🧅', '🥔', '🫜', '🍠', '🥖', '🍞', '🥚', '🧇', '🧀', '🥞', 
-    '🧈', '🍖', '🍗', '🌭', '🥩', '🌮', '🌯', '🥙', '🥗', '🧆', 
-    '🍕', '🫔', '🦴', '🍝', '🍜', '🍥', '🍰', '🍬', '🍭', '🍪', 
-    '🍩', '🌰', '🍫', '🍵'
+    '🍏', '🍋', '🍇', '🍒', '🍎', '🍋‍🟩', '🍓', '🍑', '🍐', '🍌', 
+    '🫐', '🥭', '🍊', '🍉', '🍈', '🍍', '🥥', '🥑', '🥒', '🥕', 
+    '🥝', '🫛', '🌶️', '🫒', '🍅', '🥦', '🫑', '🧄', '🍆', '🥬', 
+    '🌽', '🧅', '🥔', '🫜', '🍠', '🥖', '🍞', '🥚', '🧇', '🧀', 
+    '🥞', '🧈', '🍖', '🍗', '🌭', '🥩', '🌮', '🌯', '🥙', '🥗', 
+    '🧆', '🍕', '🫔', '🦴', '🍝', '🍜', '🍥', '🍰', '🍬', '🍭', 
+    '🍪', '🍩', '🌰', '🍫', '🍵'
 ];
 
 // Global candy allocation tracker to ensure absolute uniqueness
@@ -754,43 +812,125 @@ async function confirmPoison() {
         if (result.success) {
             // Update game state
             gameState.currentGameState = result.data.game_state;
-            gameState.isPlayerTurn = true; // Player 1 typically starts
             
-            // For AI games, set AI poison automatically
+            // For AI games, set AI poison automatically and start game
             if (gameState.gameMode === 'ai' && gameState.currentGameState.player2.poison_choice === null) {
                 console.log('Setting AI poison automatically...');
                 await setAIPoison();
-            }
-            
-            // Show success notification and start game automatically 
-            showNotification(`🎮 Game Starting! Your poison: ${gameState.selectedPoison}`, 'success', 2000);
-            
-            // Mark game as started
-            gameState.gameStarted = true;
-            
-            // Start game automatically after brief delay
-            setTimeout(() => {
-                showScreen('page3'); // Show the Dubai game screen
-                initializeGameBoardInPage(); // Initialize the game board properly
                 
-                            // For matchmaking games, start timers after poison selection
-            if (gameState.isMatchmakingGame) {
-                console.log('🎮 Starting matchmaking game timers after poison selection');
-                // Show city-specific timer notification
-                const cityTimerValue = getDifficultyTimerValue('easy'); // Will use city-specific timer
-                showNotification(`⏰ Game starting in ${gameState.selectedCity}! Each turn: ${cityTimerValue} seconds`, 'info', 3000);
+                // Start AI game immediately after AI poison is set
+                gameState.isPlayerTurn = true;
+                gameState.gameStarted = true;
+                showNotification(`🎮 Game Starting! Your poison: ${gameState.selectedPoison}`, 'success', 2000);
                 
                 setTimeout(() => {
-                    startGameTimer(); // 30-second game timer
-                    if (gameState.isPlayerTurn) {
-                        startTurnTimer(); // Turn-based timer
+                    showScreen('page3');
+                    initializeGameBoardInPage();
+                    
+                    if (gameState.isMatchmakingGame) {
+                        console.log('🎮 Starting matchmaking game timers after poison selection');
+                        const cityTimerValue = getDifficultyTimerValue('easy');
+                        showNotification(`⏰ Game starting in ${gameState.selectedCity}! Each turn: ${cityTimerValue} seconds`, 'info', 3000);
+                        
+                        setTimeout(() => {
+                            startGameTimer();
+                            if (gameState.isPlayerTurn) {
+                                startTurnTimer();
+                            }
+                        }, 1000);
+                    } else {
+                        console.log('🎮 Starting AI game with non-blocking timer');
+                        startTurnTimer();
                     }
-                }, 1000);
-            } else if (gameState.gameMode === 'online' || gameState.gameMode === 'friends') {
-                    console.log('🎮 Starting online game with non-blocking timer');
-                    startTurnTimer();
+                }, 500);
+                return;
+            }
+            
+            // For online multiplayer games, check if both players have set poison
+            if (gameState.gameMode === 'online' && gameState.currentGameState) {
+                const player1HasPoison = gameState.currentGameState.player1.poison_choice !== null;
+                const player2HasPoison = gameState.currentGameState.player2.poison_choice !== null;
+                
+                console.log('Poison selection status:', {
+                    player1HasPoison,
+                    player2HasPoison,
+                    gameState: gameState.currentGameState.state
+                });
+                
+                if (player1HasPoison && player2HasPoison) {
+                    // Both players have set poison - start the game
+                    console.log('🎮 Both players have set poison - starting game!');
+                    gameState.isPlayerTurn = true;
+                    gameState.gameStarted = true;
+                    
+                    showNotification(`🎮 Game Starting! Your poison: ${gameState.selectedPoison}`, 'success', 2000);
+                    
+                    setTimeout(() => {
+                        showScreen('page3');
+                        initializeGameBoardInPage();
+                        
+                        if (gameState.isMatchmakingGame) {
+                            console.log('🎮 Starting matchmaking game timers after poison selection');
+                            const cityTimerValue = getDifficultyTimerValue('easy');
+                            showNotification(`⏰ Game starting in ${gameState.selectedCity}! Each turn: ${cityTimerValue} seconds`, 'info', 3000);
+                            
+                            setTimeout(() => {
+                                startGameTimer();
+                                if (gameState.isPlayerTurn) {
+                                    startTurnTimer();
+                                }
+                            }, 1000);
+                        } else {
+                            console.log('🎮 Starting online game with non-blocking timer');
+                            startTurnTimer();
+                        }
+                    }, 500);
+                } else {
+                    // Only this player has set poison - wait for opponent
+                    console.log('🎮 Waiting for opponent to select poison...');
+                    
+                    // Show waiting notification
+                    showNotification(`✅ Poison set: ${gameState.selectedPoison}! Waiting for opponent...`, 'success', 3000);
+                    
+                    // Update UI to show waiting state
+                    const poisonDisplay = document.getElementById('selected-poison-display');
+                    if (poisonDisplay) {
+                        poisonDisplay.innerHTML = `
+                            <div class="text-center">
+                                <p class="text-lg font-bold text-success">✅ Your Poison: ${gameState.selectedPoison}</p>
+                                <p class="text-sm text-warning">⏳ Waiting for opponent to select poison...</p>
+                            </div>
+                        `;
+                    }
+                    
+                    // Disable confirm button
+                    const confirmBtn = document.getElementById('confirm-poison-btn');
+                    if (confirmBtn) {
+                        confirmBtn.textContent = 'Confirmed ✅';
+                        confirmBtn.disabled = true;
+                        confirmBtn.style.backgroundColor = '#10b981';
+                    }
+                    
+                    // Start monitoring for opponent poison selection
+                    startOpponentPoisonCheck();
                 }
-            }, 500);
+            } else {
+                // Fallback for offline/friends modes
+                gameState.isPlayerTurn = true;
+                gameState.gameStarted = true;
+                
+                showNotification(`🎮 Game Starting! Your poison: ${gameState.selectedPoison}`, 'success', 2000);
+                
+                setTimeout(() => {
+                    showScreen('page3');
+                    initializeGameBoardInPage();
+                    
+                    if (gameState.gameMode === 'friends') {
+                        console.log('🎮 Starting friends game with non-blocking timer');
+                        startTurnTimer();
+                    }
+                }, 500);
+            }
         } else {
             throw new Error(result.message || 'Failed to set poison');
         }
@@ -837,6 +977,93 @@ async function setAIPoison() {
         }
     } catch (error) {
         console.warn('Error setting AI poison:', error);
+    }
+}
+
+// Monitor opponent poison selection in online games
+let opponentPoisonCheckInterval = null;
+
+function startOpponentPoisonCheck() {
+    console.log('🔍 Starting opponent poison selection monitoring...');
+    
+    // Clear any existing interval
+    if (opponentPoisonCheckInterval) {
+        clearInterval(opponentPoisonCheckInterval);
+    }
+    
+    opponentPoisonCheckInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`http://localhost:8000/games/${gameState.gameId}/state`);
+            if (!response.ok) {
+                console.error('Failed to fetch game state for poison check');
+                return;
+            }
+            
+            const currentState = await response.json();
+            console.log('Checking opponent poison status:', currentState);
+            
+            if (currentState.success && currentState.data) {
+                const gameData = currentState.data;
+                const player1HasPoison = gameData.player1.poison_choice !== null;
+                const player2HasPoison = gameData.player2.poison_choice !== null;
+                const gameIsPlaying = gameData.state === 'playing';
+                
+                console.log('Poison check:', {
+                    player1HasPoison,
+                    player2HasPoison,
+                    gameIsPlaying,
+                    gameState: gameData.state
+                });
+                
+                if (player1HasPoison && player2HasPoison && gameIsPlaying) {
+                    console.log('🎮 Both players have set poison and game is ready - starting!');
+                    
+                    // Stop monitoring
+                    clearInterval(opponentPoisonCheckInterval);
+                    opponentPoisonCheckInterval = null;
+                    
+                    // Update game state
+                    gameState.currentGameState = gameData;
+                    gameState.isPlayerTurn = true;
+                    gameState.gameStarted = true;
+                    
+                    // Show final notification
+                    showNotification('🎮 Opponent selected poison! Game starting now!', 'success', 2000);
+                    
+                    // Start the game
+                    setTimeout(() => {
+                        showScreen('page3');
+                        initializeGameBoardInPage();
+                        
+                        if (gameState.isMatchmakingGame) {
+                            console.log('🎮 Starting matchmaking game timers after both players ready');
+                            const cityTimerValue = getDifficultyTimerValue('easy');
+                            showNotification(`⏰ Game starting in ${gameState.selectedCity}! Each turn: ${cityTimerValue} seconds`, 'info', 3000);
+                            
+                            setTimeout(() => {
+                                startGameTimer();
+                                if (gameState.isPlayerTurn) {
+                                    startTurnTimer();
+                                }
+                            }, 1000);
+                        } else {
+                            console.log('🎮 Starting online game with non-blocking timer');
+                            startTurnTimer();
+                        }
+                    }, 500);
+                }
+            }
+        } catch (error) {
+            console.error('Error checking opponent poison status:', error);
+        }
+    }, 2000); // Check every 2 seconds
+}
+
+function stopOpponentPoisonCheck() {
+    if (opponentPoisonCheckInterval) {
+        clearInterval(opponentPoisonCheckInterval);
+        opponentPoisonCheckInterval = null;
+        console.log('Stopped monitoring opponent poison selection');
     }
 }
 
@@ -1238,7 +1465,7 @@ function handleOfflineCandyPick(candy, index) {
     // Show pickup animation/feedback - Profile-based
     showCandyPickFeedback('player1', candy, false);
     
-    // FIXED: Check win condition properly - ensure both players get fair chance
+    // UNIVERSAL GAME LOGIC: Check win condition with new logic
     const winCondition = checkGameWinCondition(gameState);
     if (winCondition.hasWinner) {
         endGame(winCondition.winner === 'player', winCondition.message);
@@ -1250,8 +1477,19 @@ function handleOfflineCandyPick(candy, index) {
         return;
     }
     
-    // **STEP 3 FIX: Switch turn to opponent/AI - STRICT ALTERNATION**
-    gameState.isPlayerTurn = false;
+    // Handle turn switching based on universal game logic
+    if (winCondition.switchToOpponent) {
+        console.log("🔄 Player reached 11 - switching to opponent for final chance");
+        gameState.isPlayerTurn = false;
+        showNotification('🎉 You reached 11! Opponent gets final chance...', 'info', 3000);
+    } else if (winCondition.switchToPlayer) {
+        console.log("🔄 Opponent reached 11 - switching to player for final chance");
+        gameState.isPlayerTurn = true;
+        showNotification('💔 Opponent reached 11! You get final chance...', 'warning', 3000);
+    } else {
+        // Normal turn switch
+        gameState.isPlayerTurn = false;
+    }
     
     // Update the game board to reflect turn change
     initializeGameBoardInPage();
@@ -1342,7 +1580,7 @@ function handleOfflineAITurn() {
     const totalMoves = gameState.playerCollection.length + gameState.opponentCollection.length;
     gameState.round = Math.ceil(totalMoves / 2); // Round = pair of moves
     
-    // FIXED: Check win condition properly - ensure both players get fair chance
+    // UNIVERSAL GAME LOGIC: Check win condition with new logic
     const winCondition = checkGameWinCondition(gameState);
     if (winCondition.hasWinner) {
         endGame(winCondition.winner === 'player', winCondition.message);
@@ -1356,8 +1594,19 @@ function handleOfflineAITurn() {
     
     console.log(`🤖 ${gameState.gameMode === 'friends' ? 'Friend' : 'AI'} picked ${pickedCandy}. Collection now: ${gameState.opponentCollection.length}/11`);
     
-    // **STEP 3 FIX: Switch turn back to player - STRICT ALTERNATION**
-    gameState.isPlayerTurn = true;
+    // Handle turn switching based on universal game logic
+    if (winCondition.switchToPlayer) {
+        console.log("🔄 Opponent reached 11 - switching to player for final chance");
+        gameState.isPlayerTurn = true;
+        showNotification('💔 Opponent reached 11! You get final chance...', 'warning', 3000);
+    } else if (winCondition.switchToOpponent) {
+        console.log("🔄 Player reached 11 - switching to opponent for final chance");
+        gameState.isPlayerTurn = false;
+        showNotification('🎉 You reached 11! Opponent gets final chance...', 'info', 3000);
+    } else {
+        // Normal turn switch back to player
+        gameState.isPlayerTurn = true;
+    }
     
     // Update the game board to reflect turn change
     initializeGameBoardInPage();
@@ -2048,7 +2297,7 @@ let isConnectedToBackend = false;
 // Check if backend is available
 async function checkBackendConnection() {
     try {
-        const response = await fetch('/api/health');
+        const response = await fetch('http://localhost:8000/health');
         if (response.ok) {
             isConnectedToBackend = true;
             console.log('✅ Backend connected for coin transactions');
@@ -2067,7 +2316,7 @@ async function checkBackendConnection() {
 async function getPlayerBalance(playerName = 'Player') {
     try {
         if (isConnectedToBackend) {
-            const response = await fetch('/api/players/balance', {
+            const response = await fetch('http://localhost:8000/players/balance', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2098,7 +2347,7 @@ async function processCoinTransaction(amount, transactionType, description = nul
     
     try {
         if (isConnectedToBackend) {
-            const response = await fetch('/api/players/transaction', {
+            const response = await fetch('http://localhost:8000/players/transaction', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2165,7 +2414,7 @@ async function processCoinTransaction(amount, transactionType, description = nul
 async function updateArenaStatistics(arenaType, entryFee, prizeAmount, serviceFee) {
     try {
         if (isConnectedToBackend) {
-            const response = await fetch('/api/arena/stats/update', {
+            const response = await fetch('http://localhost:8000/arena/stats/update', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2294,6 +2543,12 @@ function getPrizeAmount(entryCost) {
 }
 
 // Online game starter from city selection
+// Start city-specific matchmaking
+function startCityMatchmaking(city, cost, prize) {
+    console.log(`🌍 Starting ${city} matchmaking: ${cost} coins entry, ${prize} coins prize`);
+    startOnlineGame(city, cost);
+}
+
 function startOnlineGame(city, cost) {
     console.log(`Starting online game in ${city} for ${cost} coins`);
     
@@ -2313,72 +2568,15 @@ function startOnlineGame(city, cost) {
         // Store the selection and payment info
         gameState.selectedCity = city;
         gameState.gameCost = cost;
-        gameState.gameMode = 'online'; // Set game mode
         
         // Show city-specific info with payment confirmation
         const prizeAmount = getPrizeAmount(cost);
         showNotification(`✅ ${city} Arena: Entry paid! Prize pool: ${prizeAmount.toLocaleString()} coins`, 'success', 3000);
         
-        // CRITICAL FIX: Initialize the online game properly with backend before poison selection
-        console.log('🔧 Creating online game via backend...');
-        setTimeout(async () => {
-            try {
-                // Initialize player name if not set
-                if (!gameState.playerName) {
-                    gameState.playerName = 'Player';
-                }
-                
-                // Create game via backend API to get candy data
-                const response = await fetch('http://localhost:8000/games', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        player1_name: gameState.playerName,
-                        player2_name: 'Online Opponent'
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to create online game: ${response.status}`);
-                }
-                
-                const result = await response.json();
-                if (!result.success) {
-                    throw new Error(result.message || 'Failed to create online game');
-                }
-                
-                // Set up game state from backend response
-                const gameData = result.data;
-                gameState.gameId = gameData.game_id;
-                gameState.playerId = gameData.game_state.player1.id;
-                gameState.opponentId = gameData.game_state.player2.id;
-                gameState.currentGameState = gameData.game_state;
-                gameState.playerCandies = Array.from(gameData.game_state.player1.owned_candies);
-                gameState.opponentCandies = Array.from(gameData.game_state.player2.owned_candies);
-                
-                console.log('✅ Online game created successfully:', {
-                    gameId: gameState.gameId,
-                    playerCandies: gameState.playerCandies.length,
-                    opponentCandies: gameState.opponentCandies.length
-                });
-                
-                // Now go to poison selection with proper candy data
-                showScreen('page4');
-                initializePoisonSelection();
-                
-            } catch (error) {
-                console.error('❌ Failed to create online game:', error);
-                showNotification('Failed to start online game. Please try again.', 'error', 5000);
-                
-                // Fallback to offline mode
-                gameState.gameMode = 'offline';
-                const uniqueCandySets = generateUniqueGameCandies();
-                gameState.playerCandies = uniqueCandySets.playerCandies;
-                gameState.opponentCandies = uniqueCandySets.opponentCandies;
-                
-                showScreen('page4');
-                initializePoisonSelection();
-            }
+        // Go to poison selection
+        setTimeout(() => {
+            showScreen('page4');
+            initializePoisonSelection();
         }, 500);
         
         return;
@@ -2811,7 +3009,7 @@ function claimDailyReward() {
     
     const coinsCount = parseInt(document.getElementById('coins-count').textContent);
     const diamondsCount = parseInt(document.getElementById('diamonds-count').textContent);
-    const newCoinsCount = coinsCount + 50;
+    const newCoinsCount = coinsCount + 100;  // PRD: 100 coins per daily login
     const newDiamondsCount = diamondsCount + 1;
     
     document.getElementById('coins-count').textContent = newCoinsCount;
@@ -2820,7 +3018,7 @@ function claimDailyReward() {
     localStorage.setItem('pcd_diamonds', newDiamondsCount.toString());
     localStorage.setItem('pcd_last_daily_claim', today);
     
-    showNotification('Daily reward claimed! +50 coins +1 diamond', 'success');
+    showNotification('Daily reward claimed! +100 coins +1 diamond', 'success');  // PRD: 100 coins daily
 }
 
 // Leaderboard Functions
@@ -3631,6 +3829,38 @@ function handleGameEndInPage(playerWon, message) {
 
 // Timer functions are defined earlier in the file
 
+// ===== BALANCE RESET FUNCTION =====
+function resetBalanceToPRD() {
+    console.log('🔄 Resetting balance to PRD specifications...');
+    
+    // Set PRD-specified amounts
+    const prdCoins = 10000;
+    const prdDiamonds = 500;
+    
+    // Clear old values and set new ones
+    localStorage.setItem('playerCoins', prdCoins.toString());
+    localStorage.setItem('playerDiamonds', prdDiamonds.toString());
+    localStorage.setItem('pcd_coins', prdCoins.toString());
+    localStorage.setItem('pcd_diamonds', prdDiamonds.toString());
+    
+    // Update all displays
+    const coinsElements = document.querySelectorAll('#coins-count, #coins-profile');
+    const diamondsElements = document.querySelectorAll('#diamonds-count, #diamonds-profile');
+    
+    coinsElements.forEach(element => {
+        if (element) element.textContent = prdCoins;
+    });
+    
+    diamondsElements.forEach(element => {
+        if (element) element.textContent = prdDiamonds;
+    });
+    
+    console.log(`✅ Balance reset to PRD: ${prdCoins} coins, ${prdDiamonds} diamonds`);
+    
+    // Show notification
+    showNotification('💰 Balance reset to PRD specifications!', 'success', 3000);
+}
+
 // ===== GLOBAL INITIALIZATION =====
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🎮 PCD Game - DOM Content Loaded');
@@ -3659,18 +3889,38 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update stats display
     gameState.updateStats();
     
-    // Initialize saved preferences
-    const savedCoins = localStorage.getItem('playerCoins') || localStorage.getItem('pcd_coins') || '1000';
-    const savedDiamonds = localStorage.getItem('playerDiamonds') || localStorage.getItem('pcd_diamonds') || '50';
+    // Initialize saved preferences with PRD enforcement
+    let savedCoins = localStorage.getItem('playerCoins') || localStorage.getItem('pcd_coins') || '10000';
+    let savedDiamonds = localStorage.getItem('playerDiamonds') || localStorage.getItem('pcd_diamonds') || '500';  // PRD: 500 diamonds for new players
+    
+    // Force PRD minimums if stored values are below specification
+    if (parseInt(savedCoins) < 10000) {
+        savedCoins = '10000';
+        localStorage.setItem('playerCoins', savedCoins);
+        localStorage.setItem('pcd_coins', savedCoins);
+        console.log('⚡ Coins upgraded to PRD minimum: 10,000');
+    }
+    
+    if (parseInt(savedDiamonds) < 500) {
+        savedDiamonds = '500';
+        localStorage.setItem('playerDiamonds', savedDiamonds);
+        localStorage.setItem('pcd_diamonds', savedDiamonds);
+        console.log('⚡ Diamonds upgraded to PRD minimum: 500');
+    }
     
     // Update coin/diamond displays if elements exist
     const coinsElement = document.getElementById('coins-count');
     const diamondsElement = document.getElementById('diamonds-count');
+    const coinsProfileElement = document.getElementById('coins-profile');
+    const diamondsProfileElement = document.getElementById('diamonds-profile');
     
     if (coinsElement) coinsElement.textContent = savedCoins;
     if (diamondsElement) diamondsElement.textContent = savedDiamonds;
+    if (coinsProfileElement) coinsProfileElement.textContent = savedCoins;
+    if (diamondsProfileElement) diamondsProfileElement.textContent = savedDiamonds;
     
     console.log('🎯 PCD Game initialization complete!');
+    console.log(`💰 Current balance: ${savedCoins} coins, ${savedDiamonds} diamonds`);
 });
 
 // Fallback initialization for immediate access
@@ -4364,7 +4614,7 @@ function handleEnhancedCandyPick(candy, index) {
     // Show pickup animation - Profile-based
     showCandyPickFeedback('player1', candy, false);
     
-    // FIXED: Check win condition properly - ensure both players get fair chance
+    // UNIVERSAL GAME LOGIC: Check win condition with new logic
     const winCondition = checkGameWinCondition(gameState);
     if (winCondition.hasWinner) {
         endGame(winCondition.winner === 'player', winCondition.message);
@@ -4376,8 +4626,19 @@ function handleEnhancedCandyPick(candy, index) {
         return;
     }
     
-    // Switch to AI turn
-    gameState.isPlayerTurn = false;
+    // Handle turn switching based on universal game logic
+    if (winCondition.switchToOpponent) {
+        console.log("🔄 Player reached 11 - switching to opponent for final chance");
+        gameState.isPlayerTurn = false;
+        showNotification('🎉 You reached 11! Opponent gets final chance...', 'info', 3000);
+    } else if (winCondition.switchToPlayer) {
+        console.log("🔄 Opponent reached 11 - switching to player for final chance");
+        gameState.isPlayerTurn = true;
+        showNotification('💔 Opponent reached 11! You get final chance...', 'warning', 3000);
+    } else {
+        // Normal turn switch to AI
+        gameState.isPlayerTurn = false;
+    }
     
     // Stop player timer
     stopCircularTimer();
@@ -4437,7 +4698,7 @@ function handleEnhancedAITurn() {
     const totalMoves = gameState.playerCollection.length + gameState.opponentCollection.length;
     gameState.round = Math.ceil(totalMoves / 2);
     
-    // FIXED: Check win condition properly - ensure both players get fair chance
+    // UNIVERSAL GAME LOGIC: Check win condition with new logic
     const winCondition = checkGameWinCondition(gameState);
     if (winCondition.hasWinner) {
         endGame(winCondition.winner === 'player', winCondition.message);
@@ -4451,8 +4712,19 @@ function handleEnhancedAITurn() {
     
     console.log(`🤖 AI picked ${pickedCandy}. Collection: ${gameState.opponentCollection.length}/11`);
     
-    // Switch back to player turn
-    gameState.isPlayerTurn = true;
+    // Handle turn switching based on universal game logic
+    if (winCondition.switchToPlayer) {
+        console.log("🔄 Opponent reached 11 - switching to player for final chance");
+        gameState.isPlayerTurn = true;
+        showNotification('💔 Opponent reached 11! You get final chance...', 'warning', 3000);
+    } else if (winCondition.switchToOpponent) {
+        console.log("🔄 Player reached 11 - switching to opponent for final chance");
+        gameState.isPlayerTurn = false;
+        showNotification('🎉 You reached 11! Opponent gets final chance...', 'info', 3000);
+    } else {
+        // Normal turn switch back to player
+        gameState.isPlayerTurn = true;
+    }
     
     // Update the enhanced board
     initializeEnhancedGameBoard();
@@ -4700,7 +4972,7 @@ function doAITurn() {
     
     console.log(`🤖 AI collected ${aiChoice}. AI total: ${gameState.opponentCollection.length}`);
     
-    // FIXED: Check win condition properly - ensure both players get fair chance
+    // UNIVERSAL GAME LOGIC: Check win condition with new logic
     const winCondition = checkGameWinCondition(gameState);
     if (winCondition.hasWinner) {
         endGame(winCondition.winner === 'player', winCondition.message);
@@ -4712,21 +4984,32 @@ function doAITurn() {
         return;
     }
     
-    // Back to player turn
-    updateGameStatus('🎯 Your turn - Pick a candy!');
+    // Handle turn switching based on universal game logic
+    if (winCondition.switchToPlayer) {
+        console.log("🔄 Opponent reached 11 - switching to player for final chance");
+        showNotification('💔 Opponent reached 11! You get final chance...', 'warning', 3000);
+        updateGameStatus('🎯 Your final chance - Pick a candy!');
+    } else if (winCondition.switchToOpponent) {
+        console.log("🔄 Player reached 11 - switching to opponent for final chance");
+        showNotification('🎉 You reached 11! Opponent gets final chance...', 'info', 3000);
+        updateGameStatus('⏳ Opponent final chance...');
+    } else {
+        // Back to normal player turn
+        updateGameStatus('🎯 Your turn - Pick a candy!');
+    }
 }
 
 // ===== ENHANCED ECONOMY SYSTEM =====
 
 class EconomyManager {
     constructor() {
-        this.exchangeRate = 10; // 1 diamond = 10 coins
+        this.exchangeRate = 25; // PRD: 1 diamond = 25 coins (600D=15K, 1200D=30K)
         this.loadBalances();
     }
     
     loadBalances() {
-        this.coins = parseInt(localStorage.getItem('playerCoins') || localStorage.getItem('pcd_coins') || '1000');
-        this.diamonds = parseInt(localStorage.getItem('playerDiamonds') || localStorage.getItem('pcd_diamonds') || '50');
+        this.coins = parseInt(localStorage.getItem('playerCoins') || localStorage.getItem('pcd_coins') || '10000');
+        this.diamonds = parseInt(localStorage.getItem('playerDiamonds') || localStorage.getItem('pcd_diamonds') || '500');  // PRD: 500 diamonds for new players
         this.updateDisplays();
     }
     
@@ -4877,7 +5160,7 @@ function showCoinsInfo() {
                 </div>
                 <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                     <span>📅 Daily Login</span>
-                    <span class="text-warning font-bold">+50 coins</span>
+                    <span class="text-warning font-bold">+100 coins</span>
                 </div>
                 <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                     <span>🎯 Complete Challenges</span>
@@ -4885,13 +5168,24 @@ function showCoinsInfo() {
                 </div>
                 <div class="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
                     <span>💎 Exchange Diamonds</span>
-                    <span class="text-blue-600 font-bold">1 💎 = 10 💰</span>
+                    <span class="text-blue-600 font-bold">1 💎 = 25 💰</span>
                 </div>
             </div>
         </div>
     `, [
         { text: 'Get More Coins', action: () => { closeModal(); showScreen('page9'); }, class: 'btn-primary' },
         { text: 'Exchange Diamonds', action: () => { closeModal(); exchangeDiamonds(); }, class: 'btn-info' },
+        { text: 'Reset Balance', action: () => { 
+            closeModal(); 
+            createModal(
+                '🔄 Reset Balance',
+                '<div class="text-center"><p class="mb-4">Reset your balance to PRD specifications?</p><div class="bg-blue-50 rounded-lg p-4"><p class="text-sm text-blue-700">This will set your balance to:<br><strong>10,000 coins</strong> and <strong>500 diamonds</strong></p></div></div>',
+                [
+                    { text: 'Reset Now', action: () => { resetBalanceToPRD(); closeModal(); }, class: 'btn-primary' },
+                    { text: 'Cancel', action: closeModal, class: 'btn-secondary' }
+                ]
+            );
+        }, class: 'btn-warning' },
         { text: 'Close', action: closeModal, class: 'btn-secondary' }
     ]);
 }
@@ -5445,7 +5739,7 @@ function updateGameScores() {
 }
 
 // Update game status message
-function updateGameStatusMessage(message) {
+function updateGameStatus(message) {
     // Update both old interface and new offline-style interface
     const statusElement = document.getElementById('game-instructions');
     if (statusElement) {
@@ -6026,23 +6320,13 @@ class UnifiedCandyPicker {
         const totalMoves = gameState.playerCollection.length + gameState.opponentCollection.length;
         gameState.round = Math.ceil(totalMoves / 2);
 
-        // FIXED: Check win condition properly - ensure both players get fair chance
-        const winCondition = checkGameWinCondition(gameState);
-        if (winCondition.hasWinner) {
+        // Check win condition
+        if (gameState.playerCollection.length >= 11) {
             return {
                 success: false,
                 isWin: true,
-                message: winCondition.message,
-                endGame: { won: winCondition.winner === 'player', message: winCondition.message }
-            };
-        }
-        
-        if (winCondition.isDraw) {
-            return {
-                success: false,
-                isDraw: true,
-                message: winCondition.message,
-                endGame: { won: false, message: winCondition.message, isDraw: true }
+                message: '🎉 You collected 11 different candies! You win!',
+                endGame: { won: true, message: '🎉 You collected 11 different candies! You win!' }
             };
         }
 
@@ -7449,4 +7733,336 @@ function getServiceFee(cost) {
     const totalPool = getTotalPrizePool(cost);
     return totalPool - prizeAmount;
 }
+
+// ===== CANDY SELECTION CONFIRMATION SYSTEM =====
+
+// Global variables for candy selection confirmation
+let candyConfirmationTimer = null;
+let candyConfirmationCountdown = 60; // 60 seconds as requested
+let opponentStatusCheckInterval = null;
+
+// Initialize candy selection confirmation screen
+function initializeCandySelectionConfirmation(matchData) {
+    console.log('🍬 Initializing candy selection confirmation screen');
+    
+    // Store match data
+    gameState.matchData = matchData;
+    gameState.gameId = matchData.game_id;
+    gameState.playerId = matchData.player_id;
+    gameState.opponentName = matchData.opponent.name;
+    gameState.city = matchData.city || 'dubai';
+    
+    // Update UI elements
+    const opponentNameElement = document.getElementById('opponent-name-display');
+    if (opponentNameElement) {
+        opponentNameElement.textContent = gameState.opponentName;
+    }
+    
+    const cityDisplayElement = document.getElementById('city-display');
+    if (cityDisplayElement) {
+        cityDisplayElement.textContent = gameState.city.toUpperCase();
+    }
+    
+    // Display player's candy collection
+    displayPlayerCandyCollection();
+    
+    // Start confirmation timer
+    startCandyConfirmationTimer();
+    
+    // Start checking opponent status
+    startOpponentStatusCheck();
+}
+
+// Display player's candy collection for confirmation
+function displayPlayerCandyCollection() {
+    const candyCollectionElement = document.getElementById('player-candy-collection');
+    if (!candyCollectionElement) return;
+    
+    // Generate unique candies for this game
+    const candies = generateUniqueGameCandies();
+    gameState.playerCandies = candies;
+    
+    candyCollectionElement.innerHTML = '';
+    candies.forEach((candy, index) => {
+        const candyElement = document.createElement('div');
+        candyElement.className = 'candy-item';
+        candyElement.innerHTML = `
+            <div class="candy-icon">${candy}</div>
+            <div class="candy-name">${candy}</div>
+        `;
+        candyCollectionElement.appendChild(candyElement);
+    });
+}
+
+// Start candy confirmation timer - PRD: 20 seconds + 10 second warning
+function startCandyConfirmationTimer() {
+    candyConfirmationCountdown = 20; // PRD: 20 seconds initial confirmation time
+    updateCandyConfirmationDisplay();
+    
+    candyConfirmationTimer = setInterval(() => {
+        candyConfirmationCountdown--;
+        updateCandyConfirmationDisplay();
+        
+        // PRD: Show warning at 10 seconds remaining
+        if (candyConfirmationCountdown === 10) {
+            showNotification('⚠️ Please confirm your candy selection - 10 seconds remaining!', 'warning', 3000);
+        }
+        
+        // PRD: Disconnect after 30 seconds total (20+10)
+        if (candyConfirmationCountdown <= 0) {
+            clearInterval(candyConfirmationTimer);
+            handleCandyConfirmationTimeout();
+        }
+    }, 1000);
+}
+
+// Update candy confirmation timer display - PRD compliant
+function updateCandyConfirmationDisplay() {
+    const timerElement = document.getElementById('candy-confirmation-timer');
+    if (timerElement) {
+        // PRD: First 20 seconds - normal confirmation phase
+        if (candyConfirmationCountdown > 10) {
+            timerElement.textContent = `Confirm your candy selection: ${candyConfirmationCountdown}s`;
+            timerElement.style.color = '#10b981';
+            timerElement.style.fontWeight = 'normal';
+        }
+        // PRD: Last 10 seconds - warning phase
+        else if (candyConfirmationCountdown > 0) {
+            timerElement.textContent = `⚠️ WARNING - Confirm now: ${candyConfirmationCountdown}s`;
+            timerElement.style.color = '#ef4444';
+            timerElement.style.fontWeight = 'bold';
+        }
+        // PRD: Timeout phase
+        else {
+            timerElement.textContent = 'TIMEOUT - Disconnecting...';
+            timerElement.style.color = '#dc2626';
+            timerElement.style.fontWeight = 'bold';
+        }
+    }
+}
+
+// Handle candy confirmation timeout - PRD compliant
+function handleCandyConfirmationTimeout() {
+    console.log('⏰ PRD: Candy confirmation timeout after 30 seconds - disconnecting player');
+    
+    // Stop opponent status checking
+    if (opponentStatusCheckInterval) {
+        clearInterval(opponentStatusCheckInterval);
+        opponentStatusCheckInterval = null;
+    }
+    
+    // PRD: Disconnect player and return opponent to matchmaking queue
+    showNotification('⏰ Candy selection timed out after 30 seconds! Disconnecting...', 'error', 5000);
+    
+    // Notify backend of timeout/disconnect
+    if (gameState.gameId && gameState.playerId) {
+        fetch('http://localhost:8000/games/disconnect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                game_id: gameState.gameId,
+                player_id: gameState.playerId,
+                reason: 'candy_confirmation_timeout'
+            })
+        }).catch(error => console.error('Failed to notify backend of disconnect:', error));
+    }
+    
+    // Return to main menu
+    setTimeout(() => {
+        showScreen('page1');
+    }, 2000);
+}
+
+// Confirm candy selection
+async function confirmCandySelection() {
+    console.log('🍬 Confirming candy selection...');
+    
+    try {
+        // Call backend API to confirm candy selection
+        const response = await fetch('http://localhost:8000/candy/select', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                player_id: gameState.playerId,
+                candy_id: 'confirmed', // Just confirming the existing candy collection
+                game_id: gameState.gameId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('✅ Candy selection confirmed successfully');
+            
+            // Stop confirmation timer
+            if (candyConfirmationTimer) {
+                clearInterval(candyConfirmationTimer);
+                candyConfirmationTimer = null;
+            }
+            
+            // Update UI to show confirmation
+            const confirmButton = document.getElementById('confirm-candy-btn');
+            if (confirmButton) {
+                confirmButton.textContent = 'Confirmed ✅';
+                confirmButton.disabled = true;
+                confirmButton.style.backgroundColor = '#10b981';
+            }
+            
+            // Update status message
+            const statusElement = document.getElementById('candy-confirmation-status');
+            if (statusElement) {
+                statusElement.textContent = 'Waiting for opponent to confirm...';
+                statusElement.style.color = '#10b981';
+            }
+            
+            showNotification('✅ Candy selection confirmed! Waiting for opponent...', 'success', 3000);
+            
+            // Continue checking opponent status
+            // This will automatically proceed to game start when both players confirmed
+            
+        } else {
+            console.log('❌ Failed to confirm candy selection:', result.message);
+            showNotification('❌ Failed to confirm candy selection. Please try again.', 'error');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error confirming candy selection:', error);
+        showNotification('❌ Error confirming candy selection. Please try again.', 'error');
+    }
+}
+
+// Start checking opponent status
+function startOpponentStatusCheck() {
+    opponentStatusCheckInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`http://localhost:8000/game/status/${gameState.gameId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                const gameStatus = data.data;
+                
+                // Update opponent status display
+                const opponentStatusElement = document.getElementById('opponent-status');
+                if (opponentStatusElement) {
+                    const opponentConfirmed = gameStatus.player2 && gameStatus.player2.candy_confirmed;
+                    opponentStatusElement.textContent = opponentConfirmed ? 'Confirmed ✅' : 'Waiting...';
+                    opponentStatusElement.style.color = opponentConfirmed ? '#10b981' : '#f59e0b';
+                }
+                
+                // Check if both players confirmed
+                const player1Confirmed = gameStatus.player1 && gameStatus.player1.candy_confirmed;
+                const player2Confirmed = gameStatus.player2 && gameStatus.player2.candy_confirmed;
+                
+                if (player1Confirmed && player2Confirmed) {
+                    console.log('🎮 Both players confirmed candy selection - starting game');
+                    
+                    // Stop status checking
+                    clearInterval(opponentStatusCheckInterval);
+                    opponentStatusCheckInterval = null;
+                    
+                    // Start the game
+                    await startGameAfterConfirmation();
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error checking opponent status:', error);
+        }
+    }, 2000); // Check every 2 seconds
+}
+
+// Start game after both players confirmed
+async function startGameAfterConfirmation() {
+    console.log('🎮 Starting game after candy confirmation');
+    
+    try {
+        // Call backend to start the game
+        const response = await fetch('http://localhost:8000/game/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                game_id: gameState.gameId,
+                player_id: gameState.playerId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('✅ Game started successfully');
+            
+            // Show success message
+            showNotification('🎮 Game starting! Get ready to play!', 'success', 3000);
+            
+            // Navigate to game screen
+            setTimeout(() => {
+                showScreen('page4'); // Go to main game screen
+                initializeOnlineGame();
+            }, 2000);
+            
+        } else {
+            console.log('❌ Failed to start game:', result.message);
+            showNotification('❌ Failed to start game. Returning to main menu.', 'error');
+            
+            setTimeout(() => {
+                showScreen('page1');
+            }, 2000);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error starting game:', error);
+        showNotification('❌ Error starting game. Returning to main menu.', 'error');
+        
+        setTimeout(() => {
+            showScreen('page1');
+        }, 2000);
+    }
+}
+
+// Initialize online game after candy confirmation
+function initializeOnlineGame() {
+    console.log('🎮 Initializing online game');
+    
+    // Set game mode
+    gameState.gameMode = 'online';
+    
+    // Initialize game board
+    if (typeof initializeGameBoard === 'function') {
+        initializeGameBoard();
+    }
+    
+    // Set up opponent name display
+    const opponentNameElement = document.getElementById('opponent-name');
+    if (opponentNameElement) {
+        opponentNameElement.textContent = gameState.opponentName;
+    }
+    
+    // Initialize poison selection
+    if (typeof initializePoisonSelectionInGame === 'function') {
+        initializePoisonSelectionInGame();
+    }
+    
+    console.log('✅ Online game initialized');
+}
+
+// Clean up candy confirmation timers
+function cleanupCandyConfirmation() {
+    if (candyConfirmationTimer) {
+        clearInterval(candyConfirmationTimer);
+        candyConfirmationTimer = null;
+    }
+    
+    if (opponentStatusCheckInterval) {
+        clearInterval(opponentStatusCheckInterval);
+        opponentStatusCheckInterval = null;
+    }
+}
+
+// Export candy confirmation functions
+window.initializeCandySelectionConfirmation = initializeCandySelectionConfirmation;
+window.confirmCandySelection = confirmCandySelection;
+window.cleanupCandyConfirmation = cleanupCandyConfirmation;
 

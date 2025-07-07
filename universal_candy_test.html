@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Candy System Test - PCD Game</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .test-container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            margin: 20px 0;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .test-result {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        .test-pass {
+            background: rgba(34, 197, 94, 0.2);
+            border: 2px solid #22c55e;
+            color: #16a34a;
+        }
+        .test-fail {
+            background: rgba(239, 68, 68, 0.2);
+            border: 2px solid #ef4444;
+            color: #dc2626;
+        }
+        .candy-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .candy-item {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            font-size: 24px;
+            transition: all 0.3s ease;
+        }
+        .candy-item:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+        .player-candies {
+            border-color: #22c55e;
+            background: rgba(34, 197, 94, 0.1);
+        }
+        .opponent-candies {
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+        .poison-candies {
+            border-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.1);
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        .summary {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 Universal Candy System Test</h1>
+        <p>This test validates the universal candy picking system with your specified candy set.</p>
+        
+        <button onclick="runTests()">Run All Tests</button>
+        <button onclick="generateGameCandies()">Generate Game Candies</button>
+        
+        <div id="test-results"></div>
+        
+        <div class="summary" id="summary" style="display: none;">
+            <h3>📊 Test Summary</h3>
+            <div id="summary-content"></div>
+        </div>
+        
+        <div id="candy-display"></div>
+    </div>
+
+    <script>
+        // User-specified candy set
+        const CANDY_TYPES = [
+            '🍏', '🍋', '🍇', '🍒', '🍎', '🍋‍🟩', '🍓', '🍑', '🍐', '🍌', 
+            '🫐', '🥭', '🍊', '🍉', '🍈', '🍍', '🥥', '🥑', '🥒', '🥕', 
+            '🥝', '🫛', '🌶️', '🫒', '🍅', '🥦', '🫑', '🧄', '🍆', '🥬', 
+            '🌽', '🧅', '🥔', '🫜', '🍠', '🥖', '🍞', '🥚', '🧇', '🧀', 
+            '🥞', '🧈', '🍖', '🍗', '🌭', '🥩', '🌮', '🌯', '🥙', '🥗', 
+            '🧆', '🍕', '🫔', '🦴', '🍝', '🍜', '🍥', '🍰', '🍬', '🍭', 
+            '🍪', '🍩', '🌰', '🍫', '🍵'
+        ];
+
+        function generateUniqueGameCandies() {
+            console.log('🍭 Generating completely unique candy sets for entire game...');
+            
+            // Verify we have enough candies
+            if (CANDY_TYPES.length < 24) {
+                throw new Error(`Need at least 24 candy types, but only have ${CANDY_TYPES.length}`);
+            }
+            
+            // Shuffle all available candies multiple times for better randomness
+            let shuffledCandies = [...CANDY_TYPES];
+            for (let i = 0; i < 3; i++) {
+                shuffledCandies = shuffledCandies.sort(() => Math.random() - 0.5);
+            }
+            
+            // Allocate candies ensuring NO overlaps anywhere
+            const playerCandies = shuffledCandies.slice(0, 12);      
+            const opponentCandies = shuffledCandies.slice(12, 24);   
+            
+            // Poison selection uses player's actual game candies (SAME SET)
+            const poisonCandies = [...playerCandies];
+            
+            return {
+                playerCandies: playerCandies,
+                opponentCandies: opponentCandies,
+                poisonCandies: poisonCandies
+            };
+        }
+
+        function runTests() {
+            const resultsDiv = document.getElementById('test-results');
+            const summaryDiv = document.getElementById('summary');
+            const summaryContent = document.getElementById('summary-content');
+            
+            resultsDiv.innerHTML = '<h3>🧪 Running Tests...</h3>';
+            
+            const tests = [
+                { name: 'Candy Set Size', func: testCandySetSize },
+                { name: 'Unique Candies', func: testUniqueCandies },
+                { name: 'Game Generation', func: testGameGeneration },
+                { name: 'Poison Consistency', func: testPoisonConsistency },
+                { name: 'No Duplicates', func: testNoDuplicates },
+                { name: 'No Overlaps', func: testNoOverlaps }
+            ];
+
+            const results = [];
+            
+            tests.forEach(test => {
+                try {
+                    const result = test.func();
+                    results.push({ name: test.name, passed: result.passed, message: result.message });
+                    
+                    const testDiv = document.createElement('div');
+                    testDiv.className = `test-result ${result.passed ? 'test-pass' : 'test-fail'}`;
+                    testDiv.innerHTML = `
+                        <strong>${result.passed ? '✅' : '❌'} ${test.name}</strong><br>
+                        ${result.message}
+                    `;
+                    resultsDiv.appendChild(testDiv);
+                } catch (error) {
+                    results.push({ name: test.name, passed: false, message: error.message });
+                    
+                    const testDiv = document.createElement('div');
+                    testDiv.className = 'test-result test-fail';
+                    testDiv.innerHTML = `
+                        <strong>❌ ${test.name}</strong><br>
+                        Error: ${error.message}
+                    `;
+                    resultsDiv.appendChild(testDiv);
+                }
+            });
+
+            // Show summary
+            const passed = results.filter(r => r.passed).length;
+            const total = results.length;
+            
+            summaryContent.innerHTML = `
+                <p><strong>Tests Passed: ${passed}/${total}</strong></p>
+                <p><strong>Success Rate: ${Math.round((passed/total) * 100)}%</strong></p>
+                <p><strong>Status: ${passed === total ? '🎉 ALL TESTS PASSED!' : '⚠️ Some tests failed'}</strong></p>
+            `;
+            summaryDiv.style.display = 'block';
+        }
+
+        function testCandySetSize() {
+            const result = CANDY_TYPES.length >= 24;
+            return {
+                passed: result,
+                message: `Candy set has ${CANDY_TYPES.length} types (minimum 24 required)`
+            };
+        }
+
+        function testUniqueCandies() {
+            const uniqueSet = new Set(CANDY_TYPES);
+            const result = uniqueSet.size === CANDY_TYPES.length;
+            return {
+                passed: result,
+                message: result ? 
+                    `All ${CANDY_TYPES.length} candies are unique` : 
+                    `Duplicate candies found! ${CANDY_TYPES.length} total vs ${uniqueSet.size} unique`
+            };
+        }
+
+        function testGameGeneration() {
+            const gameSet = generateUniqueGameCandies();
+            const result = gameSet.playerCandies.length === 12 && gameSet.opponentCandies.length === 12;
+            return {
+                passed: result,
+                message: result ? 
+                    'Successfully generated 12 player and 12 opponent candies' : 
+                    `Failed to generate correct candy counts: ${gameSet.playerCandies.length} player, ${gameSet.opponentCandies.length} opponent`
+            };
+        }
+
+        function testPoisonConsistency() {
+            const gameSet = generateUniqueGameCandies();
+            const result = JSON.stringify(gameSet.poisonCandies) === JSON.stringify(gameSet.playerCandies);
+            return {
+                passed: result,
+                message: result ? 
+                    'Poison selection uses same candies as player game set' : 
+                    'Poison selection candies differ from player game candies'
+            };
+        }
+
+        function testNoDuplicates() {
+            const gameSet = generateUniqueGameCandies();
+            const playerSet = new Set(gameSet.playerCandies);
+            const opponentSet = new Set(gameSet.opponentCandies);
+            const result = playerSet.size === 12 && opponentSet.size === 12;
+            return {
+                passed: result,
+                message: result ? 
+                    'No duplicates within player or opponent sets' : 
+                    `Duplicates found: Player ${playerSet.size}/12 unique, Opponent ${opponentSet.size}/12 unique`
+            };
+        }
+
+        function testNoOverlaps() {
+            const gameSet = generateUniqueGameCandies();
+            const playerSet = new Set(gameSet.playerCandies);
+            const opponentSet = new Set(gameSet.opponentCandies);
+            const intersection = [...playerSet].filter(candy => opponentSet.has(candy));
+            const result = intersection.length === 0;
+            return {
+                passed: result,
+                message: result ? 
+                    'No overlaps between player and opponent candy sets' : 
+                    `Overlaps found: ${intersection.join(', ')}`
+            };
+        }
+
+        function generateGameCandies() {
+            const displayDiv = document.getElementById('candy-display');
+            
+            try {
+                const gameSet = generateUniqueGameCandies();
+                
+                displayDiv.innerHTML = `
+                    <h3>🎮 Generated Game Candies</h3>
+                    
+                    <h4>🟢 Player Candies (${gameSet.playerCandies.length})</h4>
+                    <div class="candy-grid">
+                        ${gameSet.playerCandies.map(candy => `<div class="candy-item player-candies">${candy}</div>`).join('')}
+                    </div>
+                    
+                    <h4>🔴 Opponent Candies (${gameSet.opponentCandies.length})</h4>
+                    <div class="candy-grid">
+                        ${gameSet.opponentCandies.map(candy => `<div class="candy-item opponent-candies">${candy}</div>`).join('')}
+                    </div>
+                    
+                    <h4>🟡 Poison Selection Pool (${gameSet.poisonCandies.length})</h4>
+                    <div class="candy-grid">
+                        ${gameSet.poisonCandies.map(candy => `<div class="candy-item poison-candies">${candy}</div>`).join('')}
+                    </div>
+                    
+                    <div class="test-result test-pass">
+                        <strong>✅ Generation Successful!</strong><br>
+                        Player and poison pools are identical as required.<br>
+                        No overlaps between player and opponent candies.
+                    </div>
+                `;
+            } catch (error) {
+                displayDiv.innerHTML = `
+                    <div class="test-result test-fail">
+                        <strong>❌ Generation Failed!</strong><br>
+                        Error: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Auto-run tests on page load
+        setTimeout(() => {
+            runTests();
+        }, 1000);
+    </script>
+</body>
+</html> 
