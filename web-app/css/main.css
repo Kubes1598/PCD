@@ -4136,3 +4136,117 @@ input[type="text"]:focus, input[type="password"]:focus, input[type="email"]:focu
         display: none; /* Hide "coins" and "diamonds" text on very small screens */
     }
 }
+
+/* ===== PRD COMPLIANT SEARCHING SCREEN ===== */
+.searching-spinner {
+    width: 80px;
+    height: 80px;
+    border: 6px solid var(--gray-200);
+    border-top: 6px solid var(--primary);
+    border-radius: 50%;
+    animation: spin 1.5s linear infinite;
+    margin: 0 auto;
+    position: relative;
+}
+
+.searching-spinner::after {
+    content: '';
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    border: 3px solid transparent;
+    border-top: 3px solid var(--warning);
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: spin 2s linear infinite reverse;
+}
+
+@keyframes searching-pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 0.7;
+    }
+}
+
+.searching-dots span {
+    display: inline-block;
+    animation: searching-pulse 1.5s ease-in-out infinite;
+}
+
+.searching-dots span:nth-child(2) {
+    animation-delay: 0.3s;
+}
+
+.searching-dots span:nth-child(3) {
+    animation-delay: 0.6s;
+}
+
+/* Match found overlay */
+#match-found-overlay.show {
+    display: flex !important;
+}
+
+/* Search progress bar animation */
+@keyframes search-progress-countdown {
+    from {
+        width: 100%;
+    }
+    to {
+        width: 0%;
+    }
+}
+
+.search-countdown-active {
+    animation: search-progress-countdown 30s linear;
+}
+
+/* City icons for searching screen */
+.city-icon-dubai { color: #f59e0b; }
+.city-icon-cairo { color: #dc2626; }
+.city-icon-oslo { color: #3b82f6; }
+
+/* Status text animations */
+.status-text-updating {
+    animation: fade-pulse 0.5s ease-in-out;
+}
+
+@keyframes fade-pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Responsive adjustments for searching screen */
+@media (max-width: 768px) {
+    .searching-spinner {
+        width: 60px;
+        height: 60px;
+        border-width: 4px;
+    }
+    
+    .searching-spinner::after {
+        width: 45px;
+        height: 45px;
+        border-width: 2px;
+    }
+    
+    #selected-city-icon {
+        font-size: 4rem;
+    }
+}
+
+@media (max-width: 480px) {
+    #selected-city-icon {
+        font-size: 3rem;
+    }
+    
+    .searching-dots {
+        font-size: 1.5rem;
+    }
+}

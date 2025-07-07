@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Candy Pool Demo - Poison Candy Duel</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            padding: 30px;
+            text-align: center;
+            color: white;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            margin: 10px 0 0;
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .controls {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .control-group label {
+            font-weight: bold;
+            color: #495057;
+            min-width: 100px;
+        }
+
+        select, button {
+            padding: 10px 20px;
+            border: 2px solid #dee2e6;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        select:focus, button:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0,123,255,0.25);
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        .results {
+            padding: 30px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        .pool-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            border: 2px solid #e9ecef;
+        }
+
+        .pool-section h3 {
+            margin: 0 0 20px;
+            color: #495057;
+            font-size: 1.5em;
+            text-align: center;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .candy-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(50px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .candy-item {
+            background: white;
+            border: 2px solid #dee2e6;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            font-size: 24px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .candy-item:hover {
+            transform: scale(1.1);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .candy-item.common {
+            border-color: #28a745;
+            background: #f8fff9;
+        }
+
+        .candy-item.uncommon {
+            border-color: #ffc107;
+            background: #fffef8;
+        }
+
+        .candy-item.rare {
+            border-color: #dc3545;
+            background: #fff8f8;
+        }
+
+        .candy-item.special {
+            border-color: #6f42c1;
+            background: #f8f7ff;
+        }
+
+        .stats {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            border: 2px solid #e9ecef;
+        }
+
+        .stats h4 {
+            margin: 0 0 10px;
+            color: #495057;
+        }
+
+        .stat-bar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .stat-bar .label {
+            font-weight: bold;
+        }
+
+        .stat-bar .value {
+            color: #6c757d;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .session-info {
+            background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            color: white;
+            text-align: center;
+        }
+
+        .session-info h4 {
+            margin: 0 0 10px;
+            font-size: 1.3em;
+        }
+
+        .session-info p {
+            margin: 5px 0;
+            opacity: 0.9;
+        }
+
+        .balance-test {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            color: white;
+            text-align: center;
+        }
+
+        .balance-test button {
+            background: rgba(255,255,255,0.2);
+            border: 2px solid white;
+            color: white;
+            margin-top: 10px;
+        }
+
+        .balance-test button:hover {
+            background: white;
+            color: #333;
+        }
+
+        @media (max-width: 768px) {
+            .results {
+                grid-template-columns: 1fr;
+            }
+            
+            .control-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .control-group label {
+                min-width: auto;
+                margin-bottom: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍭 Enhanced Candy Pool System</h1>
+            <p>Balanced & Synchronized Candy Generation for Online Play</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="citySelect">Select City:</label>
+                <select id="citySelect">
+                    <option value="Dubai">Dubai (Balanced)</option>
+                    <option value="Cairo">Cairo (Competitive)</option>
+                    <option value="Oslo">Oslo (Expert)</option>
+                </select>
+                <button onclick="generateNewPools()">Generate New Pools</button>
+                <button onclick="validateCurrentPools()">Validate Pools</button>
+            </div>
+        </div>
+
+        <div class="results">
+            <div id="sessionInfo" class="session-info full-width">
+                <h4>Session Information</h4>
+                <p>Click "Generate New Pools" to start</p>
+            </div>
+
+            <div class="pool-section">
+                <h3>Player 1 Candies</h3>
+                <div id="player1Grid" class="candy-grid"></div>
+                <div id="player1Stats" class="stats"></div>
+            </div>
+
+            <div class="pool-section">
+                <h3>Player 2 Candies</h3>
+                <div id="player2Grid" class="candy-grid"></div>
+                <div id="player2Stats" class="stats"></div>
+            </div>
+
+            <div class="balance-test full-width">
+                <h4>🧪 System Testing</h4>
+                <p>Run comprehensive balance tests for all cities</p>
+                <button onclick="runBalanceTest()">Run Balance Test</button>
+                <button onclick="showStatistics()">Show Statistics</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Enhanced Candy Pool System -->
+    <script src="js/enhanced-candy-pool.js"></script>
+
+    <script>
+        let currentPools = null;
+        let enhancedCandyPool = null;
+
+        // Initialize the system
+        function initializeSystem() {
+            enhancedCandyPool = getEnhancedCandyPool();
+            console.log('🍭 Enhanced Candy Pool Demo initialized');
+        }
+
+        // Generate new candy pools
+        function generateNewPools() {
+            const citySelect = document.getElementById('citySelect');
+            const selectedCity = citySelect.value;
+
+            try {
+                console.log(`🎯 Generating pools for ${selectedCity}...`);
+                currentPools = enhancedCandyPool.generateSynchronizedCandyPools(selectedCity);
+                
+                updateSessionInfo(currentPools);
+                displayCandyPool('player1Grid', 'player1Stats', currentPools.player1Candies, 'Player 1');
+                displayCandyPool('player2Grid', 'player2Stats', currentPools.player2Candies, 'Player 2');
+                
+                console.log('✅ Pools generated successfully');
+            } catch (error) {
+                console.error('❌ Error generating pools:', error);
+                alert('Error generating pools: ' + error.message);
+            }
+        }
+
+        // Update session information display
+        function updateSessionInfo(pools) {
+            const sessionInfo = document.getElementById('sessionInfo');
+            sessionInfo.innerHTML = `
+                <h4>Session: ${pools.sessionId}</h4>
+                <p><strong>City:</strong> ${pools.city} | <strong>Difficulty:</strong> ${pools.difficulty}</p>
+                <p><strong>Master Pool:</strong> ${pools.masterPool.length} candies | <strong>Per Player:</strong> ${pools.player1Candies.length} candies each</p>
+            `;
+        }
+
+        // Display candy pool in grid
+        function displayCandyPool(gridId, statsId, candies, playerName) {
+            const grid = document.getElementById(gridId);
+            const stats = document.getElementById(statsId);
+            
+            // Clear existing content
+            grid.innerHTML = '';
+            
+            // Create candy items
+            candies.forEach(candy => {
+                const candyElement = document.createElement('div');
+                candyElement.className = 'candy-item ' + getCandyCategory(candy);
+                candyElement.textContent = candy;
+                candyElement.title = `${candy} (${getCandyCategory(candy)})`;
+                grid.appendChild(candyElement);
+            });
+
+            // Update stats
+            updateStats(statsId, candies, playerName);
+        }
+
+        // Get candy category for styling
+        function getCandyCategory(candy) {
+            if (!enhancedCandyPool) return 'common';
+            
+            const pools = enhancedCandyPool.candyPools;
+            for (const [category, pool] of Object.entries(pools)) {
+                if (pool.includes(candy)) {
+                    return category;
+                }
+            }
+            return 'common';
+        }
+
+        // Update statistics display
+        function updateStats(statsId, candies, playerName) {
+            const stats = document.getElementById(statsId);
+            
+            if (!enhancedCandyPool) {
+                stats.innerHTML = '<p>Enhanced candy pool not available</p>';
+                return;
+            }
+
+            const validation = enhancedCandyPool.validatePoolBalance(candies);
+            
+            stats.innerHTML = `
+                <h4>${playerName} Balance</h4>
+                <div class="stat-bar">
+                    <span class="label">Common:</span>
+                    <span class="value">${validation.distribution.common} (${validation.percentages.common}%)</span>
+                </div>
+                <div class="stat-bar">
+                    <span class="label">Uncommon:</span>
+                    <span class="value">${validation.distribution.uncommon} (${validation.percentages.uncommon}%)</span>
+                </div>
+                <div class="stat-bar">
+                    <span class="label">Rare:</span>
+                    <span class="value">${validation.distribution.rare} (${validation.percentages.rare}%)</span>
+                </div>
+                <div class="stat-bar">
+                    <span class="label">Special:</span>
+                    <span class="value">${validation.distribution.special} (${validation.percentages.special}%)</span>
+                </div>
+                <div class="stat-bar">
+                    <span class="label">Total:</span>
+                    <span class="value">${candies.length} candies</span>
+                </div>
+            `;
+        }
+
+        // Validate current pools
+        function validateCurrentPools() {
+            if (!currentPools) {
+                alert('No pools generated yet. Click "Generate New Pools" first.');
+                return;
+            }
+
+            const player1Candies = currentPools.player1Candies;
+            const player2Candies = currentPools.player2Candies;
+
+            // Check for duplicates within pools
+            const player1Set = new Set(player1Candies);
+            const player2Set = new Set(player2Candies);
+
+            // Check for overlaps between pools
+            const overlap = player1Candies.filter(candy => player2Candies.includes(candy));
+
+            let validationMessage = '🔍 Validation Results:\n\n';
+            
+            if (player1Set.size === player1Candies.length) {
+                validationMessage += '✅ Player 1: No duplicates\n';
+            } else {
+                validationMessage += '❌ Player 1: Contains duplicates\n';
+            }
+
+            if (player2Set.size === player2Candies.length) {
+                validationMessage += '✅ Player 2: No duplicates\n';
+            } else {
+                validationMessage += '❌ Player 2: Contains duplicates\n';
+            }
+
+            if (overlap.length === 0) {
+                validationMessage += '✅ No overlaps between players\n';
+            } else {
+                validationMessage += `❌ Found ${overlap.length} overlapping candies: ${overlap.join(', ')}\n`;
+            }
+
+            validationMessage += `\n📊 Balance Check:\n`;
+            validationMessage += `Player 1: ${player1Candies.length} candies\n`;
+            validationMessage += `Player 2: ${player2Candies.length} candies\n`;
+            validationMessage += `Session: ${currentPools.sessionId}\n`;
+            validationMessage += `City: ${currentPools.city} (${currentPools.difficulty})`;
+
+            alert(validationMessage);
+        }
+
+        // Run comprehensive balance test
+        function runBalanceTest() {
+            if (!enhancedCandyPool) {
+                alert('Enhanced candy pool system not available');
+                return;
+            }
+
+            console.log('🧪 Running comprehensive balance test...');
+            enhancedCandyPool.runBalanceTest();
+            
+            alert('Balance test completed! Check the console for detailed results.');
+        }
+
+        // Show system statistics
+        function showStatistics() {
+            if (!enhancedCandyPool) {
+                alert('Enhanced candy pool system not available');
+                return;
+            }
+
+            const stats = enhancedCandyPool.getPoolStatistics();
+            
+            let statsMessage = '📈 System Statistics:\n\n';
+            statsMessage += `Total Candy Types: ${stats.totalCandyTypes}\n`;
+            statsMessage += `Active Sessions: ${stats.activeSessions}\n\n`;
+            
+            statsMessage += 'Categories:\n';
+            Object.entries(stats.categories).forEach(([category, info]) => {
+                statsMessage += `  ${category}: ${info.count} candies\n`;
+            });
+            
+            statsMessage += '\nCity Difficulties:\n';
+            Object.entries(stats.cityDifficulties).forEach(([city, difficulty]) => {
+                statsMessage += `  ${city}: ${difficulty}\n`;
+            });
+
+            alert(statsMessage);
+        }
+
+        // Initialize system when page loads
+        window.addEventListener('load', initializeSystem);
+    </script>
+</body>
+</html> 

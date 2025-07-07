@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Candy Pool Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f8ff;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #007bff;
+        }
+        .candy-pool {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+        }
+        .candy-item {
+            background: white;
+            border: 1px solid #ddd;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 18px;
+            min-width: 30px;
+            text-align: center;
+        }
+        .candy-item.common { border-color: #28a745; }
+        .candy-item.uncommon { border-color: #ffc107; }
+        .candy-item.rare { border-color: #dc3545; }
+        .candy-item.special { border-color: #6f42c1; }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .stat-box {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+        .stat-box h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍭 Enhanced Candy Pool System Test</h1>
+        
+        <div class="test-section">
+            <h3>System Status</h3>
+            <div id="systemStatus" class="status info">Loading...</div>
+            <button onclick="initializeSystem()">Initialize System</button>
+            <button onclick="runAllTests()">Run All Tests</button>
+        </div>
+
+        <div class="test-section">
+            <h3>City Pool Generation</h3>
+            <button onclick="testCityPool('Dubai')">Test Dubai (Balanced)</button>
+            <button onclick="testCityPool('Cairo')">Test Cairo (Competitive)</button>
+            <button onclick="testCityPool('Oslo')">Test Oslo (Expert)</button>
+            <div id="cityResults"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Pool Validation</h3>
+            <button onclick="testPoolValidation()">Test Pool Validation</button>
+            <div id="validationResults"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>PRD Integration</h3>
+            <button onclick="testPRDIntegration()">Test PRD Integration</button>
+            <div id="prdResults"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Legacy Fallback</h3>
+            <button onclick="testLegacyFallback()">Test Legacy Fallback</button>
+            <div id="legacyResults"></div>
+        </div>
+    </div>
+
+    <script src="web-app/js/enhanced-candy-pool.js"></script>
+    <script>
+        let enhancedCandyPool = null;
+        let testResults = [];
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('systemStatus');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function initializeSystem() {
+            try {
+                if (typeof getEnhancedCandyPool === 'function') {
+                    enhancedCandyPool = getEnhancedCandyPool();
+                    updateStatus('✅ Enhanced Candy Pool System initialized successfully!', 'success');
+                } else {
+                    updateStatus('❌ Enhanced Candy Pool System not found!', 'error');
+                }
+            } catch (error) {
+                updateStatus(`❌ Initialization failed: ${error.message}`, 'error');
+            }
+        }
+
+        function testCityPool(city) {
+            if (!enhancedCandyPool) {
+                updateStatus('❌ System not initialized. Click "Initialize System" first.', 'error');
+                return;
+            }
+
+            try {
+                const pools = enhancedCandyPool.generateSynchronizedCandyPools(city);
+                
+                const resultsDiv = document.getElementById('cityResults');
+                resultsDiv.innerHTML = `
+                    <h4>Results for ${city}:</h4>
+                    <div class="stats">
+                        <div class="stat-box">
+                            <h4>Session ID</h4>
+                            <div class="stat-value">${pools.sessionId.split('_')[1]}</div>
+                        </div>
+                        <div class="stat-box">
+                            <h4>Difficulty</h4>
+                            <div class="stat-value">${pools.difficulty}</div>
+                        </div>
+                        <div class="stat-box">
+                            <h4>Master Pool</h4>
+                            <div class="stat-value">${pools.masterPool.length}</div>
+                        </div>
+                        <div class="stat-box">
+                            <h4>Per Player</h4>
+                            <div class="stat-value">${pools.player1Candies.length}</div>
+                        </div>
+                    </div>
+                    <h5>Player 1 Candies:</h5>
+                    <div class="candy-pool">
+                        ${pools.player1Candies.map(candy => 
+                            `<div class="candy-item ${getCandyCategory(candy)}">${candy}</div>`
+                        ).join('')}
+                    </div>
+                    <h5>Player 2 Candies:</h5>
+                    <div class="candy-pool">
+                        ${pools.player2Candies.map(candy => 
+                            `<div class="candy-item ${getCandyCategory(candy)}">${candy}</div>`
+                        ).join('')}
+                    </div>
+                `;
+                
+                testResults.push({
+                    test: `City Pool - ${city}`,
+                    result: 'PASS',
+                    details: `Generated ${pools.player1Candies.length + pools.player2Candies.length} candies`
+                });
+                
+            } catch (error) {
+                document.getElementById('cityResults').innerHTML = `
+                    <div class="status error">❌ Error testing ${city}: ${error.message}</div>
+                `;
+                testResults.push({
+                    test: `City Pool - ${city}`,
+                    result: 'FAIL',
+                    details: error.message
+                });
+            }
+        }
+
+        function getCandyCategory(candy) {
+            if (!enhancedCandyPool) return 'common';
+            
+            const pools = enhancedCandyPool.candyPools;
+            for (const [category, pool] of Object.entries(pools)) {
+                if (pool.includes(candy)) {
+                    return category;
+                }
+            }
+            return 'common';
+        }
+
+        function testPoolValidation() {
+            if (!enhancedCandyPool) {
+                updateStatus('❌ System not initialized. Click "Initialize System" first.', 'error');
+                return;
+            }
+
+            try {
+                const pools = enhancedCandyPool.generateSynchronizedCandyPools('Dubai');
+                
+                // Test for duplicates
+                const player1Set = new Set(pools.player1Candies);
+                const player2Set = new Set(pools.player2Candies);
+                
+                // Test for overlaps
+                const overlap = pools.player1Candies.filter(candy => pools.player2Candies.includes(candy));
+                
+                const results = [];
+                
+                // Validate player 1
+                if (player1Set.size === pools.player1Candies.length) {
+                    results.push('✅ Player 1: No duplicates');
+                } else {
+                    results.push('❌ Player 1: Contains duplicates');
+                }
+                
+                // Validate player 2
+                if (player2Set.size === pools.player2Candies.length) {
+                    results.push('✅ Player 2: No duplicates');
+                } else {
+                    results.push('❌ Player 2: Contains duplicates');
+                }
+                
+                // Validate no overlap
+                if (overlap.length === 0) {
+                    results.push('✅ No overlaps between players');
+                } else {
+                    results.push(`❌ Found ${overlap.length} overlapping candies`);
+                }
+                
+                const validation = enhancedCandyPool.validatePoolBalance(pools.player1Candies);
+                results.push(`📊 Player 1 balance: ${validation.percentages.common}% common, ${validation.percentages.uncommon}% uncommon, ${validation.percentages.rare}% rare, ${validation.percentages.special}% special`);
+                
+                document.getElementById('validationResults').innerHTML = `
+                    <div class="status ${overlap.length === 0 ? 'success' : 'error'}">
+                        ${results.join('<br>')}
+                    </div>
+                `;
+                
+                testResults.push({
+                    test: 'Pool Validation',
+                    result: overlap.length === 0 ? 'PASS' : 'FAIL',
+                    details: `Overlap count: ${overlap.length}`
+                });
+                
+            } catch (error) {
+                document.getElementById('validationResults').innerHTML = `
+                    <div class="status error">❌ Validation test failed: ${error.message}</div>
+                `;
+                testResults.push({
+                    test: 'Pool Validation',
+                    result: 'FAIL',
+                    details: error.message
+                });
+            }
+        }
+
+        function testPRDIntegration() {
+            try {
+                if (typeof generatePRDEnhancedCandies === 'function') {
+                    const prdCandies = generatePRDEnhancedCandies('Cairo');
+                    
+                    document.getElementById('prdResults').innerHTML = `
+                        <div class="status success">
+                            ✅ PRD Integration successful!<br>
+                            City: ${prdCandies.city}<br>
+                            Difficulty: ${prdCandies.difficulty}<br>
+                            Player candies: ${prdCandies.playerCandies.length}<br>
+                            Opponent candies: ${prdCandies.opponentCandies.length}<br>
+                            Session ID: ${prdCandies.sessionId}
+                        </div>
+                    `;
+                    
+                    testResults.push({
+                        test: 'PRD Integration',
+                        result: 'PASS',
+                        details: `Generated ${prdCandies.playerCandies.length} player candies`
+                    });
+                } else {
+                    throw new Error('generatePRDEnhancedCandies function not found');
+                }
+            } catch (error) {
+                document.getElementById('prdResults').innerHTML = `
+                    <div class="status error">❌ PRD Integration failed: ${error.message}</div>
+                `;
+                testResults.push({
+                    test: 'PRD Integration',
+                    result: 'FAIL',
+                    details: error.message
+                });
+            }
+        }
+
+        function testLegacyFallback() {
+            try {
+                if (typeof generateEnhancedGameCandies === 'function') {
+                    const legacyCandies = generateEnhancedGameCandies('Dubai');
+                    
+                    document.getElementById('legacyResults').innerHTML = `
+                        <div class="status success">
+                            ✅ Legacy fallback successful!<br>
+                            Player candies: ${legacyCandies.playerCandies.length}<br>
+                            Opponent candies: ${legacyCandies.opponentCandies.length}<br>
+                            Total unique candies: ${legacyCandies.playerCandies.length + legacyCandies.opponentCandies.length}
+                        </div>
+                    `;
+                    
+                    testResults.push({
+                        test: 'Legacy Fallback',
+                        result: 'PASS',
+                        details: `Generated ${legacyCandies.playerCandies.length + legacyCandies.opponentCandies.length} candies`
+                    });
+                } else {
+                    throw new Error('generateEnhancedGameCandies function not found');
+                }
+            } catch (error) {
+                document.getElementById('legacyResults').innerHTML = `
+                    <div class="status error">❌ Legacy fallback failed: ${error.message}</div>
+                `;
+                testResults.push({
+                    test: 'Legacy Fallback',
+                    result: 'FAIL',
+                    details: error.message
+                });
+            }
+        }
+
+        function runAllTests() {
+            testResults = [];
+            initializeSystem();
+            
+            setTimeout(() => {
+                testCityPool('Dubai');
+                setTimeout(() => {
+                    testCityPool('Cairo');
+                    setTimeout(() => {
+                        testCityPool('Oslo');
+                        setTimeout(() => {
+                            testPoolValidation();
+                            setTimeout(() => {
+                                testPRDIntegration();
+                                setTimeout(() => {
+                                    testLegacyFallback();
+                                    setTimeout(() => {
+                                        showTestSummary();
+                                    }, 500);
+                                }, 500);
+                            }, 500);
+                        }, 500);
+                    }, 500);
+                }, 500);
+            }, 500);
+        }
+
+        function showTestSummary() {
+            const passed = testResults.filter(r => r.result === 'PASS').length;
+            const total = testResults.length;
+            
+            updateStatus(`🎯 Test Summary: ${passed}/${total} tests passed`, passed === total ? 'success' : 'error');
+            
+            console.log('🧪 Enhanced Candy Pool Test Results:');
+            testResults.forEach(result => {
+                console.log(`${result.result === 'PASS' ? '✅' : '❌'} ${result.test}: ${result.details}`);
+            });
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', initializeSystem);
+    </script>
+</body>
+</html> 

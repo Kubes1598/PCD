@@ -516,10 +516,49 @@ function enterArena(arenaName, cost, prize, timeLimit) {
             {
                 text: `Enter ${arenaName}`,
                 class: 'btn-primary',
-                onclick: () => startArenaMatchmaking(arenaName, cost, prize, timeLimit)
+                onclick: () => startPRDArenaFlow(arenaName, cost, prize, timeLimit)
             }
         ]
     );
+}
+
+// PRD-Compliant Arena Flow
+function startPRDArenaFlow(arenaName, cost, prize, timeLimit) {
+    console.log(`🌍 PRD: Starting arena flow for ${arenaName}`);
+    
+    if (!currencyManager) {
+        console.error('Currency manager not initialized');
+        uxManager.showNotification('Currency system not ready. Please refresh the page.', 'error');
+        return;
+    }
+    
+    try {
+        // Actually spend the coins using currency manager
+        currencyManager.spendCoins(cost, `${arenaName} Arena entry`);
+        
+        uxManager.showNotification(`💰 ${cost.toLocaleString()} coins spent for ${arenaName} Arena`, 'info');
+        
+        // Store arena information for later use
+        if (typeof gameState !== 'undefined') {
+            gameState.selectedCity = arenaName;
+            gameState.gameCost = cost;
+            gameState.expectedPrize = prize;
+            gameState.turnTimeLimit = timeLimit;
+        }
+        
+        // PRD: Start the searching flow
+        if (typeof startPRDCitySearch === 'function') {
+            startPRDCitySearch(arenaName);
+        } else {
+            console.error('PRD matchmaking not loaded');
+            uxManager.showNotification('Matchmaking system not ready. Please refresh the page.', 'error');
+        }
+        
+    } catch (error) {
+        console.error('Failed to spend coins:', error);
+        uxManager.showNotification('Failed to process payment: ' + error.message, 'error');
+        return;
+    }
 }
 
 function getArenaIcon(arenaName) {

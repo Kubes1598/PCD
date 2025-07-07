@@ -236,6 +236,34 @@ function getRandomCandies(count) {
 function generateUniqueGameCandies() {
     console.log('🍭 Generating completely unique candy sets for entire game...');
     
+    // Try to use enhanced candy pool system if available
+    if (typeof generateEnhancedGameCandies === 'function') {
+        try {
+            console.log('🎯 Using enhanced candy pool system...');
+            
+            // Determine city based on current game state
+            let city = 'Dubai'; // Default
+            if (typeof gameState !== 'undefined' && gameState.selectedCity) {
+                city = gameState.selectedCity;
+            }
+            
+            const enhancedResult = generateEnhancedGameCandies(city);
+            
+            console.log(`✅ Enhanced candy generation successful for ${city}:`, {
+                playerCandies: enhancedResult.playerCandies.length,
+                opponentCandies: enhancedResult.opponentCandies.length
+            });
+            
+            return enhancedResult;
+            
+        } catch (error) {
+            console.warn('⚠️ Enhanced candy pool failed, falling back to legacy system:', error);
+        }
+    }
+    
+    // Legacy candy generation system (fallback)
+    console.log('🔄 Using legacy candy generation system...');
+    
     // Reset the global tracker
     globalUsedCandies.clear();
     
@@ -288,7 +316,7 @@ function generateUniqueGameCandies() {
     // CRITICAL FIX: Poison selection uses player's actual game candies
     const poisonCandies = [...playerCandies]; // Exact copy
     
-    console.log('✅ Generated unique candy sets:');
+    console.log('✅ Generated unique candy sets (legacy):');
     console.log('   Player candies:', playerCandies);
     console.log('   Opponent candies:', opponentCandies);
     console.log('   Poison selection (same as player):', poisonCandies);
@@ -2805,12 +2833,21 @@ function startAIGame(difficulty) {
     gameState.aiDifficulty = difficulty;
     gameState.playerName = 'Player';
     
-    // CRITICAL FIX: Generate completely unique candy sets using the new system
+    // Enhanced: Generate completely unique candy sets using enhanced system
     try {
-        const uniqueCandySets = generateUniqueGameCandies();
-        gameState.playerCandies = uniqueCandySets.playerCandies;
-        gameState.opponentCandies = uniqueCandySets.opponentCandies;
-        console.log('✅ Successfully generated unique candy sets for AI game');
+        // Try enhanced candy pool first
+        if (typeof generateEnhancedGameCandies === 'function') {
+            const enhancedCandies = generateEnhancedGameCandies('Dubai'); // AI games default to Dubai
+            gameState.playerCandies = enhancedCandies.playerCandies;
+            gameState.opponentCandies = enhancedCandies.opponentCandies;
+            console.log('✅ Successfully generated enhanced candy sets for AI game');
+        } else {
+            // Use legacy system
+            const uniqueCandySets = generateUniqueGameCandies();
+            gameState.playerCandies = uniqueCandySets.playerCandies;
+            gameState.opponentCandies = uniqueCandySets.opponentCandies;
+            console.log('✅ Successfully generated unique candy sets for AI game');
+        }
     } catch (error) {
         console.error('❌ Error generating candies:', error);
         // Fallback: create simple unique arrays
