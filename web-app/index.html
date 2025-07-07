@@ -52,28 +52,51 @@
                         <div>
                             <h1 class="text-2xl font-display font-bold text-primary">Poison Candy Duel</h1>
                             <div class="flex items-center space-x-4 text-sm text-gray-600">
-                                <button class="flex items-center hover:bg-gray-100 rounded-lg px-2 py-1 transition-colors cursor-pointer" onclick="showCoinsInfo()">
+                                <button class="currency-display flex items-center hover:bg-gray-100 rounded-lg px-3 py-1 transition-colors cursor-pointer" onclick="showCoinsInfo()">
                                     <svg class="w-4 h-4 mr-1 text-warning" fill="currentColor" viewBox="0 0 24 24">
                                         <circle cx="12" cy="12" r="3"/>
                                         <path d="M12 1l3.09 6.26L22 9l-5.91 3.07L19 22l-7-3.64L5 22l2.91-9.93L2 9l6.91-1.74L12 1z"/>
                                     </svg>
                                     <span id="coins-count">10000</span>
+                                    <span class="ml-1 text-xs">coins</span>
                                 </button>
-                                <button class="flex items-center hover:bg-gray-100 rounded-lg px-2 py-1 transition-colors cursor-pointer" onclick="showDiamondsInfo()">
+                                <button class="currency-display flex items-center hover:bg-gray-100 rounded-lg px-3 py-1 transition-colors cursor-pointer" onclick="showDiamondsInfo()">
                                     <svg class="w-4 h-4 mr-1 text-success" fill="currentColor" viewBox="0 0 24 24">
                                         <path d="M7 4V2a1 1 0 0 1 2 0v2h6V2a1 1 0 0 1 2 0v2h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2zm0 3a1 1 0 1 0 0 2h10a1 1 0 1 0 0-2H7z"/>
                                     </svg>
                                     <span id="diamonds-count">50</span>
+                                    <span class="ml-1 text-xs">diamonds</span>
+                                </button>
+                                <button class="daily-reward-btn flex items-center hover:bg-yellow-100 rounded-lg px-3 py-1 transition-colors cursor-pointer bg-yellow-50 border border-yellow-200" onclick="showDailyRewardModal()" title="Claim daily reward">
+                                    <svg class="w-4 h-4 mr-1 text-yellow-600" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 2l3.09 6.26L22 9l-5.91 3.07L19 22l-7-3.64L5 22l2.91-9.93L2 9l6.91-1.74L12 1z"/>
+                                    </svg>
+                                    <span class="text-xs text-yellow-600 font-medium">Daily</span>
                                 </button>
                             </div>
                         </div>
                     </div>
-                    <button class="btn btn-secondary" onclick="showScreen('page11')">
-                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                        </svg>
-                        Profile
-                    </button>
+                    <div class="flex items-center space-x-3">
+                        <!-- Currency Management Buttons -->
+                        <button class="btn btn-warning btn-sm" onclick="showConversionModal()" title="Convert diamonds to coins">
+                            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M7 14l5-5 5 5z"/>
+                            </svg>
+                            Convert
+                        </button>
+                        <button class="btn btn-success btn-sm" onclick="showPurchaseModal()" title="Buy more diamonds">
+                            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                            </svg>
+                            Buy
+                        </button>
+                        <button class="btn btn-secondary" onclick="showScreen('page11')">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                            </svg>
+                            Profile
+                        </button>
+                    </div>
                 </header>
 
                 <!-- Welcome Section -->
@@ -160,17 +183,17 @@
                             • Global leaderboards<br>
                             • Personal statistics<br>
                             • Daily rewards system
+                    </div>
                         </div>
                     </div>
-                </div>
-
+                    
                 <!-- Quick Stats -->
                 <div class="grid grid-cols-3 gap-4 max-w-lg mx-auto mb-8">
                     <div class="card text-center p-4">
                         <div class="text-2xl mb-2">🎮</div>
                         <div class="text-sm text-gray-600">Games Played</div>
                         <div class="text-xl font-bold text-primary" id="total-games">0</div>
-                    </div>
+                </div>
                     <div class="card text-center p-4">
                         <div class="text-2xl mb-2">🏆</div>
                         <div class="text-sm text-gray-600">Win Rate</div>
@@ -206,7 +229,7 @@
                         Back to Menu
                     </button>
                     <div class="text-center">
-                        <h2 class="text-2xl font-display font-bold text-primary">Select Your Arena</h2>
+                    <h2 class="text-2xl font-display font-bold text-primary">Select Your Arena</h2>
                         <p class="text-sm text-gray-600">Choose your battlefield and stake your coins</p>
                     </div>
                     <div class="w-32"></div> <!-- Spacer for centering -->
@@ -222,7 +245,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Arena Selection Cards with improved UX -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <!-- Dubai Arena -->
@@ -306,9 +329,9 @@
                                 </svg>
                                 Enter Oslo Fjord
                             </button>
+                            </div>
                         </div>
                     </div>
-                </div>
 
                 <!-- Matchmaking Section (for when matched players select city) -->
                 <div id="matchmaking-section" class="mb-8" style="display: none;">
@@ -804,7 +827,7 @@
                     </div>
                     <div class="w-32"></div>
                 </header>
-
+                
                 <!-- Practice Benefits -->
                 <div class="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-6 mb-8">
                     <div class="text-center">
@@ -845,13 +868,13 @@
                                     <div>• Slow decision making</div>
                                     <div>• Predictable patterns</div>
                                     <div>• 70% win rate for players</div>
-                                </div>
                             </div>
+                        </div>
                             
                             <div class="arena-timer bg-green-100 rounded-lg p-3 mb-4">
                                 <div class="text-sm text-green-700">🎁 Reward: 10-25 coins</div>
-                            </div>
-                            
+                    </div>
+                    
                             <button class="btn btn-success w-full" onclick="startPracticeMode('easy')">
                                 <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M8 5v14l11-7z"/>
@@ -874,13 +897,13 @@
                                     <div>• Moderate decision speed</div>
                                     <div>• Some strategic thinking</div>
                                     <div>• 50% win rate for players</div>
-                                </div>
                             </div>
+                        </div>
                             
                             <div class="arena-timer bg-yellow-100 rounded-lg p-3 mb-4">
                                 <div class="text-sm text-yellow-700">🎁 Reward: 25-50 coins</div>
-                            </div>
-                            
+                    </div>
+                    
                             <button class="btn btn-warning w-full" onclick="startPracticeMode('medium')">
                                 <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M8 5v14l11-7z"/>
@@ -903,8 +926,8 @@
                                     <div>• Fast decision making</div>
                                     <div>• Advanced strategies</div>
                                     <div>• 30% win rate for players</div>
-                                </div>
                             </div>
+                        </div>
                             
                             <div class="arena-timer bg-red-100 rounded-lg p-3 mb-4">
                                 <div class="text-sm text-red-700">🎁 Reward: 50-100 coins</div>
@@ -1467,6 +1490,7 @@
     </div>
 
     <!-- Scripts -->
+    <script src="js/currency-manager.js"></script>
     <script src="js/ux-improvements.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/api.js"></script>

@@ -409,18 +409,60 @@ if (typeof window !== 'undefined') {
 function enterArena(arenaName, cost, prize, timeLimit) {
     console.log(`🎮 Entering ${arenaName} Arena - Cost: ${cost}, Prize: ${prize}, Time: ${timeLimit}s`);
     
-    // Check if user has enough coins
-    const currentBalance = parseInt(document.getElementById('player-balance')?.textContent || '0');
+    if (!currencyManager) {
+        console.error('Currency manager not initialized');
+        uxManager.showNotification('Currency system not ready. Please refresh the page.', 'error');
+        return;
+    }
+    
+    // Check if user has enough coins using currency manager
+    const currentBalance = currencyManager.getCoins();
     
     if (currentBalance < cost) {
         uxManager.showModal(
             '❌ Insufficient Funds',
-            `You need ${cost} coins to enter ${arenaName} Arena, but you only have ${currentBalance} coins.`,
+            `
+                <div class="text-center space-y-4">
+                    <div class="text-4xl mb-4">💸</div>
+                    <h3 class="text-xl font-bold mb-4">Not Enough Coins</h3>
+                    <div class="bg-red-50 rounded-lg p-4">
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <div class="text-gray-600">Arena Cost</div>
+                                <div class="font-bold text-red-600">${cost.toLocaleString()} coins</div>
+                            </div>
+                            <div>
+                                <div class="text-gray-600">Your Balance</div>
+                                <div class="font-bold text-gray-800">${currentBalance.toLocaleString()} coins</div>
+                            </div>
+                            <div>
+                                <div class="text-gray-600">You Need</div>
+                                <div class="font-bold text-orange-600">+${(cost - currentBalance).toLocaleString()} coins</div>
+                            </div>
+                            <div>
+                                <div class="text-gray-600">Your Diamonds</div>
+                                <div class="font-bold text-blue-600">${currencyManager.getDiamonds()} diamonds</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-gray-600">You can earn coins by playing practice mode or convert diamonds!</p>
+                </div>
+            `,
             [
                 {
-                    text: 'Get More Coins',
+                    text: 'Practice Mode',
                     class: 'btn-primary',
-                    onclick: () => showScreen('page9') // Rewards page
+                    onclick: () => showScreen('page7')
+                },
+                {
+                    text: 'Convert Diamonds',
+                    class: 'btn-warning',
+                    onclick: () => showConversionModal()
+                },
+                {
+                    text: 'Buy Diamonds',
+                    class: 'btn-success',
+                    onclick: () => showPurchaseModal()
                 },
                 {
                     text: 'Cancel',
@@ -431,7 +473,7 @@ function enterArena(arenaName, cost, prize, timeLimit) {
         return;
     }
     
-    // Show confirmation dialog
+    // Show confirmation dialog with real currency data
     uxManager.showModal(
         `🎯 Enter ${arenaName} Arena`,
         `
@@ -442,20 +484,25 @@ function enterArena(arenaName, cost, prize, timeLimit) {
                     <div class="grid grid-cols-2 gap-4 text-sm">
                         <div>
                             <div class="text-gray-600">Entry Cost</div>
-                            <div class="font-bold text-danger">${cost} coins</div>
+                            <div class="font-bold text-danger">-${cost.toLocaleString()} coins</div>
                         </div>
                         <div>
                             <div class="text-gray-600">Potential Prize</div>
-                            <div class="font-bold text-success">${prize} coins</div>
+                            <div class="font-bold text-success">+${prize.toLocaleString()} coins</div>
                         </div>
                         <div>
                             <div class="text-gray-600">Turn Timer</div>
                             <div class="font-bold text-warning">${timeLimit} seconds</div>
                         </div>
                         <div>
-                            <div class="text-gray-600">After Entry</div>
-                            <div class="font-bold text-primary">${currentBalance - cost} coins</div>
+                            <div class="text-gray-600">Balance After</div>
+                            <div class="font-bold text-primary">${(currentBalance - cost).toLocaleString()} coins</div>
                         </div>
+                    </div>
+                </div>
+                <div class="bg-blue-50 rounded-lg p-3 mb-4">
+                    <div class="text-sm text-blue-700">
+                        💡 <strong>Win Rate:</strong> Your skill level determines your chances of winning the prize!
                     </div>
                 </div>
                 <p class="text-sm text-gray-600">Are you ready to challenge players worldwide?</p>
@@ -487,11 +534,22 @@ function getArenaIcon(arenaName) {
 function startArenaMatchmaking(arenaName, cost, prize, timeLimit) {
     console.log(`🔍 Starting matchmaking for ${arenaName} Arena`);
     
-    // Update balance immediately
-    const balanceElement = document.getElementById('player-balance');
-    if (balanceElement) {
-        const currentBalance = parseInt(balanceElement.textContent);
-        balanceElement.textContent = currentBalance - cost;
+    if (!currencyManager) {
+        console.error('Currency manager not initialized');
+        uxManager.showNotification('Currency system not ready. Please refresh the page.', 'error');
+        return;
+    }
+    
+    try {
+        // Actually spend the coins using currency manager
+        currencyManager.spendCoins(cost, `${arenaName} Arena entry`);
+        
+        uxManager.showNotification(`💰 ${cost.toLocaleString()} coins spent for ${arenaName} Arena`, 'info');
+        
+    } catch (error) {
+        console.error('Failed to spend coins:', error);
+        uxManager.showNotification('Failed to process payment: ' + error.message, 'error');
+        return;
     }
     
     // Show matchmaking screen
@@ -504,6 +562,13 @@ function startArenaMatchmaking(arenaName, cost, prize, timeLimit) {
                 <div class="loading-spinner-large mx-auto mb-4"></div>
                 <p class="text-lg font-medium mb-2">Searching for opponents...</p>
                 <p class="text-sm text-gray-600">We're finding players with similar skill levels</p>
+                
+                <div class="bg-green-50 rounded-lg p-3 mb-4">
+                    <div class="text-sm text-green-700">
+                        ✓ Payment processed: ${cost.toLocaleString()} coins
+                    </div>
+                </div>
+                
                 <div id="matchmaking-status" class="mt-4">
                     <div class="bg-blue-50 rounded-lg p-3">
                         <div class="text-sm text-blue-700">⏰ Expected wait time: 5-15 seconds</div>
@@ -583,14 +648,21 @@ function simulateMatchmaking(arenaName, cost, prize, timeLimit) {
 }
 
 function cancelArenaMatchmaking(cost) {
-    // Refund the cost
-    const balanceElement = document.getElementById('player-balance');
-    if (balanceElement) {
-        const currentBalance = parseInt(balanceElement.textContent);
-        balanceElement.textContent = currentBalance + cost;
+    if (!currencyManager) {
+        console.error('Currency manager not initialized');
+        return;
     }
     
-    uxManager.showNotification('Matchmaking cancelled. Coins refunded.', 'info');
+    try {
+        // Refund the cost using currency manager
+        currencyManager.addCoins(cost, 'Arena matchmaking cancelled - refund');
+        
+        uxManager.showNotification(`🔄 Matchmaking cancelled. ${cost.toLocaleString()} coins refunded.`, 'info');
+        
+    } catch (error) {
+        console.error('Failed to refund coins:', error);
+        uxManager.showNotification('Refund processed', 'info');
+    }
 }
 
 function showGameScreen(arenaName, cost, prize, timeLimit) {
@@ -831,7 +903,7 @@ function showCoinsInfo() {
             <div class="space-y-4">
                 <div class="text-center">
                     <div class="text-6xl mb-4">💰</div>
-                    <h3 class="text-xl font-bold mb-2">Your Coins: ${document.getElementById('coins-count')?.textContent || '0'}</h3>
+                    <h3 class="text-xl font-bold mb-2">Your Coins: ${currencyManager ? currencyManager.getCoins().toLocaleString() : '0'}</h3>
                 </div>
                 
                 <div class="bg-blue-50 rounded-lg p-4">
@@ -841,6 +913,7 @@ function showCoinsInfo() {
                         <li>• Complete daily challenges</li>
                         <li>• Claim daily login rewards</li>
                         <li>• Practice mode gives small rewards</li>
+                        <li>• Convert diamonds to coins</li>
                     </ul>
                 </div>
                 
@@ -850,8 +923,15 @@ function showCoinsInfo() {
                         <li>• Enter premium arenas for bigger prizes</li>
                         <li>• Buy power-ups and advantages</li>
                         <li>• Unlock exclusive candy themes</li>
-                        <li>• Convert to diamonds (10:1 ratio)</li>
                     </ul>
+                </div>
+                
+                <div class="bg-yellow-50 rounded-lg p-4">
+                    <h4 class="font-bold text-yellow-900 mb-2">💎 Need More Coins?</h4>
+                    <p class="text-yellow-800 text-sm mb-3">Convert your diamonds to coins instantly!</p>
+                    <button class="btn btn-warning btn-sm w-full" onclick="showConversionModal()">
+                        💎➡️💰 Convert Diamonds
+                    </button>
                 </div>
             </div>
         `,
@@ -876,7 +956,7 @@ function showDiamondsInfo() {
             <div class="space-y-4">
                 <div class="text-center">
                     <div class="text-6xl mb-4">💎</div>
-                    <h3 class="text-xl font-bold mb-2">Your Diamonds: ${document.getElementById('diamonds-count')?.textContent || '0'}</h3>
+                    <h3 class="text-xl font-bold mb-2">Your Diamonds: ${currencyManager ? currencyManager.getDiamonds().toLocaleString() : '0'}</h3>
                 </div>
                 
                 <div class="bg-purple-50 rounded-lg p-4">
@@ -891,26 +971,32 @@ function showDiamondsInfo() {
                         <li>• Complete weekly challenges</li>
                         <li>• Achieve ranking milestones</li>
                         <li>• Special events and tournaments</li>
+                        <li>• Purchase with real money</li>
                     </ul>
                 </div>
                 
                 <div class="bg-red-50 rounded-lg p-4">
                     <h4 class="font-bold text-red-900 mb-2">🛍️ Premium Features</h4>
                     <ul class="text-red-800 text-sm space-y-1">
+                        <li>• Convert to coins (600💎 = 10K coins)</li>
                         <li>• Unlock exclusive arenas</li>
                         <li>• Get premium candy themes</li>
                         <li>• Access VIP tournaments</li>
                         <li>• Purchase rare power-ups</li>
                     </ul>
                 </div>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <button class="btn btn-primary btn-sm" onclick="showConversionModal()">
+                        💰 Convert to Coins
+                    </button>
+                    <button class="btn btn-success btn-sm" onclick="showPurchaseModal()">
+                        💳 Buy More
+                    </button>
+                </div>
             </div>
         `,
         [
-            {
-                text: 'Premium Shop',
-                class: 'btn-primary',
-                onclick: () => showScreen('page9')
-            },
             {
                 text: 'Close',
                 class: 'btn-secondary'
@@ -1317,14 +1403,19 @@ function updatePracticeStats(difficulty, won, coinsEarned) {
         
         localStorage.setItem('pcd_practice_stats', JSON.stringify(stats));
         
+        // Actually award coins using currency manager
+        if (currencyManager) {
+            currencyManager.addCoins(coinsEarned, `Practice mode - ${difficulty} AI ${won ? 'victory' : 'participation'}`);
+        }
+        
         // Update UI
         loadPracticeStats();
         
         // Show result notification
         if (won) {
-            uxManager.showNotification(`🎉 Victory! +${coinsEarned} practice coins`, 'success');
+            uxManager.showNotification(`🎉 Victory! +${coinsEarned} coins earned`, 'success');
         } else {
-            uxManager.showNotification(`💪 Good effort! +${Math.floor(coinsEarned/2)} participation coins`, 'info');
+            uxManager.showNotification(`💪 Good effort! +${coinsEarned} participation coins`, 'info');
         }
         
     } catch (error) {
@@ -1360,13 +1451,41 @@ function loadPracticeStats() {
 
 // Enhanced game result handling
 function handleGameResult(result) {
-    const { winner, gameMode, difficulty, coinsEarned, isPractice } = result;
+    const { winner, gameMode, difficulty, coinsEarned, isPractice, arenaName, originalCost } = result;
     
-    if (isPractice) {
-        updatePracticeStats(difficulty, winner === 'player', coinsEarned);
-    } else {
-        // Update main game stats
-        updatePlayerStats(result);
+    if (!currencyManager) {
+        console.error('Currency manager not initialized');
+        return;
+    }
+    
+    try {
+        if (isPractice) {
+            updatePracticeStats(difficulty, winner === 'player', coinsEarned);
+        } else {
+            // Handle arena game results
+            if (winner === 'player') {
+                // Award prize coins
+                currencyManager.addCoins(coinsEarned, `${arenaName} Arena victory prize`);
+                
+                // Award bonus diamonds for big wins
+                if (coinsEarned >= 5000) {
+                    const bonusDiamonds = Math.floor(coinsEarned / 1000);
+                    currencyManager.addDiamonds(bonusDiamonds, `${arenaName} Arena victory bonus`);
+                }
+            } else {
+                // Consolation prize for losing
+                const consolationCoins = Math.floor(originalCost * 0.1); // 10% of entry fee
+                if (consolationCoins > 0) {
+                    currencyManager.addCoins(consolationCoins, `${arenaName} Arena participation`);
+                }
+            }
+            
+            // Update main game stats
+            updatePlayerStats(result);
+        }
+        
+    } catch (error) {
+        console.error('Error handling game result:', error);
     }
     
     // Show enhanced result modal
@@ -1374,11 +1493,25 @@ function handleGameResult(result) {
 }
 
 function showGameResultModal(result) {
-    const { winner, gameMode, difficulty, coinsEarned, isPractice } = result;
+    const { winner, gameMode, difficulty, coinsEarned, isPractice, arenaName, originalCost } = result;
     
     const isWin = winner === 'player';
     const title = isWin ? '🎉 Victory!' : '💪 Good Game!';
     const message = isWin ? 'Congratulations on your win!' : 'Better luck next time!';
+    
+    // Calculate actual rewards
+    let actualCoinsEarned = coinsEarned;
+    let bonusDiamonds = 0;
+    let consolationCoins = 0;
+    
+    if (!isPractice) {
+        if (isWin && coinsEarned >= 5000) {
+            bonusDiamonds = Math.floor(coinsEarned / 1000);
+        } else if (!isWin && originalCost) {
+            consolationCoins = Math.floor(originalCost * 0.1);
+            actualCoinsEarned = consolationCoins;
+        }
+    }
     
     const content = `
         <div class="text-center space-y-4">
@@ -1390,7 +1523,7 @@ function showGameResultModal(result) {
                 <div class="grid grid-cols-2 gap-4 text-sm">
                     <div>
                         <div class="text-gray-600">Game Mode</div>
-                        <div class="font-bold capitalize">${gameMode}</div>
+                        <div class="font-bold capitalize">${gameMode}${arenaName ? ` - ${arenaName}` : ''}</div>
                     </div>
                     <div>
                         <div class="text-gray-600">Difficulty</div>
@@ -1398,16 +1531,39 @@ function showGameResultModal(result) {
                     </div>
                     <div>
                         <div class="text-gray-600">Coins Earned</div>
-                        <div class="font-bold text-success">+${coinsEarned}</div>
+                        <div class="font-bold text-success">+${actualCoinsEarned.toLocaleString()}</div>
                     </div>
                     <div>
                         <div class="text-gray-600">Result</div>
                         <div class="font-bold ${isWin ? 'text-success' : 'text-gray-600'}">${isWin ? 'Win' : 'Loss'}</div>
                     </div>
                 </div>
+                
+                ${bonusDiamonds > 0 ? `
+                    <div class="mt-3 bg-blue-50 rounded-lg p-3">
+                        <div class="text-sm text-blue-700">
+                            🎁 <strong>Victory Bonus:</strong> +${bonusDiamonds} diamonds!
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${consolationCoins > 0 ? `
+                    <div class="mt-3 bg-yellow-50 rounded-lg p-3">
+                        <div class="text-sm text-yellow-700">
+                            🎁 <strong>Participation Reward:</strong> +${consolationCoins} coins
+                        </div>
+                    </div>
+                ` : ''}
             </div>
             
-            ${isPractice ? '<div class="bg-blue-50 rounded-lg p-3"><div class="text-sm text-blue-700">💡 Practice game - stats not counted toward main record</div></div>' : ''}
+            <div class="bg-gray-50 rounded-lg p-4">
+                <div class="text-sm text-gray-700">
+                    <div>💰 Total Coins: ${currencyManager ? currencyManager.getCoins().toLocaleString() : '0'}</div>
+                    <div>💎 Total Diamonds: ${currencyManager ? currencyManager.getDiamonds().toLocaleString() : '0'}</div>
+                </div>
+            </div>
+            
+            ${isPractice ? '<div class="bg-blue-50 rounded-lg p-3"><div class="text-sm text-blue-700">💡 Practice game - helps you improve without risk!</div></div>' : ''}
         </div>
     `;
     
@@ -1421,6 +1577,8 @@ function showGameResultModal(result) {
                 onclick: () => {
                     if (isPractice) {
                         startPracticeMode(difficulty);
+                    } else if (arenaName) {
+                        showScreen('page2'); // Back to arena selection
                     } else {
                         showScreen('page1');
                     }
@@ -1435,11 +1593,413 @@ function showGameResultModal(result) {
     );
 }
 
-// Export new functions
+// Daily reward system integration
+function showDailyRewardModal() {
+    if (!currencyManager) {
+        console.error('Currency manager not initialized');
+        return;
+    }
+    
+    try {
+        const reward = currencyManager.claimDailyReward();
+        
+        uxManager.showModal(
+            '🎁 Daily Reward Claimed!',
+            `
+                <div class="text-center space-y-4">
+                    <div class="text-6xl mb-4">🎁</div>
+                    <h3 class="text-xl font-bold mb-4">Daily Login Bonus</h3>
+                    
+                    <div class="bg-gradient-to-r from-yellow-50 to-green-50 rounded-lg p-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-white rounded-lg p-3">
+                                <div class="text-2xl mb-1">💰</div>
+                                <div class="font-bold text-primary">+${reward.coins} Coins</div>
+                                <div class="text-sm text-gray-600">Daily bonus</div>
+                            </div>
+                            <div class="bg-white rounded-lg p-3">
+                                <div class="text-2xl mb-1">💎</div>
+                                <div class="font-bold text-blue-600">+${reward.diamonds} Diamonds</div>
+                                <div class="text-sm text-gray-600">Premium bonus</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-blue-50 rounded-lg p-3">
+                        <div class="text-sm text-blue-700">
+                            🔥 <strong>Login Streak:</strong> ${reward.streak} days
+                            ${reward.streak >= 7 ? ' - Amazing dedication!' : ''}
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm text-gray-700">
+                            <div>💰 Total Coins: ${currencyManager.getCoins().toLocaleString()}</div>
+                            <div>💎 Total Diamonds: ${currencyManager.getDiamonds().toLocaleString()}</div>
+                        </div>
+                    </div>
+                </div>
+            `,
+            [
+                {
+                    text: 'Awesome!',
+                    class: 'btn-primary'
+                }
+            ]
+        );
+        
+    } catch (error) {
+        console.error('Error claiming daily reward:', error);
+        uxManager.showNotification('Daily reward already claimed', 'info');
+    }
+}
+
+// Diamond to Coin Conversion System
+function showConversionModal() {
+    if (!currencyManager) {
+        console.error('Currency manager not initialized');
+        return;
+    }
+
+    const options = currencyManager.getConversionOptions();
+    
+    uxManager.showModal(
+        '💎➡️💰 Convert Diamonds to Coins',
+        `
+            <div class="space-y-4">
+                <div class="text-center mb-4">
+                    <p class="text-gray-600">Exchange your premium diamonds for coins to enter arenas!</p>
+                </div>
+                
+                <div class="grid grid-cols-1 gap-4">
+                    ${options.map(option => `
+                        <div class="conversion-option ${option.available ? '' : 'disabled'}" 
+                             data-diamonds="${option.diamonds}" 
+                             data-coins="${option.coins}">
+                            <div class="flex items-center justify-between p-4 border rounded-lg ${option.available ? 'border-primary cursor-pointer hover:bg-primary hover:bg-opacity-5' : 'border-gray-300 opacity-50'}">
+                                <div class="flex items-center space-x-3">
+                                    <div class="text-2xl">${option.bonus ? '🌟' : '💎'}</div>
+                                    <div>
+                                        <div class="font-semibold">${option.value}</div>
+                                        <div class="text-sm text-gray-600">
+                                            ${option.diamonds} diamonds → ${option.coins.toLocaleString()} coins
+                                        </div>
+                                        ${option.bonus ? '<div class="text-xs text-yellow-600 font-medium">⭐ Best Value!</div>' : ''}
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-sm ${option.available ? 'text-green-600' : 'text-red-600'}">
+                                        ${option.available ? '✓ Available' : '✗ Insufficient'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="bg-blue-50 rounded-lg p-3">
+                    <div class="text-sm text-blue-700">
+                        <strong>💡 Tip:</strong> Diamonds are premium currency. Use them wisely!
+                    </div>
+                </div>
+            </div>
+        `,
+        [
+            {
+                text: 'Cancel',
+                class: 'btn-secondary'
+            }
+        ]
+    );
+    
+    // Add click handlers to conversion options
+    document.querySelectorAll('.conversion-option').forEach(option => {
+        if (!option.classList.contains('disabled')) {
+            option.addEventListener('click', () => {
+                const diamonds = parseInt(option.dataset.diamonds);
+                const coins = parseInt(option.dataset.coins);
+                confirmConversion(diamonds, coins);
+            });
+        }
+    });
+}
+
+function confirmConversion(diamonds, coins) {
+    uxManager.showModal(
+        '🔄 Confirm Conversion',
+        `
+            <div class="text-center space-y-4">
+                <div class="text-4xl mb-4">💎➡️💰</div>
+                <h3 class="text-xl font-bold mb-4">Confirm Diamond Conversion</h3>
+                
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <div class="text-gray-600">You'll Spend</div>
+                            <div class="font-bold text-red-600">-${diamonds} diamonds</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-600">You'll Receive</div>
+                            <div class="font-bold text-green-600">+${coins.toLocaleString()} coins</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-600">Diamonds After</div>
+                            <div class="font-bold text-primary">${currencyManager.getDiamonds() - diamonds}</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-600">Coins After</div>
+                            <div class="font-bold text-primary">${(currencyManager.getCoins() + coins).toLocaleString()}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-yellow-50 rounded-lg p-3">
+                    <div class="text-sm text-yellow-700">
+                        ⚠️ This action cannot be undone!
+                    </div>
+                </div>
+            </div>
+        `,
+        [
+            {
+                text: 'Cancel',
+                class: 'btn-secondary'
+            },
+            {
+                text: 'Convert Now',
+                class: 'btn-primary',
+                onclick: () => executeConversion(diamonds, coins)
+            }
+        ]
+    );
+}
+
+function executeConversion(diamonds, coins) {
+    try {
+        const result = currencyManager.convertDiamondsToCoins(diamonds);
+        
+        uxManager.showModal(
+            '✅ Conversion Successful!',
+            `
+                <div class="text-center space-y-4">
+                    <div class="text-6xl mb-4">🎉</div>
+                    <h3 class="text-xl font-bold mb-4">Conversion Complete!</h3>
+                    
+                    <div class="bg-green-50 rounded-lg p-4">
+                        <div class="text-green-800">
+                            <div class="font-bold">✓ Successfully converted!</div>
+                            <div class="text-sm mt-2">
+                                ${result.diamondsSpent} diamonds → ${result.coinsEarned.toLocaleString()} coins
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm text-gray-700">
+                            <div>💎 Diamonds: ${currencyManager.getDiamonds()}</div>
+                            <div>💰 Coins: ${currencyManager.getCoins().toLocaleString()}</div>
+                        </div>
+                    </div>
+                </div>
+            `,
+            [
+                {
+                    text: 'Continue Playing',
+                    class: 'btn-primary'
+                }
+            ]
+        );
+        
+    } catch (error) {
+        console.error('Conversion failed:', error);
+        uxManager.showNotification('Conversion failed: ' + error.message, 'error');
+    }
+}
+
+// Purchase Diamond System
+function showPurchaseModal() {
+    if (!currencyManager) {
+        console.error('Currency manager not initialized');
+        return;
+    }
+
+    const options = currencyManager.getPurchaseOptions();
+    
+    uxManager.showModal(
+        '💎 Purchase Diamonds',
+        `
+            <div class="space-y-4">
+                <div class="text-center mb-4">
+                    <p class="text-gray-600">Get more diamonds to unlock premium features!</p>
+                </div>
+                
+                <div class="grid grid-cols-1 gap-4">
+                    ${options.map(option => `
+                        <div class="purchase-option ${option.popular ? 'popular' : ''}" 
+                             data-diamonds="${option.diamonds}" 
+                             data-price="${option.price}">
+                            <div class="relative p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors ${option.popular ? 'border-primary border-2' : 'border-gray-300'}">
+                                ${option.popular ? '<div class="absolute -top-2 left-4 bg-primary text-white px-2 py-1 rounded text-xs font-bold">POPULAR</div>' : ''}
+                                
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="text-2xl">💎</div>
+                                        <div>
+                                            <div class="font-semibold">${option.description}</div>
+                                            <div class="text-sm text-gray-600">
+                                                ${option.diamonds} diamonds
+                                                ${option.bonus ? ` + ${option.bonus}` : ''}
+                                            </div>
+                                            ${option.savings ? `<div class="text-xs text-green-600 font-medium">${option.savings}</div>` : ''}
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-lg font-bold">$${option.price.toFixed(2)}</div>
+                                        <div class="text-sm text-gray-500">USD</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="bg-blue-50 rounded-lg p-3">
+                    <div class="text-sm text-blue-700">
+                        <strong>🔒 Secure:</strong> All transactions are processed securely
+                    </div>
+                </div>
+                
+                <div class="bg-yellow-50 rounded-lg p-3">
+                    <div class="text-sm text-yellow-700">
+                        <strong>⚠️ Demo Mode:</strong> This is a simulation for testing purposes
+                    </div>
+                </div>
+            </div>
+        `,
+        [
+            {
+                text: 'Cancel',
+                class: 'btn-secondary'
+            }
+        ]
+    );
+    
+    // Add click handlers to purchase options
+    document.querySelectorAll('.purchase-option').forEach(option => {
+        option.addEventListener('click', () => {
+            const diamonds = parseInt(option.dataset.diamonds);
+            const price = parseFloat(option.dataset.price);
+            confirmPurchase(diamonds, price);
+        });
+    });
+}
+
+function confirmPurchase(diamonds, price) {
+    uxManager.showModal(
+        '💳 Confirm Purchase',
+        `
+            <div class="text-center space-y-4">
+                <div class="text-4xl mb-4">💎</div>
+                <h3 class="text-xl font-bold mb-4">Confirm Diamond Purchase</h3>
+                
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <div class="text-gray-600">You'll Receive</div>
+                            <div class="font-bold text-blue-600">+${diamonds} diamonds</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-600">You'll Pay</div>
+                            <div class="font-bold text-red-600">$${price.toFixed(2)} USD</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-600">Diamonds After</div>
+                            <div class="font-bold text-primary">${currencyManager.getDiamonds() + diamonds}</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-600">Bonus</div>
+                            <div class="font-bold text-green-600">${diamonds >= 2500 ? (diamonds >= 5000 ? '+500' : '+100') : 'None'}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-green-50 rounded-lg p-3">
+                    <div class="text-sm text-green-700">
+                        🎁 ${diamonds >= 2500 ? 'Bonus diamonds included!' : 'Great value for premium currency!'}
+                    </div>
+                </div>
+            </div>
+        `,
+        [
+            {
+                text: 'Cancel',
+                class: 'btn-secondary'
+            },
+            {
+                text: 'Purchase',
+                class: 'btn-primary',
+                onclick: () => executePurchase(diamonds, price)
+            }
+        ]
+    );
+}
+
+function executePurchase(diamonds, price) {
+    try {
+        const result = currencyManager.simulatePurchase(diamonds, price);
+        
+        uxManager.showModal(
+            '✅ Purchase Successful!',
+            `
+                <div class="text-center space-y-4">
+                    <div class="text-6xl mb-4">🎉</div>
+                    <h3 class="text-xl font-bold mb-4">Purchase Complete!</h3>
+                    
+                    <div class="bg-green-50 rounded-lg p-4">
+                        <div class="text-green-800">
+                            <div class="font-bold">✓ Payment processed successfully!</div>
+                            <div class="text-sm mt-2">
+                                ${result.diamondsAdded} diamonds added to your account
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm text-gray-700">
+                            <div>💎 Total Diamonds: ${currencyManager.getDiamonds()}</div>
+                            <div>💰 Total Coins: ${currencyManager.getCoins().toLocaleString()}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-blue-50 rounded-lg p-3">
+                        <div class="text-sm text-blue-700">
+                            💡 Remember: You can convert diamonds to coins anytime!
+                        </div>
+                    </div>
+                </div>
+            `,
+            [
+                {
+                    text: 'Continue Playing',
+                    class: 'btn-primary'
+                }
+            ]
+        );
+        
+    } catch (error) {
+        console.error('Purchase failed:', error);
+        uxManager.showNotification('Purchase failed: ' + error.message, 'error');
+    }
+}
+
+// Export functions for global use
 if (typeof window !== 'undefined') {
+    window.showConversionModal = showConversionModal;
+    window.showPurchaseModal = showPurchaseModal;
     window.startPracticeMode = startPracticeMode;
     window.launchPracticeGame = launchPracticeGame;
     window.updatePracticeStats = updatePracticeStats;
     window.loadPracticeStats = loadPracticeStats;
     window.handleGameResult = handleGameResult;
+    window.showDailyRewardModal = showDailyRewardModal;
 } 

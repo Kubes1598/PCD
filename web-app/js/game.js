@@ -143,9 +143,9 @@ function checkGameWinCondition(gameState) {
             };
         } else if (gameState.gameProgress.opponentGotChance || gameState.isPlayerTurn) {
             // Opponent already had their chance and didn't reach 11, or it's back to player's turn
-            return { 
-                hasWinner: true, 
-                winner: 'player',
+        return { 
+            hasWinner: true, 
+            winner: 'player',
                 message: "🎉 You win! You collected 11 candies first!"
             };
         }
@@ -183,9 +183,9 @@ function checkGameWinCondition(gameState) {
         } else if (gameState.gameProgress.playerGotChance || !gameState.isPlayerTurn) {
             // Player already had their chance and didn't reach 11, or it's back to opponent's turn
             const opponentLabel = gameState.gameMode === 'friends' ? 'Friend' : 'Opponent';
-            return { 
-                hasWinner: true, 
-                winner: 'opponent',
+        return { 
+            hasWinner: true, 
+            winner: 'opponent',
                 message: `💔 ${opponentLabel} wins! They collected 11 candies first!`
             };
         }
@@ -817,12 +817,12 @@ async function confirmPoison() {
             if (gameState.gameMode === 'ai' && gameState.currentGameState.player2.poison_choice === null) {
                 console.log('Setting AI poison automatically...');
                 await setAIPoison();
-                
+            
                 // Start AI game immediately after AI poison is set
                 gameState.isPlayerTurn = true;
                 gameState.gameStarted = true;
-                showNotification(`🎮 Game Starting! Your poison: ${gameState.selectedPoison}`, 'success', 2000);
-                
+            showNotification(`🎮 Game Starting! Your poison: ${gameState.selectedPoison}`, 'success', 2000);
+            
                 setTimeout(() => {
                     showScreen('page3');
                     initializeGameBoardInPage();
@@ -861,30 +861,30 @@ async function confirmPoison() {
                     // Both players have set poison - start the game
                     console.log('🎮 Both players have set poison - starting game!');
                     gameState.isPlayerTurn = true;
-                    gameState.gameStarted = true;
-                    
+            gameState.gameStarted = true;
+            
                     showNotification(`🎮 Game Starting! Your poison: ${gameState.selectedPoison}`, 'success', 2000);
                     
-                    setTimeout(() => {
+            setTimeout(() => {
                         showScreen('page3');
                         initializeGameBoardInPage();
-                        
-                        if (gameState.isMatchmakingGame) {
-                            console.log('🎮 Starting matchmaking game timers after poison selection');
+                
+            if (gameState.isMatchmakingGame) {
+                console.log('🎮 Starting matchmaking game timers after poison selection');
                             const cityTimerValue = getDifficultyTimerValue('easy');
-                            showNotification(`⏰ Game starting in ${gameState.selectedCity}! Each turn: ${cityTimerValue} seconds`, 'info', 3000);
-                            
-                            setTimeout(() => {
+                showNotification(`⏰ Game starting in ${gameState.selectedCity}! Each turn: ${cityTimerValue} seconds`, 'info', 3000);
+                
+                setTimeout(() => {
                                 startGameTimer();
-                                if (gameState.isPlayerTurn) {
+                    if (gameState.isPlayerTurn) {
                                     startTurnTimer();
-                                }
-                            }, 1000);
+                    }
+                }, 1000);
                         } else {
-                            console.log('🎮 Starting online game with non-blocking timer');
-                            startTurnTimer();
-                        }
-                    }, 500);
+                    console.log('🎮 Starting online game with non-blocking timer');
+                    startTurnTimer();
+                }
+            }, 500);
                 } else {
                     // Only this player has set poison - wait for opponent
                     console.log('🎮 Waiting for opponent to select poison...');
@@ -1480,7 +1480,7 @@ function handleOfflineCandyPick(candy, index) {
     // Handle turn switching based on universal game logic
     if (winCondition.switchToOpponent) {
         console.log("🔄 Player reached 11 - switching to opponent for final chance");
-        gameState.isPlayerTurn = false;
+    gameState.isPlayerTurn = false;
         showNotification('🎉 You reached 11! Opponent gets final chance...', 'info', 3000);
     } else if (winCondition.switchToPlayer) {
         console.log("🔄 Opponent reached 11 - switching to player for final chance");
@@ -1597,7 +1597,7 @@ function handleOfflineAITurn() {
     // Handle turn switching based on universal game logic
     if (winCondition.switchToPlayer) {
         console.log("🔄 Opponent reached 11 - switching to player for final chance");
-        gameState.isPlayerTurn = true;
+    gameState.isPlayerTurn = true;
         showNotification('💔 Opponent reached 11! You get final chance...', 'warning', 3000);
     } else if (winCondition.switchToOpponent) {
         console.log("🔄 Player reached 11 - switching to opponent for final chance");
@@ -2575,8 +2575,8 @@ function startOnlineGame(city, cost) {
         
         // Go to poison selection
         setTimeout(() => {
-            showScreen('page4');
-            initializePoisonSelection();
+                showScreen('page4');
+                initializePoisonSelection();
         }, 500);
         
         return;
@@ -2664,7 +2664,7 @@ function proceedWithOnlineGame(city, cost) {
     console.log('Online game setup complete, starting game creation...');
     
     // Initialize game setup
-    setTimeout(() => {
+            setTimeout(() => {
         startGame(); // This will handle online game creation via API
     }, 300);
 }
@@ -4629,7 +4629,7 @@ function handleEnhancedCandyPick(candy, index) {
     // Handle turn switching based on universal game logic
     if (winCondition.switchToOpponent) {
         console.log("🔄 Player reached 11 - switching to opponent for final chance");
-        gameState.isPlayerTurn = false;
+    gameState.isPlayerTurn = false;
         showNotification('🎉 You reached 11! Opponent gets final chance...', 'info', 3000);
     } else if (winCondition.switchToPlayer) {
         console.log("🔄 Opponent reached 11 - switching to player for final chance");
@@ -4715,7 +4715,7 @@ function handleEnhancedAITurn() {
     // Handle turn switching based on universal game logic
     if (winCondition.switchToPlayer) {
         console.log("🔄 Opponent reached 11 - switching to player for final chance");
-        gameState.isPlayerTurn = true;
+    gameState.isPlayerTurn = true;
         showNotification('💔 Opponent reached 11! You get final chance...', 'warning', 3000);
     } else if (winCondition.switchToOpponent) {
         console.log("🔄 Player reached 11 - switching to opponent for final chance");
@@ -4995,7 +4995,7 @@ function doAITurn() {
         updateGameStatus('⏳ Opponent final chance...');
     } else {
         // Back to normal player turn
-        updateGameStatus('🎯 Your turn - Pick a candy!');
+    updateGameStatus('🎯 Your turn - Pick a candy!');
     }
 }
 
@@ -8007,16 +8007,16 @@ async function startGameAfterConfirmation() {
             console.log('❌ Failed to start game:', result.message);
             showNotification('❌ Failed to start game. Returning to main menu.', 'error');
             
-            setTimeout(() => {
+    setTimeout(() => {
                 showScreen('page1');
-            }, 2000);
-        }
-        
+    }, 2000);
+}
+
     } catch (error) {
         console.error('❌ Error starting game:', error);
         showNotification('❌ Error starting game. Returning to main menu.', 'error');
         
-        setTimeout(() => {
+    setTimeout(() => {
             showScreen('page1');
         }, 2000);
     }
