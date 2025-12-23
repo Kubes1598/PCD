@@ -40,7 +40,7 @@ class UXManager {
         setTimeout(() => {
             this.hideLoadingScreen();
             this.showNotification('Welcome to Poison Candy Duel!', 'success', 3000);
-            
+
             // Show the main menu
             const mainMenu = document.getElementById('page1');
             if (mainMenu) {
@@ -67,20 +67,23 @@ class UXManager {
     showNotification(message, type = 'info', duration = 3000) {
         const notification = document.createElement('div');
         notification.className = `notification ${type}`;
-        notification.textContent = message;
-        
+        notification.innerHTML = message;
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+
         this.notificationContainer.appendChild(notification);
-        
+
         // Trigger show animation
         setTimeout(() => {
             notification.classList.add('show');
         }, 10);
-        
+
         // Auto remove
         setTimeout(() => {
             this.removeNotification(notification);
         }, duration);
-        
+
         return notification;
     }
 
@@ -96,14 +99,14 @@ class UXManager {
     showModal(title, content, buttons = []) {
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
-        
+
         const modal = document.createElement('div');
         modal.className = 'modal';
-        
+
         const header = document.createElement('div');
         header.className = 'modal-header';
         header.innerHTML = `<h3 class="modal-title">${title}</h3>`;
-        
+
         const body = document.createElement('div');
         body.className = 'modal-body';
         if (typeof content === 'string') {
@@ -111,10 +114,10 @@ class UXManager {
         } else {
             body.appendChild(content);
         }
-        
+
         const footer = document.createElement('div');
         footer.className = 'modal-footer';
-        
+
         buttons.forEach(button => {
             const btn = document.createElement('button');
             btn.className = `btn ${button.class || 'btn-secondary'}`;
@@ -125,7 +128,7 @@ class UXManager {
             };
             footer.appendChild(btn);
         });
-        
+
         if (buttons.length === 0) {
             const closeBtn = document.createElement('button');
             closeBtn.className = 'btn btn-secondary';
@@ -133,25 +136,28 @@ class UXManager {
             closeBtn.onclick = () => this.closeModal(overlay);
             footer.appendChild(closeBtn);
         }
-        
+
         modal.appendChild(header);
         modal.appendChild(body);
         modal.appendChild(footer);
         overlay.appendChild(modal);
-        
+
         document.body.appendChild(overlay);
-        
+
         setTimeout(() => {
             overlay.classList.add('show');
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
         }, 10);
-        
+
         // Close on overlay click
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) {
                 this.closeModal(overlay);
             }
         });
-        
+
         return overlay;
     }
 
@@ -169,22 +175,25 @@ class UXManager {
         if (status) {
             status.className = `connection-status ${isConnected ? 'connected' : 'disconnected'}`;
             status.innerHTML = `
-                <span class="connection-dot"></span>
-                <span class="connection-text">${isConnected ? 'Connected' : 'Disconnected'}</span>
+                <i data-lucide="${isConnected ? 'link' : 'link-2-off'}" class="w-4 h-4 mr-2"></i>
+                <span class="connection-text">${isConnected ? 'Live' : 'Offline'}</span>
             `;
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
         }
     }
 
     showLoadingState(element, text = 'Loading...') {
         if (!element) return;
-        
+
         element.disabled = true;
         element.style.opacity = '0.7';
         element.style.pointerEvents = 'none';
-        
+
         const originalText = element.textContent;
         element.textContent = text;
-        
+
         return () => {
             element.disabled = false;
             element.style.opacity = '1';
@@ -195,7 +204,7 @@ class UXManager {
 
     animateElement(element, animation = 'bounce') {
         if (!element) return;
-        
+
         element.style.animation = `${animation} 0.6s ease`;
         setTimeout(() => {
             element.style.animation = '';
@@ -229,7 +238,7 @@ class UXManager {
             animation: spin 1s linear infinite;
             margin-right: 0.5rem;
         `;
-        
+
         element.insertBefore(spinner, element.firstChild);
         return spinner;
     }
@@ -245,25 +254,30 @@ class UXManager {
 // Enhanced screen navigation with transitions
 function showScreen(screenId) {
     console.log(`🖥️ Navigating to screen: ${screenId}`);
-    
+
     // Hide all screens
     const screens = document.querySelectorAll('.screen');
     screens.forEach(screen => {
         screen.classList.remove('active');
     });
-    
+
     // Show target screen with animation
     const targetScreen = document.getElementById(screenId);
     if (targetScreen) {
         setTimeout(() => {
             targetScreen.classList.add('active');
         }, 100);
-        
+
         // Update URL without page reload (for browser back button)
         if (history.pushState) {
-            history.pushState({screen: screenId}, null, `#${screenId}`);
+            history.pushState({ screen: screenId }, null, `#${screenId}`);
         }
-        
+
+        // Update gameState if it exists
+        if (typeof gameState !== 'undefined' && gameState) {
+            gameState.currentScreen = screenId;
+        }
+
         // Track navigation for analytics (if needed)
         if (typeof gtag !== 'undefined') {
             gtag('event', 'page_view', {
@@ -273,7 +287,9 @@ function showScreen(screenId) {
         }
     } else {
         console.error(`Screen not found: ${screenId}`);
-        uxManager.showNotification(`Page not found: ${screenId}`, 'error');
+        if (typeof uxManager !== 'undefined') {
+            uxManager.showNotification(`Page not found: ${screenId}`, 'error');
+        }
     }
 }
 
@@ -282,7 +298,7 @@ function addButtonFeedback() {
     document.addEventListener('click', (e) => {
         if (e.target.classList.contains('btn') || e.target.closest('.btn')) {
             const button = e.target.classList.contains('btn') ? e.target : e.target.closest('.btn');
-            
+
             // Create ripple effect
             const ripple = document.createElement('span');
             ripple.style.cssText = `
@@ -293,20 +309,20 @@ function addButtonFeedback() {
                 background-color: rgba(255, 255, 255, 0.7);
                 pointer-events: none;
             `;
-            
+
             const rect = button.getBoundingClientRect();
             const size = Math.max(rect.width, rect.height);
             const x = e.clientX - rect.left - size / 2;
             const y = e.clientY - rect.top - size / 2;
-            
+
             ripple.style.width = ripple.style.height = size + 'px';
             ripple.style.left = x + 'px';
             ripple.style.top = y + 'px';
-            
+
             button.style.position = 'relative';
             button.style.overflow = 'hidden';
             button.appendChild(ripple);
-            
+
             setTimeout(() => {
                 ripple.remove();
             }, 600);
@@ -363,37 +379,37 @@ let uxManager;
 document.addEventListener('DOMContentLoaded', () => {
     uxManager = new UXManager();
     addButtonFeedback();
-    
+
     // Initialize enhanced features
     loadPlayerStats();
     showWelcomeExperience();
     enhanceScreenManagement();
     optimizePerformance();
-    
+
     // Handle browser back button
     window.addEventListener('popstate', (e) => {
         if (e.state && e.state.screen) {
             showScreen(e.state.screen);
         }
     });
-    
+
     // Enhanced error handling
     window.addEventListener('error', (e) => {
         console.error('Application error:', e.error);
         uxManager.showNotification('Something went wrong. Please refresh the page.', 'error');
     });
-    
+
     // Connection status monitoring
     window.addEventListener('online', () => {
         uxManager.updateConnectionStatus(true);
         uxManager.showNotification('Connection restored', 'success');
     });
-    
+
     window.addEventListener('offline', () => {
         uxManager.updateConnectionStatus(false);
         uxManager.showNotification('Connection lost', 'warning');
     });
-    
+
     // Initialize game with UX improvements
     initializeGameWithUX();
 });
@@ -408,22 +424,22 @@ if (typeof window !== 'undefined') {
 // Enhanced arena selection with better UX
 function enterArena(arenaName, cost, prize, timeLimit) {
     console.log(`🎮 Entering ${arenaName} Arena - Cost: ${cost}, Prize: ${prize}, Time: ${timeLimit}s`);
-    
+
     if (!currencyManager) {
         console.error('Currency manager not initialized');
         uxManager.showNotification('Currency system not ready. Please refresh the page.', 'error');
         return;
     }
-    
+
     // Check if user has enough coins using currency manager
     const currentBalance = currencyManager.getCoins();
-    
+
     if (currentBalance < cost) {
         uxManager.showModal(
-            '❌ Insufficient Funds',
+            '<i data-lucide="circle-x" class="w-6 h-6 mr-2 text-red-500 inline-block"></i> Insufficient Funds',
             `
                 <div class="text-center space-y-4">
-                    <div class="text-4xl mb-4">💸</div>
+                    <div class="text-4xl mb-4 text-warning"><i data-lucide="banknote" class="w-12 h-12 mx-auto"></i></div>
                     <h3 class="text-xl font-bold mb-4">Not Enough Coins</h3>
                     <div class="bg-red-50 rounded-lg p-4">
                         <div class="grid grid-cols-2 gap-4 text-sm">
@@ -472,10 +488,10 @@ function enterArena(arenaName, cost, prize, timeLimit) {
         );
         return;
     }
-    
+
     // Show confirmation dialog with real currency data
     uxManager.showModal(
-        `🎯 Enter ${arenaName} Arena`,
+        `<i data-lucide="target" class="w-6 h-6 mr-2 text-primary inline-block"></i> Enter ${arenaName} Arena`,
         `
             <div class="text-center">
                 <div class="text-6xl mb-4">${getArenaIcon(arenaName)}</div>
@@ -502,7 +518,7 @@ function enterArena(arenaName, cost, prize, timeLimit) {
                 </div>
                 <div class="bg-blue-50 rounded-lg p-3 mb-4">
                     <div class="text-sm text-blue-700">
-                        💡 <strong>Win Rate:</strong> Your skill level determines your chances of winning the prize!
+                        <i data-lucide="lightbulb" class="w-4 h-4 mr-1 inline-block"></i> <strong>Win Rate:</strong> Your skill level determines your chances of winning the prize!
                     </div>
                 </div>
                 <p class="text-sm text-gray-600">Are you ready to challenge players worldwide?</p>
@@ -525,19 +541,19 @@ function enterArena(arenaName, cost, prize, timeLimit) {
 // PRD-Compliant Arena Flow
 function startPRDArenaFlow(arenaName, cost, prize, timeLimit) {
     console.log(`🌍 PRD: Starting arena flow for ${arenaName}`);
-    
+
     if (!currencyManager) {
         console.error('Currency manager not initialized');
         uxManager.showNotification('Currency system not ready. Please refresh the page.', 'error');
         return;
     }
-    
+
     try {
         // Actually spend the coins using currency manager
         currencyManager.spendCoins(cost, `${arenaName} Arena entry`);
-        
-        uxManager.showNotification(`💰 ${cost.toLocaleString()} coins spent for ${arenaName} Arena`, 'info');
-        
+
+        uxManager.showNotification(`Coins spent for ${arenaName} Arena`, 'info');
+
         // Store arena information for later use
         if (typeof gameState !== 'undefined') {
             gameState.selectedCity = arenaName;
@@ -545,7 +561,7 @@ function startPRDArenaFlow(arenaName, cost, prize, timeLimit) {
             gameState.expectedPrize = prize;
             gameState.turnTimeLimit = timeLimit;
         }
-        
+
         // PRD: Start the searching flow
         if (typeof startPRDCitySearch === 'function') {
             startPRDCitySearch(arenaName);
@@ -553,7 +569,7 @@ function startPRDArenaFlow(arenaName, cost, prize, timeLimit) {
             console.error('PRD matchmaking not loaded');
             uxManager.showNotification('Matchmaking system not ready. Please refresh the page.', 'error');
         }
-        
+
     } catch (error) {
         console.error('Failed to spend coins:', error);
         uxManager.showNotification('Failed to process payment: ' + error.message, 'error');
@@ -572,25 +588,25 @@ function getArenaIcon(arenaName) {
 
 function startArenaMatchmaking(arenaName, cost, prize, timeLimit) {
     console.log(`🔍 Starting matchmaking for ${arenaName} Arena`);
-    
+
     if (!currencyManager) {
         console.error('Currency manager not initialized');
         uxManager.showNotification('Currency system not ready. Please refresh the page.', 'error');
         return;
     }
-    
+
     try {
         // Actually spend the coins using currency manager
         currencyManager.spendCoins(cost, `${arenaName} Arena entry`);
-        
+
         uxManager.showNotification(`💰 ${cost.toLocaleString()} coins spent for ${arenaName} Arena`, 'info');
-        
+
     } catch (error) {
         console.error('Failed to spend coins:', error);
         uxManager.showNotification('Failed to process payment: ' + error.message, 'error');
         return;
     }
-    
+
     // Show matchmaking screen
     uxManager.showModal(
         `🌍 Finding Opponents`,
@@ -610,7 +626,7 @@ function startArenaMatchmaking(arenaName, cost, prize, timeLimit) {
                 
                 <div id="matchmaking-status" class="mt-4">
                     <div class="bg-blue-50 rounded-lg p-3">
-                        <div class="text-sm text-blue-700">⏰ Expected wait time: 5-15 seconds</div>
+                        <div class="text-sm text-blue-700 flex items-center justify-center"><i data-lucide="clock" class="w-4 h-4 mr-2"></i> Expected wait time: 5-15 seconds</div>
                     </div>
                 </div>
             </div>
@@ -623,7 +639,7 @@ function startArenaMatchmaking(arenaName, cost, prize, timeLimit) {
             }
         ]
     );
-    
+
     // Add loading spinner styles
     if (!document.getElementById('loading-spinner-styles')) {
         const style = document.createElement('style');
@@ -640,7 +656,7 @@ function startArenaMatchmaking(arenaName, cost, prize, timeLimit) {
         `;
         document.head.appendChild(style);
     }
-    
+
     // Simulate matchmaking process
     simulateMatchmaking(arenaName, cost, prize, timeLimit);
 }
@@ -654,7 +670,7 @@ function simulateMatchmaking(arenaName, cost, prize, timeLimit) {
         'Opponent found! Preparing game...',
         'Entering game arena...'
     ];
-    
+
     const interval = setInterval(() => {
         const statusElement = document.getElementById('matchmaking-status');
         if (statusElement && progress < steps.length) {
@@ -675,9 +691,9 @@ function simulateMatchmaking(arenaName, cost, prize, timeLimit) {
             if (modal) {
                 uxManager.closeModal(modal);
             }
-            
+
             uxManager.showNotification(`🎮 Entering ${arenaName} Arena!`, 'success');
-            
+
             // Navigate to game screen
             setTimeout(() => {
                 showGameScreen(arenaName, cost, prize, timeLimit);
@@ -691,13 +707,13 @@ function cancelArenaMatchmaking(cost) {
         console.error('Currency manager not initialized');
         return;
     }
-    
+
     try {
         // Refund the cost using currency manager
         currencyManager.addCoins(cost, 'Arena matchmaking cancelled - refund');
-        
+
         uxManager.showNotification(`🔄 Matchmaking cancelled. ${cost.toLocaleString()} coins refunded.`, 'info');
-        
+
     } catch (error) {
         console.error('Failed to refund coins:', error);
         uxManager.showNotification('Refund processed', 'info');
@@ -708,7 +724,7 @@ function showGameScreen(arenaName, cost, prize, timeLimit) {
     // This would typically transition to the actual game screen
     // For now, we'll show a placeholder
     console.log(`Starting ${arenaName} game with ${timeLimit}s timer`);
-    
+
     // Try to use existing game functions
     if (typeof startCityMatchmaking === 'function') {
         startCityMatchmaking(arenaName, cost, prize);
@@ -721,7 +737,7 @@ function showGameScreen(arenaName, cost, prize, timeLimit) {
 // Enhanced help system
 function showEnhancedHelp() {
     uxManager.showModal(
-        '🎯 How to Play Poison Candy Duel',
+        '<i data-lucide="help-circle" class="w-6 h-6 mr-2 text-primary inline-block"></i> How to Play Poison Candy Duel',
         `
             <div class="space-y-4">
                 <div class="bg-blue-50 rounded-lg p-4">
@@ -730,7 +746,7 @@ function showEnhancedHelp() {
                 </div>
                 
                 <div class="bg-green-50 rounded-lg p-4">
-                    <h4 class="font-bold text-green-900 mb-2">✅ How to Win</h4>
+                    <h4 class="font-bold text-green-900 mb-2 flex items-center"><i data-lucide="check-circle" class="w-5 h-5 mr-2"></i> How to Win</h4>
                     <ul class="text-green-800 text-sm space-y-1">
                         <li>• Collect 11 candies without picking the poison</li>
                         <li>• If you pick the poison, you lose instantly</li>
@@ -748,7 +764,7 @@ function showEnhancedHelp() {
                 </div>
                 
                 <div class="bg-red-50 rounded-lg p-4">
-                    <h4 class="font-bold text-red-900 mb-2">💡 Pro Tips</h4>
+                    <h4 class="font-bold text-red-900 mb-2 flex items-center"><i data-lucide="zap" class="w-5 h-5 mr-2"></i> Pro Tips</h4>
                     <ul class="text-red-800 text-sm space-y-1">
                         <li>• Choose your poison candy strategically</li>
                         <li>• Watch for patterns in opponent behavior</li>
@@ -775,10 +791,10 @@ function showEnhancedHelp() {
 // Enhanced error handling
 function handleGameError(error, context = 'game') {
     console.error(`Game error in ${context}:`, error);
-    
+
     let userMessage = 'Something went wrong. Please try again.';
     let suggestions = [];
-    
+
     if (error.message && error.message.includes('network')) {
         userMessage = 'Connection problem detected.';
         suggestions = [
@@ -794,11 +810,11 @@ function handleGameError(error, context = 'game') {
             'Try a lower-stakes arena'
         ];
     }
-    
-    const suggestionsList = suggestions.length > 0 
+
+    const suggestionsList = suggestions.length > 0
         ? `<ul class="text-sm text-gray-600 mt-2">${suggestions.map(s => `<li>• ${s}</li>`).join('')}</ul>`
         : '';
-    
+
     uxManager.showModal(
         '⚠️ Oops!',
         `
@@ -888,27 +904,27 @@ function initializeGameWithUX() {
             ]
         );
     }
-    
+
     // Auto-save periodically
     setInterval(autoSaveGameState, 30000); // Every 30 seconds
 }
 
 // Enhanced screen transitions
 const originalShowScreen = window.showScreen;
-window.showScreen = function(screenId) {
+window.showScreen = function (screenId) {
     // Add loading state
     const targetScreen = document.getElementById(screenId);
     if (targetScreen) {
         targetScreen.style.opacity = '0.5';
     }
-    
+
     // Call original function
     if (originalShowScreen) {
         originalShowScreen(screenId);
     } else {
         showScreen(screenId);
     }
-    
+
     // Restore opacity with animation
     setTimeout(() => {
         if (targetScreen) {
@@ -916,7 +932,7 @@ window.showScreen = function(screenId) {
             targetScreen.style.transition = 'opacity 0.3s ease';
         }
     }, 100);
-    
+
     // Track page views for analytics
     if (typeof gtag !== 'undefined') {
         gtag('event', 'page_view', {
@@ -941,12 +957,14 @@ function showCoinsInfo() {
         `
             <div class="space-y-4">
                 <div class="text-center">
-                    <div class="text-6xl mb-4">💰</div>
+                    <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-yellow-200">
+                        <i data-lucide="coins" class="w-10 h-10 text-yellow-600"></i>
+                    </div>
                     <h3 class="text-xl font-bold mb-2">Your Coins: ${currencyManager ? currencyManager.getCoins().toLocaleString() : '0'}</h3>
                 </div>
                 
                 <div class="bg-blue-50 rounded-lg p-4">
-                    <h4 class="font-bold text-blue-900 mb-2">💡 How to Earn Coins</h4>
+                    <h4 class="font-bold text-blue-900 mb-2 flex items-center"><i data-lucide="lightbulb" class="w-4 h-4 mr-2"></i> How to Earn Coins</h4>
                     <ul class="text-blue-800 text-sm space-y-1">
                         <li>• Win arena battles to earn prize coins</li>
                         <li>• Complete daily challenges</li>
@@ -957,7 +975,7 @@ function showCoinsInfo() {
                 </div>
                 
                 <div class="bg-green-50 rounded-lg p-4">
-                    <h4 class="font-bold text-green-900 mb-2">💸 How to Spend Coins</h4>
+                    <h4 class="font-bold text-green-900 mb-2 flex items-center"><i data-lucide="banknote" class="w-4 h-4 mr-2"></i> How to Spend Coins</h4>
                     <ul class="text-green-800 text-sm space-y-1">
                         <li>• Enter premium arenas for bigger prizes</li>
                         <li>• Buy power-ups and advantages</li>
@@ -969,7 +987,7 @@ function showCoinsInfo() {
                     <h4 class="font-bold text-yellow-900 mb-2">💎 Need More Coins?</h4>
                     <p class="text-yellow-800 text-sm mb-3">Convert your diamonds to coins instantly!</p>
                     <button class="btn btn-warning btn-sm w-full" onclick="showConversionModal()">
-                        💎➡️💰 Convert Diamonds
+                        <i data-lucide="gem" class="w-3 h-3 mx-1 inline"></i> <i data-lucide="arrow-right" class="w-3 h-3 mx-1 inline"></i> <i data-lucide="coins" class="w-3 h-3 mx-1 inline"></i> Convert Diamonds
                     </button>
                 </div>
             </div>
@@ -1053,22 +1071,22 @@ function initializePlayerStats() {
         coins: 10000,
         diamonds: 50
     };
-    
+
     const winRate = Math.floor((stats.wins / stats.totalGames) * 100);
-    
+
     // Update UI elements
     const totalGamesEl = document.getElementById('total-games');
     const winRateEl = document.getElementById('win-rate');
     const coinsEl = document.getElementById('coins-count');
     const diamondsEl = document.getElementById('diamonds-count');
     const balanceEl = document.getElementById('player-balance');
-    
-    if (totalGamesEl) totalGamesEl.textContent = stats.totalGames;
+
+    if (totalGamesEl) totalGamesEl.textContent = stats.totalGames.toLocaleString();
     if (winRateEl) winRateEl.textContent = winRate + '%';
-    if (coinsEl) coinsEl.textContent = stats.coins;
-    if (diamondsEl) diamondsEl.textContent = stats.diamonds;
-    if (balanceEl) balanceEl.textContent = stats.coins;
-    
+    if (coinsEl) coinsEl.textContent = stats.coins.toLocaleString();
+    if (diamondsEl) diamondsEl.textContent = stats.diamonds.toLocaleString();
+    if (balanceEl) balanceEl.textContent = stats.coins.toLocaleString();
+
     // Store in localStorage for persistence
     localStorage.setItem('pcd_player_stats', JSON.stringify(stats));
 }
@@ -1079,18 +1097,18 @@ function loadPlayerStats() {
         const saved = localStorage.getItem('pcd_player_stats');
         if (saved) {
             const stats = JSON.parse(saved);
-            
+
             const totalGamesEl = document.getElementById('total-games');
             const winRateEl = document.getElementById('win-rate');
             const coinsEl = document.getElementById('coins-count');
             const diamondsEl = document.getElementById('diamonds-count');
             const balanceEl = document.getElementById('player-balance');
-            
-            if (totalGamesEl) totalGamesEl.textContent = stats.totalGames || 0;
+
+            if (totalGamesEl) totalGamesEl.textContent = (stats.totalGames || 0).toLocaleString();
             if (winRateEl) winRateEl.textContent = Math.floor((stats.wins / stats.totalGames) * 100) + '%';
-            if (coinsEl) coinsEl.textContent = stats.coins || 0;
-            if (diamondsEl) diamondsEl.textContent = stats.diamonds || 0;
-            if (balanceEl) balanceEl.textContent = stats.coins || 0;
+            if (coinsEl) coinsEl.textContent = (stats.coins || 0).toLocaleString();
+            if (diamondsEl) diamondsEl.textContent = (stats.diamonds || 0).toLocaleString();
+            if (balanceEl) balanceEl.textContent = (stats.coins || 0).toLocaleString();
         }
     } catch (error) {
         console.warn('Could not load player stats:', error);
@@ -1101,7 +1119,7 @@ function loadPlayerStats() {
 // Enhanced welcome experience
 function showWelcomeExperience() {
     const isFirstTime = !localStorage.getItem('pcd_visited_before');
-    
+
     if (isFirstTime) {
         setTimeout(() => {
             uxManager.showModal(
@@ -1150,11 +1168,11 @@ function showWelcomeExperience() {
 function showTutorial() {
     localStorage.setItem('pcd_visited_before', 'true');
     uxManager.showNotification('Welcome bonus added!', 'success');
-    
+
     // Show tutorial steps
     const tutorialSteps = [
         {
-            title: '🎯 Game Objective',
+            title: '<i data-lucide="target" class="w-5 h-5 mr-2 inline-block text-primary"></i> Game Objective',
             content: 'Your goal is to collect 11 candies from your opponent\'s collection while avoiding the poison candy they selected.',
             next: 'Got it!'
         },
@@ -1169,14 +1187,14 @@ function showTutorial() {
             next: 'Understood!'
         },
         {
-            title: '🏆 Victory Conditions',
+            title: '<i data-lucide="trophy" class="w-5 h-5 mr-2 inline-block text-yellow-500"></i> Victory Conditions',
             content: 'Win by collecting 11 candies without picking poison. If both players reach 11 safely, it\'s a draw and both get participation rewards!',
             next: 'Ready to play!'
         }
     ];
-    
+
     let currentStep = 0;
-    
+
     function showStep(step) {
         const isLast = step === tutorialSteps.length - 1;
         uxManager.showModal(
@@ -1186,9 +1204,9 @@ function showTutorial() {
                     <div class="text-4xl mb-4">${step === 0 ? '🎯' : step === 1 ? '🍭' : step === 2 ? '🎲' : '🏆'}</div>
                     <p class="text-lg">${tutorialSteps[step].content}</p>
                     <div class="flex justify-center space-x-2 mt-4">
-                        ${Array(tutorialSteps.length).fill(0).map((_, i) => 
-                            `<div class="w-3 h-3 rounded-full ${i === step ? 'bg-primary' : 'bg-gray-300'}"></div>`
-                        ).join('')}
+                        ${Array(tutorialSteps.length).fill(0).map((_, i) =>
+                `<div class="w-3 h-3 rounded-full ${i === step ? 'bg-primary' : 'bg-gray-300'}"></div>`
+            ).join('')}
                     </div>
                     <p class="text-sm text-gray-600">Step ${step + 1} of ${tutorialSteps.length}</p>
                 </div>
@@ -1217,7 +1235,7 @@ function showTutorial() {
             ]
         );
     }
-    
+
     showStep(0);
 }
 
@@ -1235,7 +1253,7 @@ function enhanceScreenManagement() {
             screen.appendChild(helpButton);
         }
     });
-    
+
     // Add back button to screens that need it
     const screensNeedingBackButton = ['page3', 'page4', 'page5', 'page6', 'page7', 'page8', 'page9', 'page10'];
     screensNeedingBackButton.forEach(screenId => {
@@ -1267,10 +1285,10 @@ function optimizePerformance() {
                 }
             });
         });
-        
+
         lazyImages.forEach(img => imageObserver.observe(img));
     }
-    
+
     // Debounce window resize
     let resizeTimeout;
     window.addEventListener('resize', () => {
@@ -1282,7 +1300,7 @@ function optimizePerformance() {
             document.body.style.display = '';
         }, 150);
     });
-    
+
     // Optimize animations
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (prefersReducedMotion) {
@@ -1306,7 +1324,7 @@ if (typeof window !== 'undefined') {
 // Enhanced practice mode handler
 function startPracticeMode(difficulty) {
     console.log(`🤖 Starting practice mode: ${difficulty}`);
-    
+
     const difficultyInfo = {
         easy: {
             icon: '🟢',
@@ -1330,9 +1348,9 @@ function startPracticeMode(difficulty) {
             winRate: 30
         }
     };
-    
+
     const info = difficultyInfo[difficulty];
-    
+
     // Show practice mode confirmation
     uxManager.showModal(
         `${info.icon} ${info.name}`,
@@ -1384,7 +1402,7 @@ function startPracticeMode(difficulty) {
 
 function launchPracticeGame(difficulty) {
     console.log(`🎮 Launching practice game: ${difficulty}`);
-    
+
     // Show loading state
     uxManager.showModal(
         '🤖 Preparing AI Opponent',
@@ -1399,16 +1417,16 @@ function launchPracticeGame(difficulty) {
         `,
         []
     );
-    
+
     // Simulate AI preparation
     setTimeout(() => {
         const modal = document.querySelector('.modal-overlay');
         if (modal) {
             uxManager.closeModal(modal);
         }
-        
+
         uxManager.showNotification(`🤖 ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} AI ready!`, 'success');
-        
+
         // Start actual game
         setTimeout(() => {
             // Try to use existing AI game functions
@@ -1428,35 +1446,35 @@ function launchPracticeGame(difficulty) {
 function updatePracticeStats(difficulty, won, coinsEarned) {
     try {
         const stats = JSON.parse(localStorage.getItem('pcd_practice_stats') || '{}');
-        
+
         if (!stats[difficulty]) {
             stats[difficulty] = { wins: 0, games: 0, coins: 0 };
         }
-        
+
         stats[difficulty].games++;
         stats[difficulty].coins += coinsEarned;
-        
+
         if (won) {
             stats[difficulty].wins++;
         }
-        
+
         localStorage.setItem('pcd_practice_stats', JSON.stringify(stats));
-        
+
         // Actually award coins using currency manager
         if (currencyManager) {
             currencyManager.addCoins(coinsEarned, `Practice mode - ${difficulty} AI ${won ? 'victory' : 'participation'}`);
         }
-        
+
         // Update UI
         loadPracticeStats();
-        
+
         // Show result notification
         if (won) {
             uxManager.showNotification(`🎉 Victory! +${coinsEarned} coins earned`, 'success');
         } else {
             uxManager.showNotification(`💪 Good effort! +${coinsEarned} participation coins`, 'info');
         }
-        
+
     } catch (error) {
         console.warn('Could not update practice stats:', error);
     }
@@ -1465,24 +1483,24 @@ function updatePracticeStats(difficulty, won, coinsEarned) {
 function loadPracticeStats() {
     try {
         const stats = JSON.parse(localStorage.getItem('pcd_practice_stats') || '{}');
-        
+
         let totalCoins = 0;
         ['easy', 'medium', 'hard'].forEach(difficulty => {
             const wins = stats[difficulty]?.wins || 0;
             const coins = stats[difficulty]?.coins || 0;
             totalCoins += coins;
-            
+
             const element = document.getElementById(`practice-${difficulty}-wins`);
             if (element) {
                 element.textContent = wins;
             }
         });
-        
+
         const totalElement = document.getElementById('practice-total-coins');
         if (totalElement) {
             totalElement.textContent = totalCoins;
         }
-        
+
     } catch (error) {
         console.warn('Could not load practice stats:', error);
     }
@@ -1491,12 +1509,12 @@ function loadPracticeStats() {
 // Enhanced game result handling
 function handleGameResult(result) {
     const { winner, gameMode, difficulty, coinsEarned, isPractice, arenaName, originalCost } = result;
-    
+
     if (!currencyManager) {
         console.error('Currency manager not initialized');
         return;
     }
-    
+
     try {
         if (isPractice) {
             updatePracticeStats(difficulty, winner === 'player', coinsEarned);
@@ -1505,7 +1523,7 @@ function handleGameResult(result) {
             if (winner === 'player') {
                 // Award prize coins
                 currencyManager.addCoins(coinsEarned, `${arenaName} Arena victory prize`);
-                
+
                 // Award bonus diamonds for big wins
                 if (coinsEarned >= 5000) {
                     const bonusDiamonds = Math.floor(coinsEarned / 1000);
@@ -1518,31 +1536,31 @@ function handleGameResult(result) {
                     currencyManager.addCoins(consolationCoins, `${arenaName} Arena participation`);
                 }
             }
-            
+
             // Update main game stats
             updatePlayerStats(result);
         }
-        
+
     } catch (error) {
         console.error('Error handling game result:', error);
     }
-    
+
     // Show enhanced result modal
     showGameResultModal(result);
 }
 
 function showGameResultModal(result) {
     const { winner, gameMode, difficulty, coinsEarned, isPractice, arenaName, originalCost } = result;
-    
+
     const isWin = winner === 'player';
     const title = isWin ? '🎉 Victory!' : '💪 Good Game!';
     const message = isWin ? 'Congratulations on your win!' : 'Better luck next time!';
-    
+
     // Calculate actual rewards
     let actualCoinsEarned = coinsEarned;
     let bonusDiamonds = 0;
     let consolationCoins = 0;
-    
+
     if (!isPractice) {
         if (isWin && coinsEarned >= 5000) {
             bonusDiamonds = Math.floor(coinsEarned / 1000);
@@ -1551,7 +1569,7 @@ function showGameResultModal(result) {
             actualCoinsEarned = consolationCoins;
         }
     }
-    
+
     const content = `
         <div class="text-center space-y-4">
             <div class="text-6xl mb-4">${isWin ? '🏆' : '🎯'}</div>
@@ -1605,7 +1623,7 @@ function showGameResultModal(result) {
             ${isPractice ? '<div class="bg-blue-50 rounded-lg p-3"><div class="text-sm text-blue-700">💡 Practice game - helps you improve without risk!</div></div>' : ''}
         </div>
     `;
-    
+
     uxManager.showModal(
         title,
         content,
@@ -1638,10 +1656,10 @@ function showDailyRewardModal() {
         console.error('Currency manager not initialized');
         return;
     }
-    
+
     try {
         const reward = currencyManager.claimDailyReward();
-        
+
         uxManager.showModal(
             '🎁 Daily Reward Claimed!',
             `
@@ -1686,7 +1704,7 @@ function showDailyRewardModal() {
                 }
             ]
         );
-        
+
     } catch (error) {
         console.error('Error claiming daily reward:', error);
         uxManager.showNotification('Daily reward already claimed', 'info');
@@ -1701,7 +1719,7 @@ function showConversionModal() {
     }
 
     const options = currencyManager.getConversionOptions();
-    
+
     uxManager.showModal(
         '💎➡️💰 Convert Diamonds to Coins',
         `
@@ -1750,7 +1768,7 @@ function showConversionModal() {
             }
         ]
     );
-    
+
     // Add click handlers to conversion options
     document.querySelectorAll('.conversion-option').forEach(option => {
         if (!option.classList.contains('disabled')) {
@@ -1768,7 +1786,9 @@ function confirmConversion(diamonds, coins) {
         '🔄 Confirm Conversion',
         `
             <div class="text-center space-y-4">
-                <div class="text-4xl mb-4">💎➡️💰</div>
+                <div class="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-primary/20">
+                    <i data-lucide="refresh-cw" class="w-12 h-12 text-primary animate-spin-slow"></i>
+                </div>
                 <h3 class="text-xl font-bold mb-4">Confirm Diamond Conversion</h3>
                 
                 <div class="bg-gray-50 rounded-lg p-4">
@@ -1816,9 +1836,9 @@ function confirmConversion(diamonds, coins) {
 function executeConversion(diamonds, coins) {
     try {
         const result = currencyManager.convertDiamondsToCoins(diamonds);
-        
+
         uxManager.showModal(
-            '✅ Conversion Successful!',
+            '<i data-lucide="check-circle" class="w-6 h-6 mr-2 text-success inline-block"></i> Conversion Successful!',
             `
                 <div class="text-center space-y-4">
                     <div class="text-6xl mb-4">🎉</div>
@@ -1848,7 +1868,7 @@ function executeConversion(diamonds, coins) {
                 }
             ]
         );
-        
+
     } catch (error) {
         console.error('Conversion failed:', error);
         uxManager.showNotification('Conversion failed: ' + error.message, 'error');
@@ -1863,7 +1883,7 @@ function showPurchaseModal() {
     }
 
     const options = currencyManager.getPurchaseOptions();
-    
+
     uxManager.showModal(
         '💎 Purchase Diamonds',
         `
@@ -1922,7 +1942,7 @@ function showPurchaseModal() {
             }
         ]
     );
-    
+
     // Add click handlers to purchase options
     document.querySelectorAll('.purchase-option').forEach(option => {
         option.addEventListener('click', () => {
@@ -1986,7 +2006,7 @@ function confirmPurchase(diamonds, price) {
 function executePurchase(diamonds, price) {
     try {
         const result = currencyManager.simulatePurchase(diamonds, price);
-        
+
         uxManager.showModal(
             '✅ Purchase Successful!',
             `
@@ -2024,7 +2044,7 @@ function executePurchase(diamonds, price) {
                 }
             ]
         );
-        
+
     } catch (error) {
         console.error('Purchase failed:', error);
         uxManager.showNotification('Purchase failed: ' + error.message, 'error');

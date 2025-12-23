@@ -36,7 +36,7 @@ class CurrencyManager {
             const saved = localStorage.getItem(this.storageKey);
             if (saved) {
                 this.currency = { ...this.defaultCurrency, ...JSON.parse(saved) };
-                
+
                 // Ensure minimum values for existing users
                 if (this.currency.coins < 0) this.currency.coins = 0;
                 if (this.currency.diamonds < 0) this.currency.diamonds = 0;
@@ -93,10 +93,10 @@ class CurrencyManager {
         this.currency.coins -= amount;
         this.currency.totalSpent += amount;
         this.saveCurrency();
-        
+
         console.log(`💰 Spent ${amount} coins: ${description}`);
         this.logTransaction('spend', 'coins', amount, description);
-        
+
         return true;
     }
 
@@ -107,10 +107,10 @@ class CurrencyManager {
 
         this.currency.diamonds -= amount;
         this.saveCurrency();
-        
+
         console.log(`💎 Spent ${amount} diamonds: ${description}`);
         this.logTransaction('spend', 'diamonds', amount, description);
-        
+
         return true;
     }
 
@@ -120,28 +120,28 @@ class CurrencyManager {
         this.currency.coins += amount;
         this.currency.totalEarned += amount;
         this.saveCurrency();
-        
+
         console.log(`💰 Earned ${amount} coins: ${description}`);
         this.logTransaction('earn', 'coins', amount, description);
-        
+
         if (typeof uxManager !== 'undefined') {
             uxManager.showNotification(`+${amount} coins earned!`, 'success');
         }
-        
+
         return true;
     }
 
     addDiamonds(amount, description = 'Premium reward') {
         this.currency.diamonds += amount;
         this.saveCurrency();
-        
+
         console.log(`💎 Earned ${amount} diamonds: ${description}`);
         this.logTransaction('earn', 'diamonds', amount, description);
-        
+
         if (typeof uxManager !== 'undefined') {
             uxManager.showNotification(`+${amount} diamonds earned!`, 'success');
         }
-        
+
         return true;
     }
 
@@ -167,20 +167,20 @@ class CurrencyManager {
 
     convertDiamondsToCoins(diamondAmount) {
         const conversions = this.conversionRates.diamonds_to_coins;
-        
+
         if (!conversions[diamondAmount]) {
             throw new Error(`Invalid conversion amount: ${diamondAmount} diamonds`);
         }
 
         const coinAmount = conversions[diamondAmount];
-        
+
         if (!this.canSpendDiamonds(diamondAmount)) {
             throw new Error(`Insufficient diamonds. Need ${diamondAmount}, have ${this.currency.diamonds}`);
         }
 
         this.spendDiamonds(diamondAmount, `Convert to ${coinAmount} coins`);
         this.addCoins(coinAmount, `Converted from ${diamondAmount} diamonds`);
-        
+
         return { diamondsSpent: diamondAmount, coinsEarned: coinAmount };
     }
 
@@ -213,18 +213,18 @@ class CurrencyManager {
     simulatePurchase(diamondAmount, price) {
         // In a real app, this would integrate with payment processing
         // For now, we'll simulate the purchase
-        
+
         console.log(`💳 Simulating purchase: ${diamondAmount} diamonds for $${price}`);
-        
+
         // Add purchased diamonds
         this.addDiamonds(diamondAmount, `Purchased for $${price}`);
-        
+
         // Add bonus diamonds for larger purchases
         if (diamondAmount >= 2500) {
             const bonus = diamondAmount >= 5000 ? 500 : 100;
             this.addDiamonds(bonus, 'Purchase bonus');
         }
-        
+
         return {
             success: true,
             diamondsAdded: diamondAmount,
@@ -238,12 +238,12 @@ class CurrencyManager {
         const now = Date.now();
         const lastLogin = this.currency.lastLogin;
         const daysSinceLastLogin = Math.floor((now - lastLogin) / (1000 * 60 * 60 * 24));
-        
+
         if (daysSinceLastLogin >= 1) {
             this.currency.dailyRewardClaimed = false;
             this.currency.lastLogin = now;
             this.saveCurrency();
-            
+
             if (daysSinceLastLogin >= 1) {
                 this.showDailyRewardAvailable();
             }
@@ -258,16 +258,16 @@ class CurrencyManager {
         const baseCoins = 100;
         const baseDiamonds = 5;
         const streak = this.getDailyStreak();
-        
+
         const coinsReward = baseCoins + (streak * 10);
         const diamondsReward = baseDiamonds + Math.floor(streak / 3);
-        
+
         this.addCoins(coinsReward, 'Daily reward');
         this.addDiamonds(diamondsReward, 'Daily reward');
-        
+
         this.currency.dailyRewardClaimed = true;
         this.saveCurrency();
-        
+
         return {
             coins: coinsReward,
             diamonds: diamondsReward,
@@ -280,16 +280,16 @@ class CurrencyManager {
         const streakData = JSON.parse(localStorage.getItem('pcd_daily_streak') || '{"streak": 0, "lastClaim": 0}');
         const now = Date.now();
         const daysSinceLastClaim = Math.floor((now - streakData.lastClaim) / (1000 * 60 * 60 * 24));
-        
+
         if (daysSinceLastClaim === 1) {
             streakData.streak += 1;
         } else if (daysSinceLastClaim > 1) {
             streakData.streak = 1;
         }
-        
+
         streakData.lastClaim = now;
         localStorage.setItem('pcd_daily_streak', JSON.stringify(streakData));
-        
+
         return streakData.streak;
     }
 
@@ -332,10 +332,8 @@ class CurrencyManager {
     formatNumber(num) {
         if (num >= 1000000) {
             return (num / 1000000).toFixed(1) + 'M';
-        } else if (num >= 1000) {
-            return (num / 1000).toFixed(1) + 'K';
         }
-        return num.toString();
+        return num.toLocaleString();
     }
 
     // ===== TRANSACTION LOGGING =====
@@ -356,12 +354,12 @@ class CurrencyManager {
         // Store transaction history
         const history = JSON.parse(localStorage.getItem('pcd_transaction_history') || '[]');
         history.unshift(transaction);
-        
+
         // Keep only last 100 transactions
         if (history.length > 100) {
             history.splice(100);
         }
-        
+
         localStorage.setItem('pcd_transaction_history', JSON.stringify(history));
     }
 
@@ -425,7 +423,7 @@ let currencyManager;
 // Initialize currency manager when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     currencyManager = new CurrencyManager();
-    
+
     // Update UI every 30 seconds
     setInterval(() => {
         currencyManager.updateUI();

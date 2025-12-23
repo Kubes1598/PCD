@@ -17,6 +17,8 @@ class InMemoryDatabaseService:
     def __init__(self):
         """Initialize in-memory storage."""
         self.games: Dict[str, Dict[str, Any]] = {}
+        self.players: Dict[str, Dict[str, Any]] = {}
+        self.transactions: List[Dict[str, Any]] = []
         print("🟡 Using in-memory database for local development")
     
     async def create_game(self, game_data: Dict[str, Any]) -> str:
@@ -119,6 +121,106 @@ class InMemoryDatabaseService:
         except Exception as e:
             print(f"❌ Error retrieving game stats: {e}")
             return {"total_games": 0, "active_games": 0, "status_breakdown": {}}
+
+    async def get_player(self, player_name: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a player from memory."""
+        return self.players.get(player_name)
+
+    async def update_player_balance(self, player_name: str, coin_delta: int = 0, diamond_delta: int = 0) -> bool:
+        """Update a player's balance in memory."""
+        try:
+            if player_name not in self.players:
+                self.players[player_name] = {
+                    "name": player_name,
+                    "coin_balance": 10000,
+                    "diamonds_balance": 500,
+                    "total_coins_earned": 0,
+                    "total_coins_spent": 0,
+                    "games_played": 0,
+                    "games_won": 0,
+                    "last_active": datetime.now(timezone.utc).isoformat(),
+                    "last_daily_reward": None
+                }
+            
+            player = self.players[player_name]
+            player["coin_balance"] += coin_delta
+            player["diamonds_balance"] += diamond_delta
+            
+            if coin_delta > 0:
+                player["total_coins_earned"] += coin_delta
+            elif coin_delta < 0:
+                player["total_coins_spent"] += abs(coin_delta)
+                
+            player["last_active"] = datetime.now(timezone.utc).isoformat()
+            return True
+        except Exception as e:
+            print(f"❌ Error updating player balance: {e}")
+            return False
+
+    async def create_transaction(self, transaction_data: Dict[str, Any]) -> str:
+        """Create a new transaction in memory."""
+        try:
+            transaction_id = str(uuid.uuid4())
+            transaction = {
+                "id": transaction_id,
+                **transaction_data,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            self.transactions.append(transaction)
+            return transaction_id
+        except Exception as e:
+            print(f"❌ Error creating transaction: {e}")
+            raise e
+
+    async def update_player_stats(self, player_name: str, won: bool) -> bool:
+        """Update player's game statistics after a game."""
+        try:
+            if player_name not in self.players:
+                self.players[player_name] = {
+                    "name": player_name,
+                    "coin_balance": 10000,
+                    "diamonds_balance": 500,
+                    "total_coins_earned": 0,
+                    "total_coins_spent": 0,
+                    "games_played": 0,
+                    "games_won": 0,
+                    "last_active": datetime.now(timezone.utc).isoformat(),
+                    "last_daily_reward": None
+                }
+            
+            player = self.players[player_name]
+            player["games_played"] += 1
+            if won:
+                player["games_won"] += 1
+            player["last_active"] = datetime.now(timezone.utc).isoformat()
+            return True
+        except Exception as e:
+            print(f"❌ Error updating player stats: {e}")
+            return False
+
+    async def get_leaderboard(self, sort_by: str = "wins", limit: int = 10) -> List[Dict[str, Any]]:
+        """Get leaderboard sorted by specified field."""
+        try:
+            players_list = list(self.players.values())
+            
+            if sort_by == "wins":
+                players_list.sort(key=lambda p: p.get("games_won", 0), reverse=True)
+            elif sort_by == "winrate":
+                # Filter players with at least 5 games for meaningful winrate
+                players_list = [p for p in players_list if p.get("games_played", 0) >= 5]
+                players_list.sort(
+                    key=lambda p: p.get("games_won", 0) / max(p.get("games_played", 1), 1),
+                    reverse=True
+                )
+            elif sort_by == "coins":
+                players_list.sort(key=lambda p: p.get("coin_balance", 0), reverse=True)
+            elif sort_by == "games":
+                players_list.sort(key=lambda p: p.get("games_played", 0), reverse=True)
+            
+            return players_list[:limit]
+        except Exception as e:
+            print(f"❌ Error getting leaderboard: {e}")
+            return []
 
 class SupabaseService:
     """Service class for Supabase database operations."""
@@ -276,6 +378,127 @@ class SupabaseService:
         except Exception as e:
             print(f"Error retrieving game stats: {e}")
             return {"total_games": 0, "active_games": 0, "status_breakdown": {}}
+
+    async def get_player(self, player_name: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a player from Supabase."""
+        try:
+            result = self.supabase.table("players").select("*").eq("name", player_name).execute()
+            if result.data and len(result.data) > 0:
+                return result.data[0]
+            return None
+        except Exception as e:
+            print(f"Error retrieving player from database: {e}")
+            return None
+
+    async def update_player_balance(self, player_name: str, coin_delta: int = 0, diamond_delta: int = 0) -> bool:
+        """Update a player's balance in Supabase."""
+        try:
+            player = await self.get_player(player_name)
+            if not player:
+                # Create player with default starting values + delta
+                new_player = {
+                    "name": player_name,
+                    "coin_balance": 10000 + coin_delta,
+                    "diamonds_balance": 500 + diamond_delta,
+                    "total_coins_earned": max(0, coin_delta),
+                    "total_coins_spent": abs(min(0, coin_delta)),
+                    "last_active": datetime.now(timezone.utc).isoformat()
+                }
+                result = self.supabase.table("players").insert(new_player).execute()
+                return len(result.data) > 0
+            
+            # Update existing player
+            update_data = {
+                "coin_balance": player["coin_balance"] + coin_delta,
+                "diamonds_balance": player["diamonds_balance"] + diamond_delta,
+                "last_active": datetime.now(timezone.utc).isoformat()
+            }
+            
+            if coin_delta > 0:
+                update_data["total_coins_earned"] = player.get("total_coins_earned", 0) + coin_delta
+            elif coin_delta < 0:
+                update_data["total_coins_spent"] = player.get("total_coins_spent", 0) + abs(coin_delta)
+                
+            result = self.supabase.table("players").update(update_data).eq("name", player_name).execute()
+            return len(result.data) > 0
+            
+        except Exception as e:
+            print(f"Error updating player balance in database: {e}")
+            return False
+
+    async def create_transaction(self, transaction_data: Dict[str, Any]) -> str:
+        """Create a new transaction in Supabase."""
+        try:
+            # Ensure balance_after is calculated if not provided
+            if "balance_after" not in transaction_data:
+                player = await self.get_player(transaction_data["player_name"])
+                transaction_data["balance_after"] = player["coin_balance"] if player else 0
+                
+            result = self.supabase.table("coin_transactions").insert(transaction_data).execute()
+            if result.data:
+                return result.data[0]["id"]
+            else:
+                raise Exception("Failed to create transaction in database")
+        except Exception as e:
+            print(f"Error creating transaction in database: {e}")
+            raise e
+
+    async def update_player_stats(self, player_name: str, won: bool) -> bool:
+        """Update player's game statistics in Supabase."""
+        try:
+            player = await self.get_player(player_name)
+            if not player:
+                # Create player with initial stats
+                new_player = {
+                    "name": player_name,
+                    "coin_balance": 10000,
+                    "diamonds_balance": 500,
+                    "games_played": 1,
+                    "games_won": 1 if won else 0,
+                    "last_active": datetime.now(timezone.utc).isoformat()
+                }
+                self.supabase.table("players").insert(new_player).execute()
+                return True
+            
+            update_data = {
+                "games_played": player.get("games_played", 0) + 1,
+                "games_won": player.get("games_won", 0) + (1 if won else 0),
+                "last_active": datetime.now(timezone.utc).isoformat()
+            }
+            self.supabase.table("players").update(update_data).eq("name", player_name).execute()
+            return True
+        except Exception as e:
+            print(f"Error updating player stats in database: {e}")
+            return False
+
+    async def get_leaderboard(self, sort_by: str = "wins", limit: int = 10) -> List[Dict[str, Any]]:
+        """Get leaderboard sorted by specified field from Supabase."""
+        try:
+            if sort_by == "wins":
+                result = self.supabase.table("players").select("*").order("games_won", desc=True).limit(limit).execute()
+            elif sort_by == "coins":
+                result = self.supabase.table("players").select("*").order("coin_balance", desc=True).limit(limit).execute()
+            elif sort_by == "games":
+                result = self.supabase.table("players").select("*").order("games_played", desc=True).limit(limit).execute()
+            elif sort_by == "winrate":
+                # Get all players with at least 5 games and calculate winrate
+                result = self.supabase.table("players").select("*").gte("games_played", 5).execute()
+                if result.data:
+                    # Sort by win rate in Python
+                    players = result.data
+                    players.sort(
+                        key=lambda p: p.get("games_won", 0) / max(p.get("games_played", 1), 1),
+                        reverse=True
+                    )
+                    return players[:limit]
+                return []
+            else:
+                result = self.supabase.table("players").select("*").order("games_won", desc=True).limit(limit).execute()
+            
+            return result.data if result.data else []
+        except Exception as e:
+            print(f"Error getting leaderboard from database: {e}")
+            return []
 
 # Global database service instance - use in-memory if Supabase not available
 if SUPABASE_AVAILABLE:

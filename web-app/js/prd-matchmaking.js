@@ -10,14 +10,14 @@ class PRDMatchmakingManager {
         this.searchTimeLimit = 30; // 30 seconds as per PRD
         this.candySelectionTimeLimit = 30; // 30 seconds for candy selection
         this.candyWarningTime = 20; // 20 seconds warning
-        
+
         // Mock player data for realistic simulation
         this.mockPlayerCounts = {
             'Dubai': { min: 45, max: 120 },
             'Cairo': { min: 25, max: 80 },
             'Oslo': { min: 15, max: 50 }
         };
-        
+
         this.statusMessages = [
             '🔍 Scanning for available players...',
             '🌐 Connecting to game servers...',
@@ -25,14 +25,17 @@ class PRDMatchmakingManager {
             '🎯 Finding suitable opponents...',
             '🤝 Matching with players...'
         ];
-        
+
         this.currentStatusIndex = 0;
+
+        // Initialize timeout handlers immediately
+        this.initializeTimeoutHandlers();
     }
 
     // ===== PRD STEP 2: START PLAYER SEARCH =====
     startPlayerSearch(city) {
         console.log(`🔍 PRD: Starting player search in ${city}`);
-        
+
         if (this.isSearching) {
             console.warn('Search already in progress');
             return;
@@ -45,13 +48,13 @@ class PRDMatchmakingManager {
 
         // PRD: Show "Searching for Player" screen
         this.showSearchingScreen(city);
-        
+
         // Start countdown timer (30 seconds)
         this.startSearchCountdown();
-        
+
         // Update status messages periodically
         this.startStatusUpdates();
-        
+
         // Simulate matchmaking process
         this.simulateMatchmaking();
     }
@@ -130,13 +133,13 @@ class PRDMatchmakingManager {
     // PRD: Update status messages during search
     startStatusUpdates() {
         const statusElement = document.getElementById('search-status-text');
-        
+
         const updateStatus = () => {
             if (!this.isSearching) return;
 
             if (statusElement) {
                 statusElement.classList.add('status-text-updating');
-                
+
                 setTimeout(() => {
                     statusElement.textContent = this.statusMessages[this.currentStatusIndex];
                     statusElement.classList.remove('status-text-updating');
@@ -155,11 +158,140 @@ class PRDMatchmakingManager {
         setTimeout(updateStatus, 2000);
     }
 
-    // PRD: Simulate matchmaking with realistic timing
-    simulateMatchmaking() {
-        // Random success time between 8-25 seconds
+    // PRD: Connect to real matchmaking backend
+    connectToRealMatchmaking() {
+        const city = this.selectedCity.toLowerCase();
+        const playerId = this.getPlayerId();
+        const playerName = this.getPlayerName();
+
+        console.log(`🌐 Connecting to real matchmaking for ${city} as ${playerName}`);
+
+        try {
+            // Close existing connection if any
+            if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                this.websocket.close();
+            }
+
+            // Connect to backend WebSocket
+            const wsUrl = `ws://localhost:8000/matchmaking/ws/${playerId}`;
+            this.websocket = new WebSocket(wsUrl);
+
+            this.websocket.onopen = () => {
+                console.log('🎮 Connected to matchmaking server');
+
+                // Join the city-specific queue
+                this.websocket.send(JSON.stringify({
+                    type: 'join_queue',
+                    player_name: playerName,
+                    city: city
+                }));
+
+                console.log(`📍 Joined ${city} matchmaking queue`);
+            };
+
+            this.websocket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.log('🎮 Matchmaking message:', data);
+
+                if (data.type === 'match_found') {
+                    this.handleRealMatchFound(data);
+                } else if (data.type === 'matchmaking_timeout') {
+                    this.handleSearchTimeout();
+                } else if (data.type === 'queue_status') {
+                    this.updateQueueInfo(data);
+                }
+            };
+
+            this.websocket.onerror = (error) => {
+                console.error('🎮 WebSocket error:', error);
+                // Fall back to simulation if backend unavailable
+                this.fallbackToSimulation();
+            };
+
+            this.websocket.onclose = () => {
+                console.log('🎮 WebSocket closed');
+            };
+
+        } catch (error) {
+            console.error('🎮 Failed to connect:', error);
+            this.fallbackToSimulation();
+        }
+    }
+
+    getPlayerId() {
+        // Use authenticated user ID if available
+        if (typeof authManager !== 'undefined' && authManager.user) {
+            return authManager.user.id;
+        }
+        // Fallback to localStorage player ID
+        let playerId = localStorage.getItem('pcd_player_id');
+        if (!playerId) {
+            playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('pcd_player_id', playerId);
+        }
+        return playerId;
+    }
+
+    getPlayerName() {
+        if (typeof authManager !== 'undefined' && authManager.user) {
+            return authManager.user.username || authManager.user.name;
+        }
+        if (typeof gameState !== 'undefined' && gameState.playerName) {
+            return gameState.playerName;
+        }
+        return 'Player_' + Math.floor(1000 + Math.random() * 9000);
+    }
+
+    handleRealMatchFound(data) {
+        console.log('🎯 Real match found!', data);
+        this.stopSearch();
+
+        // Store match data in gameState
+        if (typeof gameState !== 'undefined') {
+            gameState.gameId = data.game_id;
+            gameState.gameMode = 'online';
+            gameState.currentGame = data.game_state;
+            gameState.city = data.city || this.selectedCity.toLowerCase();
+            gameState.opponentName = data.opponent?.name || 'Opponent';
+
+            // Set player role
+            if (data.your_role === 'player1') {
+                gameState.playerId = data.game_state.player1.id;
+                gameState.opponentId = data.game_state.player2.id;
+                gameState.playerCandies = Array.from(data.game_state.player1.owned_candies || []);
+                gameState.opponentCandies = Array.from(data.game_state.player2.owned_candies || []);
+            } else {
+                gameState.playerId = data.game_state.player2.id;
+                gameState.opponentId = data.game_state.player1.id;
+                gameState.playerCandies = Array.from(data.game_state.player2.owned_candies || []);
+                gameState.opponentCandies = Array.from(data.game_state.player1.owned_candies || []);
+            }
+        }
+
+        this.setMatchFoundStatus();
+        this.showMatchFoundOverlay();
+
+        setTimeout(() => {
+            this.proceedToCandySelection();
+        }, 2000);
+    }
+
+    updateQueueInfo(data) {
+        const queueInfoEl = document.getElementById('queue-info-page');
+        if (queueInfoEl) {
+            queueInfoEl.style.display = 'block';
+            queueInfoEl.innerHTML = `
+                <div class="text-sm text-gray-600">
+                    Position: ${data.position} of ${data.total_waiting} waiting
+                </div>
+            `;
+        }
+    }
+
+    fallbackToSimulation() {
+        console.log('⚠️ Falling back to simulated matchmaking');
+        // Random success time between 8-25 seconds for offline/demo mode
         const successTime = 8000 + Math.random() * 17000;
-        
         this.searchTimeout = setTimeout(() => {
             if (this.isSearching) {
                 this.handleMatchFound();
@@ -167,18 +299,23 @@ class PRDMatchmakingManager {
         }, successTime);
     }
 
+    // Legacy simulate function - now connects to real backend
+    simulateMatchmaking() {
+        this.connectToRealMatchmaking();
+    }
+
     // PRD: Handle successful match
     handleMatchFound() {
         console.log('🎯 PRD: Match found!');
-        
+
         this.stopSearch();
-        
+
         // PRD: Update opponent status
         this.setMatchFoundStatus();
-        
+
         // Show match found overlay
         this.showMatchFoundOverlay();
-        
+
         // Wait 2 seconds then proceed to candy selection
         setTimeout(() => {
             this.proceedToCandySelection();
@@ -188,9 +325,9 @@ class PRDMatchmakingManager {
     // PRD: Handle 30-second timeout (no players found)
     handleSearchTimeout() {
         console.log('⏰ PRD: Search timeout after 30 seconds');
-        
+
         this.stopSearch();
-        
+
         // PRD: Show enhanced timeout message with statistics
         this.showEnhancedTimeoutModal();
     }
@@ -199,7 +336,7 @@ class PRDMatchmakingManager {
         const city = this.selectedCity;
         const timeSlot = this.getCurrentTimeSlot();
         const suggestions = this.getTimeoutSuggestions(city, timeSlot);
-        
+
         if (typeof uxManager !== 'undefined') {
             uxManager.showModal(
                 '⏰ No Players Found',
@@ -263,7 +400,7 @@ class PRDMatchmakingManager {
 
     getTimeoutSuggestions(city, timeSlot) {
         const suggestions = [];
-        
+
         // Time-based suggestions
         if (timeSlot === 'Night' || timeSlot === 'Morning') {
             suggestions.push({
@@ -273,7 +410,7 @@ class PRDMatchmakingManager {
                 color: 'blue'
             });
         }
-        
+
         // City-based suggestions
         if (city === 'Oslo') {
             suggestions.push({
@@ -283,7 +420,7 @@ class PRDMatchmakingManager {
                 color: 'green'
             });
         }
-        
+
         // General suggestions
         suggestions.push({
             icon: '💡',
@@ -291,7 +428,7 @@ class PRDMatchmakingManager {
             description: 'Practice mode helps improve your skills while waiting',
             color: 'yellow'
         });
-        
+
         return suggestions;
     }
 
@@ -311,7 +448,7 @@ class PRDMatchmakingManager {
             uxManager.closeAllModals();
             uxManager.showNotification('🔄 Retrying search in 3 seconds...', 'info', 3000);
         }
-        
+
         setTimeout(() => {
             this.startPlayerSearch(this.selectedCity);
         }, 3000);
@@ -337,7 +474,7 @@ class PRDMatchmakingManager {
     // PRD: STEP 4 - Proceed to candy selection
     proceedToCandySelection() {
         console.log('🍭 PRD: Proceeding to candy selection');
-        
+
         // Hide match found overlay
         const overlay = document.getElementById('match-found-overlay');
         if (overlay) {
@@ -347,26 +484,26 @@ class PRDMatchmakingManager {
 
         // Set up game state for matched game
         this.setupMatchedGameState();
-        
+
         // PRD: Go to candy selection screen
         if (typeof showScreen === 'function') {
             showScreen('page4'); // Existing candy selection screen
-            
+
             // Initialize PRD-compliant candy selection
             this.initializePRDCandySelection();
         }
     }
 
     // ===== UTILITY FUNCTIONS =====
-    
+
     stopSearch() {
         this.isSearching = false;
-        
+
         if (this.searchTimeout) {
             clearTimeout(this.searchTimeout);
             this.searchTimeout = null;
         }
-        
+
         if (this.countdownInterval) {
             clearInterval(this.countdownInterval);
             this.countdownInterval = null;
@@ -390,7 +527,7 @@ class PRDMatchmakingManager {
     generateMockOpponent() {
         const names = ['Alex', 'Sam', 'Jordan', 'Casey', 'Morgan', 'Taylor', 'Riley', 'Avery'];
         const ratings = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
-        
+
         return {
             name: names[Math.floor(Math.random() * names.length)],
             rating: ratings[Math.floor(Math.random() * ratings.length)]
@@ -403,19 +540,19 @@ class PRDMatchmakingManager {
             gameState.selectedCity = this.selectedCity;
             gameState.isMatchmakingGame = true;
             gameState.opponentName = this.generateMockOpponent().name;
-            
+
             // Enhanced: Use the new enhanced candy pool system
             try {
                 console.log(`🍭 PRD: Using enhanced candy pool for ${this.selectedCity}`);
-                
+
                 if (typeof generatePRDEnhancedCandies === 'function') {
                     const enhancedCandies = generatePRDEnhancedCandies(this.selectedCity);
-                    
+
                     gameState.playerCandies = enhancedCandies.playerCandies;
                     gameState.opponentCandies = enhancedCandies.opponentCandies;
                     gameState.sessionId = enhancedCandies.sessionId;
                     gameState.difficulty = enhancedCandies.difficulty;
-                    
+
                     console.log(`✅ PRD Enhanced candy allocation:`, {
                         city: this.selectedCity,
                         difficulty: enhancedCandies.difficulty,
@@ -423,23 +560,23 @@ class PRDMatchmakingManager {
                         opponentCandies: gameState.opponentCandies.length,
                         sessionId: enhancedCandies.sessionId
                     });
-                    
+
                     // Validate the candy pools
                     this.validateCandyPools(gameState.playerCandies, gameState.opponentCandies);
-                    
+
                 } else {
                     throw new Error('Enhanced candy pool system not available');
                 }
-                
+
             } catch (error) {
                 console.warn('⚠️ Enhanced candy pool failed, falling back to legacy system:', error);
-                
+
                 // Fallback to original system
                 if (typeof generateUniqueGameCandies === 'function') {
                     const candySets = generateUniqueGameCandies();
                     gameState.playerCandies = candySets.playerCandies;
                     gameState.opponentCandies = candySets.opponentCandies;
-                    
+
                     console.log('🔄 Using legacy candy generation as fallback');
                 } else {
                     console.error('❌ No candy generation system available!');
@@ -451,19 +588,19 @@ class PRDMatchmakingManager {
     // Validate generated candy pools
     validateCandyPools(playerCandies, opponentCandies) {
         console.log('🔍 PRD: Validating candy pools...');
-        
+
         // Check for duplicates within each pool
         const playerSet = new Set(playerCandies);
         const opponentSet = new Set(opponentCandies);
-        
+
         if (playerSet.size !== playerCandies.length) {
             console.error('❌ Player candies contain duplicates!', playerCandies);
         }
-        
+
         if (opponentSet.size !== opponentCandies.length) {
             console.error('❌ Opponent candies contain duplicates!', opponentCandies);
         }
-        
+
         // Check for overlaps between pools
         const overlap = playerCandies.filter(candy => opponentCandies.includes(candy));
         if (overlap.length > 0) {
@@ -471,18 +608,18 @@ class PRDMatchmakingManager {
         } else {
             console.log('✅ Candy pools are valid - no overlaps, no duplicates');
         }
-        
+
         // Show pool balance if enhanced system is available
         if (typeof getEnhancedCandyPool === 'function') {
             const enhancedPool = getEnhancedCandyPool();
-            
+
             console.log('📊 Player candy balance:');
             enhancedPool.validatePoolBalance(playerCandies);
-            
+
             console.log('📊 Opponent candy balance:');
             enhancedPool.validatePoolBalance(opponentCandies);
         }
-        
+
         return {
             playerValid: playerSet.size === playerCandies.length,
             opponentValid: opponentSet.size === opponentCandies.length,
@@ -493,48 +630,48 @@ class PRDMatchmakingManager {
     initializePRDCandySelection() {
         // This will be implemented in the next step
         console.log('🍭 PRD: Initializing candy selection with timer');
-        
+
         // PRD: Set candy selection status
         this.setCandySelectionStatus();
-        
+
         // Start realistic opponent behavior simulation
         this.simulateRealisticOpponentBehavior();
-        
+
         if (typeof initializePoisonSelection === 'function') {
             initializePoisonSelection();
         }
-        
+
         // Start candy selection timer (will be implemented next)
         this.startCandySelectionTimer();
     }
 
     startCandySelectionTimer() {
         console.log('⏰ PRD: Starting candy selection timer (30s)');
-        
+
         this.candyTimeRemaining = this.candySelectionTimeLimit;
         this.candyTimerInterval = null;
         this.candyWarningShown = false;
-        
+
         // Add timer UI to the candy selection screen
         this.addCandyTimerUI();
-        
+
         // Start countdown
         this.candyTimerInterval = setInterval(() => {
             this.candyTimeRemaining--;
             this.updateCandyTimerUI();
-            
+
             // PRD: Show warning at 20 seconds
             if (this.candyTimeRemaining === this.candyWarningTime && !this.candyWarningShown) {
                 this.showCandySelectionWarning();
             }
-            
+
             // PRD: Handle timeout at 30 seconds
             if (this.candyTimeRemaining <= 0) {
                 this.handleCandySelectionTimeout();
             }
-            
+
         }, 1000);
-        
+
         // Also simulate opponent candy selection
         this.simulateOpponentCandySelection();
     }
@@ -543,13 +680,13 @@ class PRDMatchmakingManager {
     addCandyTimerUI() {
         const candyScreen = document.getElementById('page4');
         if (!candyScreen) return;
-        
+
         // Remove existing timer if present
         const existingTimer = document.getElementById('prd-candy-timer');
         if (existingTimer) {
             existingTimer.remove();
         }
-        
+
         // Create timer UI
         const timerHTML = `
             <div id="prd-candy-timer" class="fixed top-4 right-4 bg-white shadow-lg rounded-lg p-4 border-2 border-blue-500 z-40">
@@ -565,7 +702,7 @@ class PRDMatchmakingManager {
                 </div>
             </div>
         `;
-        
+
         candyScreen.insertAdjacentHTML('afterbegin', timerHTML);
     }
 
@@ -573,17 +710,17 @@ class PRDMatchmakingManager {
     updateCandyTimerUI() {
         const timeDisplay = document.getElementById('candy-time-display');
         const progressBar = document.getElementById('candy-time-progress');
-        
+
         if (timeDisplay) {
             const minutes = Math.floor(this.candyTimeRemaining / 60);
             const seconds = this.candyTimeRemaining % 60;
             timeDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         }
-        
+
         if (progressBar) {
             const progress = (this.candyTimeRemaining / this.candySelectionTimeLimit) * 100;
             progressBar.style.width = `${progress}%`;
-            
+
             // Change color as time runs out
             if (this.candyTimeRemaining <= 10) {
                 progressBar.style.backgroundColor = '#dc2626'; // Red
@@ -596,7 +733,7 @@ class PRDMatchmakingManager {
     // PRD: Show warning at 20 seconds
     showCandySelectionWarning() {
         this.candyWarningShown = true;
-        
+
         if (typeof uxManager !== 'undefined') {
             uxManager.showModal(
                 '⚠️ Time Warning',
@@ -627,16 +764,16 @@ class PRDMatchmakingManager {
     // PRD: Handle 30-second timeout
     handleCandySelectionTimeout() {
         console.log('⏰ PRD: Candy selection timeout');
-        
+
         // Clear timeout handlers
         this.clearTimeoutHandler('candySelection');
-        
+
         // Stop the timer
         if (this.candyTimerInterval) {
             clearInterval(this.candyTimerInterval);
             this.candyTimerInterval = null;
         }
-        
+
         // PRD: Show enhanced timeout modal
         this.showCandyTimeoutModal();
     }
@@ -689,10 +826,10 @@ class PRDMatchmakingManager {
                 ]
             );
         }
-        
+
         // Issue refund
         this.refundGameCost();
-        
+
         // Clean up UI
         this.removeCandyTimerUI();
     }
@@ -700,15 +837,15 @@ class PRDMatchmakingManager {
     // Simulate opponent candy selection
     simulateOpponentCandySelection() {
         const opponentStatusElement = document.getElementById('opponent-status');
-        
+
         // Random time between 5-25 seconds for opponent to "select"
         const opponentTime = 5000 + Math.random() * 20000;
-        
+
         setTimeout(() => {
             if (this.candyTimerInterval) { // Only if timer is still running
                 // PRD: Update opponent status to confirmed
                 this.setOpponentConfirmedStatus();
-                
+
                 // Update local status element if it exists
                 if (opponentStatusElement) {
                     opponentStatusElement.textContent = 'Opponent has confirmed!';
@@ -730,16 +867,16 @@ class PRDMatchmakingManager {
     // Handle player candy confirmation (called when player confirms)
     handlePlayerCandyConfirmation() {
         console.log('✅ PRD: Player confirmed candy selection');
-        
+
         // Stop the timer
         if (this.candyTimerInterval) {
             clearInterval(this.candyTimerInterval);
             this.candyTimerInterval = null;
         }
-        
+
         // PRD: Update opponent status to show player confirmed
         this.setPlayerConfirmedStatus();
-        
+
         // Update local UI elements
         const opponentStatus = document.getElementById('opponent-status');
         if (opponentStatus) {
@@ -747,7 +884,7 @@ class PRDMatchmakingManager {
             opponentStatus.classList.add('text-blue-600');
             opponentStatus.classList.remove('text-gray-500');
         }
-        
+
         // Wait for opponent (or simulate it)
         this.waitForOpponentConfirmation();
     }
@@ -763,15 +900,15 @@ class PRDMatchmakingManager {
     // Handle opponent confirmation
     handleOpponentConfirmation() {
         console.log('✅ PRD: Both players confirmed - starting game');
-        
+
         // Remove timer UI
         this.removeCandyTimerUI();
-        
+
         // Show game starting notification
         if (typeof uxManager !== 'undefined') {
             uxManager.showNotification('🎮 Both players ready! Starting game...', 'success', 2000);
         }
-        
+
         // Proceed to gameplay
         setTimeout(() => {
             this.startGameplay();
@@ -781,17 +918,17 @@ class PRDMatchmakingManager {
     // Start the actual gameplay
     startGameplay() {
         console.log('🎮 PRD: Starting synchronized gameplay');
-        
+
         // Navigate to game screen
         if (typeof showScreen === 'function') {
             showScreen('page3');
         }
-        
+
         // Initialize game board
         if (typeof initializeGameBoard === 'function') {
             initializeGameBoard();
         }
-        
+
         // Start game timer if needed
         if (typeof startGameTimer === 'function') {
             startGameTimer();
@@ -825,13 +962,13 @@ class PRDMatchmakingManager {
     }
 
     // ===== OPPONENT STATUS MANAGEMENT =====
-    
+
     updateOpponentStatus(status, context = 'general') {
         console.log(`👤 PRD: Updating opponent status - ${status} (${context})`);
-        
+
         // Update various opponent status displays
         this.updateOpponentStatusElements(status, context);
-        
+
         // Show status notifications if needed
         if (context === 'important') {
             if (typeof uxManager !== 'undefined') {
@@ -848,7 +985,7 @@ class PRDMatchmakingManager {
             'player-opponent-status',
             'game-opponent-status'
         ];
-        
+
         statusElements.forEach(elementId => {
             const element = document.getElementById(elementId);
             if (element) {
@@ -856,7 +993,7 @@ class PRDMatchmakingManager {
                 element.className = this.getStatusClassName(context);
             }
         });
-        
+
         // Update breadcrumb or header if needed
         this.updateHeaderOpponentStatus(status);
     }
@@ -884,11 +1021,11 @@ class PRDMatchmakingManager {
         const pageHeaders = document.querySelectorAll('h2, h3');
         pageHeaders.forEach(header => {
             if (header.textContent.includes('opponent') || header.textContent.includes('player')) {
-                const statusSpan = header.querySelector('.opponent-status-inline') || 
-                                 document.createElement('span');
+                const statusSpan = header.querySelector('.opponent-status-inline') ||
+                    document.createElement('span');
                 statusSpan.className = 'opponent-status-inline text-sm text-gray-500 ml-2';
                 statusSpan.textContent = `(${status})`;
-                
+
                 if (!header.querySelector('.opponent-status-inline')) {
                     header.appendChild(statusSpan);
                 }
@@ -897,7 +1034,7 @@ class PRDMatchmakingManager {
     }
 
     // ===== OPPONENT STATUS FLOW STATES =====
-    
+
     // During player search
     setSearchingStatus() {
         this.updateOpponentStatus('Looking for players...', 'searching');
@@ -943,26 +1080,26 @@ class PRDMatchmakingManager {
     }
 
     // ===== ENHANCED SIMULATION FOR REALISTIC OPPONENT BEHAVIOR =====
-    
+
     simulateRealisticOpponentBehavior() {
         const behaviors = [
-            { 
-                delay: 3000, 
-                status: 'Opponent is reviewing candies...', 
-                context: 'waiting' 
+            {
+                delay: 3000,
+                status: 'Opponent is reviewing candies...',
+                context: 'waiting'
             },
-            { 
-                delay: 8000, 
-                status: 'Opponent is considering options...', 
-                context: 'waiting' 
+            {
+                delay: 8000,
+                status: 'Opponent is considering options...',
+                context: 'waiting'
             },
-            { 
-                delay: 15000, 
-                status: 'Opponent is making final choice...', 
-                context: 'waiting' 
+            {
+                delay: 15000,
+                status: 'Opponent is making final choice...',
+                context: 'waiting'
             }
         ];
-        
+
         behaviors.forEach(behavior => {
             setTimeout(() => {
                 if (this.candyTimerInterval) { // Only if timer is still running
@@ -973,12 +1110,12 @@ class PRDMatchmakingManager {
     }
 
     // ===== DISCONNECTION AND RECONNECTION HANDLING =====
-    
+
     simulateOpponentDisconnection() {
         console.log('📡 PRD: Simulating opponent disconnection');
-        
+
         this.setDisconnectedStatus();
-        
+
         if (typeof uxManager !== 'undefined') {
             uxManager.showModal(
                 '📡 Connection Issue',
@@ -1006,7 +1143,7 @@ class PRDMatchmakingManager {
                     }
                 ]
             );
-            
+
             this.startReconnectionTimer();
         }
     }
@@ -1014,14 +1151,14 @@ class PRDMatchmakingManager {
     startReconnectionTimer() {
         let timeRemaining = 15;
         const countdownElement = document.getElementById('reconnect-countdown');
-        
+
         const reconnectInterval = setInterval(() => {
             timeRemaining--;
-            
+
             if (countdownElement) {
                 countdownElement.textContent = timeRemaining;
             }
-            
+
             if (timeRemaining <= 0) {
                 clearInterval(reconnectInterval);
                 this.handleReconnectionTimeout();
@@ -1035,21 +1172,21 @@ class PRDMatchmakingManager {
 
     handleSuccessfulReconnection() {
         console.log('✅ PRD: Opponent reconnected successfully');
-        
+
         this.setReconnectedStatus();
-        
+
         if (typeof uxManager !== 'undefined') {
             uxManager.closeAllModals();
             uxManager.showNotification('✅ Opponent reconnected! Game resuming...', 'success', 3000);
         }
-        
+
         // Resume game state
         this.resumeAfterReconnection();
     }
 
     handleReconnectionTimeout() {
         console.log('⏰ PRD: Reconnection timeout');
-        
+
         if (typeof uxManager !== 'undefined') {
             uxManager.closeAllModals();
             uxManager.showModal(
@@ -1080,7 +1217,7 @@ class PRDMatchmakingManager {
                 ]
             );
         }
-        
+
         // Refund the user's coins
         this.refundGameCost();
     }
@@ -1117,7 +1254,7 @@ class PRDMatchmakingManager {
     }
 
     // ===== COMPREHENSIVE TIMEOUT HANDLING =====
-    
+
     // Initialize timeout handlers for all game phases
     initializeTimeoutHandlers() {
         this.timeoutHandlers = {
@@ -1131,9 +1268,9 @@ class PRDMatchmakingManager {
     // PRD: Gameplay timeout handling
     handleGameplayTimeout() {
         console.log('⏰ PRD: Gameplay timeout');
-        
+
         this.clearTimeoutHandler('gamePlay');
-        
+
         if (typeof uxManager !== 'undefined') {
             uxManager.showModal(
                 '⏰ Game Timeout',
@@ -1170,7 +1307,7 @@ class PRDMatchmakingManager {
                 ]
             );
         }
-        
+
         // Issue partial refund
         this.issuePartialRefund();
     }
@@ -1179,7 +1316,7 @@ class PRDMatchmakingManager {
     setTimeoutHandler(type, handler, delay) {
         // Clear existing handler
         this.clearTimeoutHandler(type);
-        
+
         // Set new handler
         this.timeoutHandlers[type] = setTimeout(handler, delay);
     }
@@ -1213,14 +1350,14 @@ class PRDMatchmakingManager {
     // PRD: Initialize timeout system
     initializeTimeoutSystem() {
         this.initializeTimeoutHandlers();
-        
+
         // Set up global timeout handlers
         this.setTimeoutHandler('search', () => this.handleSearchTimeout(), this.searchTimeLimit * 1000);
         this.setTimeoutHandler('candySelection', () => this.handleCandySelectionTimeout(), this.candySelectionTimeLimit * 1000);
-        
+
         // Set up gameplay timeout (5 minutes)
         this.setTimeoutHandler('gamePlay', () => this.handleGameplayTimeout(), 300000);
-        
+
         console.log('⏰ PRD: Timeout system initialized');
     }
 }
@@ -1240,7 +1377,7 @@ function initializePRDMatchmaking() {
 // PRD: Start city-specific player search
 function startPRDCitySearch(city) {
     console.log(`🌍 PRD: Starting city search for ${city}`);
-    
+
     const manager = initializePRDMatchmaking();
     manager.startPlayerSearch(city);
 }
@@ -1302,9 +1439,9 @@ if (typeof window !== 'undefined') {
     window.startPRDCitySearch = startPRDCitySearch;
     window.cancelPlayerSearch = cancelPlayerSearch;
     window.showSearchTips = showSearchTips;
-    
+
     // Global function to handle PRD candy confirmation
-    window.handlePRDCandyConfirmation = function() {
+    window.handlePRDCandyConfirmation = function () {
         if (prdMatchmaking && prdMatchmaking.candyTimerInterval) {
             console.log('🍭 PRD: Player confirmed candy selection globally');
             prdMatchmaking.handlePlayerCandyConfirmation();

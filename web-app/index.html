@@ -1,101 +1,235 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Poison Candy Duel - Ultimate Gaming Experience</title>
-    <meta name="description" content="Play Poison Candy Duel - A thrilling strategy game where you pick candies and avoid the poison. Challenge AI, friends, or players worldwide!">
-    
+    <meta name="description"
+        content="Play Poison Candy Duel - A thrilling strategy game where you pick candies and avoid the poison. Challenge AI, friends, or players worldwide!">
+
     <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍭</text></svg>">
-    
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍭</text></svg>">
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
     <!-- Styles -->
     <link rel="stylesheet" href="css/main.css">
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Google Identity Services for OAuth -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
+
 <body>
-    <!-- Connection Status Indicator -->
-    <div id="connection-status" class="connection-status connected">
-        <span class="connection-dot"></span>
-        <span class="connection-text">Connected</span>
-    </div>
-    
+
+
     <!-- Loading Screen -->
-    <div id="loading-screen" class="loading-screen">
-        <div class="loading-container">
-            <div class="game-logo">
-                <h1>🍭 Poison Candy Duel</h1>
-                <p>Ultimate Gaming Experience</p>
+    <div id="loading-screen"
+        class="screen active flex items-center justify-center bg-gradient-to-br from-primary-dark to-primary">
+        <div class="loading-container text-white text-center">
+            <div class="game-logo mb-6 animate-pulse">
+                <div
+                    class="w-32 h-32 bg-white/10 rounded-3xl flex items-center justify-center mx-auto mb-6 backdrop-blur-md border border-white/20 shadow-2xl">
+                    <i data-lucide="flask-conical" class="w-20 h-20 text-white"></i>
+                </div>
+                <h1 class="text-5xl font-display font-bold tracking-tighter mb-2">PCD</h1>
+                <p class="text-xl opacity-80 font-medium italic">Poison Candy Duel</p>
             </div>
-            <div class="loading-spinner"></div>
-            <div class="loading-text">Loading your game...</div>
+            <div class="relative w-64 h-2 bg-white/10 rounded-full mx-auto mb-6 overflow-hidden">
+                <div class="absolute inset-0 bg-white/40 animate-shimmer"
+                    style="width: 100%; transform: translateX(-100%);"></div>
+                <div class="h-full bg-white rounded-full transition-all duration-500" id="loading-progress"
+                    style="width: 10%;"></div>
+            </div>
+            <p class="loading-text text-lg opacity-90 font-medium"><i data-lucide="loader-2"
+                    class="w-5 h-5 mr-3 animate-spin inline-block"></i> Brewing the poison...</p>
         </div>
     </div>
 
     <!-- Premium Main Menu Container -->
     <div class="min-h-screen bg-gradient-to-br from-secondary-light to-white">
+        <!-- Page 0: Auth Selection -->
+        <div id="page0" class="screen">
+            <div class="container mx-auto px-4 min-h-screen flex items-center justify-center py-12">
+                <div class="max-w-md w-full">
+                    <div class="text-center mb-6">
+                        <div
+                            class="w-24 h-24 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-primary/20 shadow-lg">
+                            <i data-lucide="shield-check" class="w-12 h-12 text-primary"></i>
+                        </div>
+                        <h2 class="text-3xl font-display font-bold text-primary mb-2">Welcome Player</h2>
+                        <p class="text-gray-600">Choose how you want to play today</p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <!-- Auth Mode Toggle -->
+                        <div class="flex bg-gray-100 rounded-xl p-1 mb-6">
+                            <button id="login-tab" onclick="authManager.setAuthMode('login')"
+                                class="flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-all bg-white shadow text-primary">
+                                Login
+                            </button>
+                            <button id="signup-tab" onclick="authManager.setAuthMode('signup')"
+                                class="flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-all text-gray-500">
+                                Sign Up
+                            </button>
+                        </div>
+
+                        <!-- Email/Password Form -->
+                        <form id="auth-form" onsubmit="authManager.handleAuthSubmit(event)" class="space-y-4">
+                            <!-- Username (Signup only) -->
+                            <div id="username-field" class="hidden">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                                <div class="relative">
+                                    <i data-lucide="user"
+                                        class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                                    <input type="text" id="auth-username" placeholder="Choose a username"
+                                        class="w-full pl-11 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-primary focus:ring-0 transition-colors">
+                                </div>
+                            </div>
+
+                            <!-- Email -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                <div class="relative">
+                                    <i data-lucide="mail"
+                                        class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                                    <input type="email" id="auth-email" placeholder="your@email.com" required
+                                        class="w-full pl-11 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-primary focus:ring-0 transition-colors">
+                                </div>
+                            </div>
+
+                            <!-- Password -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                                <div class="relative">
+                                    <i data-lucide="lock"
+                                        class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                                    <input type="password" id="auth-password" placeholder="••••••••" required
+                                        minlength="6"
+                                        class="w-full pl-11 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-primary focus:ring-0 transition-colors">
+                                </div>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <button type="submit" id="auth-submit-btn"
+                                class="w-full py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary-dark transition-colors flex items-center justify-center space-x-2">
+                                <i data-lucide="log-in" class="w-5 h-5"></i>
+                                <span id="auth-submit-text">Login</span>
+                            </button>
+                        </form>
+
+                        <div class="flex items-center space-x-4 py-2">
+                            <div class="h-px bg-gray-200 flex-1"></div>
+                            <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">or</span>
+                            <div class="h-px bg-gray-200 flex-1"></div>
+                        </div>
+
+                        <!-- Guest Login -->
+                        <button onclick="authManager.login('guest')"
+                            class="w-full flex items-center justify-between p-4 bg-gray-50 border-2 border-transparent rounded-2xl hover:bg-gray-100 transition-all group">
+                            <div class="flex items-center space-x-4">
+                                <div
+                                    class="w-12 h-12 bg-gray-200 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                    <i data-lucide="user" class="w-6 h-6 text-gray-600"></i>
+                                </div>
+                                <div class="text-left">
+                                    <div class="font-bold text-gray-700">Play as Guest</div>
+                                    <div class="text-xs text-gray-500">No account needed</div>
+                                </div>
+                            </div>
+                            <i data-lucide="arrow-right"
+                                class="w-5 h-5 text-gray-300 group-hover:text-gray-600 translation-all"></i>
+                        </button>
+                    </div>
+
+                    <p class="mt-8 text-center text-xs text-gray-400 px-8">
+                        By continuing, you agree to our Terms of Service and Privacy Policy.
+                    </p>
+                </div>
+            </div>
+        </div>
+
         <!-- Page 1: Premium Main Menu -->
         <div id="page1" class="screen">
-            <div class="container mx-auto px-4 py-8">
-                <!-- Enhanced header with profile info -->
-                <header class="flex justify-between items-center mb-12">
-                    <div class="flex items-center space-x-4">
-                        <div class="w-12 h-12 rounded-full bg-primary flex items-center justify-center">
-                            <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                            </svg>
+            <div class="container mx-auto px-4 pt-2 pb-6">
+                <!-- Enhanced Navbar Header -->
+                <header
+                    class="flex justify-between items-center mb-6 py-4 px-6 bg-white/50 backdrop-blur-md rounded-2xl border border-white/20 shadow-sm">
+                    <div class="flex items-center space-x-3">
+                        <div
+                            class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
+                            <i data-lucide="flask-conical" class="w-6 h-6 text-white"></i>
                         </div>
-                        <div>
-                            <h1 class="text-2xl font-display font-bold text-primary">Poison Candy Duel</h1>
-                            <div class="flex items-center space-x-4 text-sm text-gray-600">
-                                <button class="currency-display flex items-center hover:bg-gray-100 rounded-lg px-3 py-1 transition-colors cursor-pointer" onclick="showCoinsInfo()">
-                                    <svg class="w-4 h-4 mr-1 text-warning" fill="currentColor" viewBox="0 0 24 24">
-                                        <circle cx="12" cy="12" r="3"/>
-                                        <path d="M12 1l3.09 6.26L22 9l-5.91 3.07L19 22l-7-3.64L5 22l2.91-9.93L2 9l6.91-1.74L12 1z"/>
-                                    </svg>
-                                    <span id="coins-count">10000</span>
-                                    <span class="ml-1 text-xs">coins</span>
+                        <h1 class="text-xl font-display font-bold text-primary tracking-tight">Poison Candy Duel</h1>
+                    </div>
+
+                    <div class="flex items-center space-x-4">
+                        <!-- Currency Displays -->
+                        <div class="flex items-center space-x-2 bg-gray-100/50 p-1 rounded-xl">
+                            <button
+                                class="currency-display flex items-center hover:bg-white rounded-lg px-3 py-1.5 transition-all cursor-pointer shadow-sm hover:shadow-md"
+                                onclick="showCoinsInfo()">
+                                <i data-lucide="coins" class="w-4 h-4 mr-2 text-warning"></i>
+                                <span id="coins-count" class="font-bold text-gray-800">10,000</span>
+                                <span class="ml-1 text-xs text-gray-500 font-medium">coins</span>
+                            </button>
+                            <button
+                                class="currency-display flex items-center hover:bg-white rounded-lg px-3 py-1.5 transition-all cursor-pointer shadow-sm hover:shadow-md"
+                                onclick="showDiamondsInfo()">
+                                <i data-lucide="gem" class="w-4 h-4 mr-2 text-success"></i>
+                                <span id="diamonds-count" class="font-bold text-gray-800">50</span>
+                                <span class="ml-1 text-xs text-gray-500 font-medium">diamonds</span>
+                            </button>
+                            <button
+                                class="daily-reward-btn flex items-center hover:bg-yellow-100/80 rounded-lg px-3 py-1.5 transition-all cursor-pointer bg-yellow-50 border border-yellow-100"
+                                onclick="showDailyRewardModal()" title="Claim daily reward">
+                                <i data-lucide="gift" class="w-4 h-4 mr-2 text-yellow-600"></i>
+                                <span class="text-xs text-yellow-700 font-bold uppercase">Daily</span>
+                            </button>
+                        </div>
+
+                        <div class="h-8 w-px bg-gray-200 mx-2"></div>
+
+                        <div class="flex items-center space-x-2">
+                            <!-- Action Buttons -->
+                            <button class="btn btn-warning btn-sm px-4 py-2 rounded-xl" onclick="showConversionModal()"
+                                title="Convert diamonds to coins">
+                                <i data-lucide="refresh-cw" class="w-4 h-4 mr-1.5"></i>
+                                Convert
+                            </button>
+                            <button class="btn btn-success btn-sm px-4 py-2 rounded-xl" onclick="showPurchaseModal()"
+                                title="Buy more diamonds">
+                                <i data-lucide="plus" class="w-4 h-4 mr-1.5"></i>
+                                Buy
+                            </button>
+
+                            <!-- Profile & Connection Status -->
+                            <div class="relative group">
+                                <button
+                                    class="flex items-center space-x-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl pl-1.5 pr-4 py-1.5 transition-all shadow-sm"
+                                    onclick="showScreen('page11')">
+                                    <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                        <i data-lucide="user" class="w-4 h-4 text-primary"></i>
+                                    </div>
+                                    <span class="text-sm font-bold text-gray-700">Profile</span>
                                 </button>
-                                <button class="currency-display flex items-center hover:bg-gray-100 rounded-lg px-3 py-1 transition-colors cursor-pointer" onclick="showDiamondsInfo()">
-                                    <svg class="w-4 h-4 mr-1 text-success" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M7 4V2a1 1 0 0 1 2 0v2h6V2a1 1 0 0 1 2 0v2h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2zm0 3a1 1 0 1 0 0 2h10a1 1 0 1 0 0-2H7z"/>
-                                    </svg>
-                                    <span id="diamonds-count">50</span>
-                                    <span class="ml-1 text-xs">diamonds</span>
-                                </button>
-                                <button class="daily-reward-btn flex items-center hover:bg-yellow-100 rounded-lg px-3 py-1 transition-colors cursor-pointer bg-yellow-50 border border-yellow-200" onclick="showDailyRewardModal()" title="Claim daily reward">
-                                    <svg class="w-4 h-4 mr-1 text-yellow-600" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M12 2l3.09 6.26L22 9l-5.91 3.07L19 22l-7-3.64L5 22l2.91-9.93L2 9l6.91-1.74L12 1z"/>
-                                    </svg>
-                                    <span class="text-xs text-yellow-600 font-medium">Daily</span>
-                                </button>
+                                <!-- Inline Connection Status -->
+                                <div id="connection-status"
+                                    class="absolute -top-2 -right-2 flex items-center px-2 py-0.5 bg-success/10 border border-success/30 rounded-full backdrop-blur-sm">
+                                    <span class="w-2 h-2 bg-success rounded-full animate-pulse mr-1.5"></span>
+                                    <span class="text-[10px] font-bold text-success uppercase">Connected</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="flex items-center space-x-3">
-                        <!-- Currency Management Buttons -->
-                        <button class="btn btn-warning btn-sm" onclick="showConversionModal()" title="Convert diamonds to coins">
-                            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M7 14l5-5 5 5z"/>
-                            </svg>
-                            Convert
-                        </button>
-                        <button class="btn btn-success btn-sm" onclick="showPurchaseModal()" title="Buy more diamonds">
-                            <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                            </svg>
-                            Buy
-                        </button>
-                        <button class="btn btn-secondary" onclick="showScreen('page11')">
-                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                            </svg>
-                            Profile
-                        </button>
                     </div>
                 </header>
 
@@ -103,7 +237,7 @@
                 <div class="text-center mb-8">
                     <h2 class="text-3xl font-display font-bold text-primary mb-4">Welcome to Poison Candy Duel</h2>
                     <p class="text-lg text-gray-600 max-w-2xl mx-auto">
-                        Challenge your strategy skills in this thrilling candy-picking game. 
+                        Challenge your strategy skills in this thrilling candy-picking game.
                         Collect 11 candies while avoiding the deadly poison. Choose your game mode below!
                     </p>
                 </div>
@@ -113,13 +247,11 @@
                     <!-- Online Play -->
                     <div class="menu-card" onclick="showScreen('page2')">
                         <div class="menu-card-icon">
-                            <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                            </svg>
+                            <span class="text-4xl">🌍</span>
                         </div>
-                        <h3 class="menu-card-title">🌍 Play Online</h3>
+                        <h3 class="menu-card-title">Play Online</h3>
                         <p class="menu-card-subtitle">
-                            Compete against players worldwide in different arenas. 
+                            Compete against players worldwide in different arenas.
                             Win coins and climb the leaderboard!
                         </p>
                         <div class="mt-4 text-sm text-gray-500">
@@ -132,13 +264,11 @@
                     <!-- Practice Mode -->
                     <div class="menu-card" onclick="showScreen('page7')">
                         <div class="menu-card-icon">
-                            <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M9 11H7v9h2v-9zm4 0h-2v9h2v-9zm4 0h-2v9h2v-9zm2-7v2H4V4h3V2h10v2h3zm-2 4H5v16h14V8z"/>
-                            </svg>
+                            <span class="text-4xl">🎯</span>
                         </div>
-                        <h3 class="menu-card-title">🤖 Practice Mode</h3>
+                        <h3 class="menu-card-title">Practice Mode</h3>
                         <p class="menu-card-subtitle">
-                            Perfect your skills against AI opponents. 
+                            Perfect your skills against AI opponents.
                             No risk, just pure strategy training!
                         </p>
                         <div class="mt-4 text-sm text-gray-500">
@@ -151,13 +281,11 @@
                     <!-- Friends Mode -->
                     <div class="menu-card" onclick="showScreen('page6')">
                         <div class="menu-card-icon">
-                            <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M16 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zm4 18v-6h2.5l-2.54-7.63c-.34-1.02-1.3-1.74-2.39-1.74-.34 0-.68.07-1 .2L13 8.5V7c0-.56-.45-1-1-1s-1 .44-1 1v3.5c0 .45.3.84.74.96L15 12.5v6H4l1.54-4.63c.34-1.02 1.3-1.74 2.39-1.74H9v-2H7.93c-.81 0-1.58.36-2.12 1L3 18.5V22h18v-2h-1z"/>
-                            </svg>
+                            <span class="text-4xl">👥</span>
                         </div>
-                        <h3 class="menu-card-title">👥 Play with Friends</h3>
+                        <h3 class="menu-card-title">Play with Friends</h3>
                         <p class="menu-card-subtitle">
-                            Create private rooms and challenge your friends. 
+                            Create private rooms and challenge your friends.
                             Share room codes for instant matches!
                         </p>
                         <div class="mt-4 text-sm text-gray-500">
@@ -170,37 +298,38 @@
                     <!-- Stats & Progress -->
                     <div class="menu-card" onclick="showScreen('page10')">
                         <div class="menu-card-icon">
-                            <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M16,11V3H8v6H2v12h20V11H16z M10,5h4v14h-4V5z M4,11h4v8H4V11z M20,19h-4v-6h4V19z"/>
-                            </svg>
+                            <span class="text-4xl">📊</span>
                         </div>
-                        <h3 class="menu-card-title">📊 Stats & Rankings</h3>
+                        <h3 class="menu-card-title">Stats & Rankings</h3>
                         <p class="menu-card-subtitle">
-                            Track your progress, view leaderboards, 
+                            Track your progress, view leaderboards,
                             and collect daily rewards!
                         </p>
                         <div class="mt-4 text-sm text-gray-500">
                             • Global leaderboards<br>
                             • Personal statistics<br>
                             • Daily rewards system
-                    </div>
                         </div>
                     </div>
-                    
+                </div>
+
                 <!-- Quick Stats -->
                 <div class="grid grid-cols-3 gap-4 max-w-lg mx-auto mb-8">
                     <div class="card text-center p-4">
-                        <div class="text-2xl mb-2">🎮</div>
+                        <div class="text-2xl mb-2"><i data-lucide="gamepad-2" class="w-8 h-8 mx-auto text-primary"></i>
+                        </div>
                         <div class="text-sm text-gray-600">Games Played</div>
                         <div class="text-xl font-bold text-primary" id="total-games">0</div>
-                </div>
+                    </div>
                     <div class="card text-center p-4">
-                        <div class="text-2xl mb-2">🏆</div>
+                        <div class="text-2xl mb-2"><i data-lucide="trophy" class="w-8 h-8 mx-auto text-success"></i>
+                        </div>
                         <div class="text-sm text-gray-600">Win Rate</div>
                         <div class="text-xl font-bold text-success" id="win-rate">0%</div>
                     </div>
                     <div class="card text-center p-4">
-                        <div class="text-2xl mb-2">⭐</div>
+                        <div class="text-2xl mb-2"><i data-lucide="sparkles" class="w-8 h-8 mx-auto text-warning"></i>
+                        </div>
                         <div class="text-sm text-gray-600">Rank</div>
                         <div class="text-xl font-bold text-warning">Beginner</div>
                     </div>
@@ -210,26 +339,26 @@
 
         <!-- Page 2: Premium City Selection -->
         <div id="page2" class="screen">
-            <div class="container mx-auto px-4 py-8">
+            <div class="container mx-auto px-4 pt-2 pb-6">
                 <!-- Breadcrumb Navigation -->
-                <nav class="breadcrumb mb-6">
+                <nav class="breadcrumb mb-2">
                     <ol class="flex items-center space-x-2 text-sm">
-                        <li><a href="#" onclick="showScreen('page1')" class="text-primary hover:text-primary-dark">🏠 Home</a></li>
+                        <li><a href="#" onclick="showScreen('page1')" class="text-primary hover:text-primary-dark"><i
+                                    data-lucide="home" class="w-4 h-4 inline-block -mt-1 mr-1"></i>
+                                Home</a></li>
                         <li class="text-gray-400">›</li>
                         <li class="text-gray-600">🌍 Online Arenas</li>
                     </ol>
                 </nav>
 
                 <!-- Enhanced header -->
-                <header class="flex items-center justify-between mb-8">
+                <header class="flex items-center justify-between mb-4">
                     <button class="btn btn-secondary" onclick="showScreen('page1')">
-                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                        </svg>
+                        <i data-lucide="arrow-left" class="w-5 h-5 mr-2"></i>
                         Back to Menu
                     </button>
-                    <div class="text-center">
-                    <h2 class="text-2xl font-display font-bold text-primary">Select Your Arena</h2>
+                    <div class="text-center mb-6">
+                        <h2 class="text-2xl font-display font-bold text-primary">Select Your Arena</h2>
                         <p class="text-sm text-gray-600">Choose your battlefield and stake your coins</p>
                     </div>
                     <div class="w-32"></div> <!-- Spacer for centering -->
@@ -238,7 +367,7 @@
                 <!-- Player Balance Display -->
                 <div class="card card-premium text-center p-4 max-w-md mx-auto mb-8">
                     <div class="flex items-center justify-center space-x-4">
-                        <div class="text-2xl">💰</div>
+                        <i data-lucide="wallet" class="w-6 h-6 text-warning"></i>
                         <div>
                             <div class="text-sm text-gray-600">Your Balance</div>
                             <div class="text-xl font-bold text-primary" id="player-balance">1000</div>
@@ -251,26 +380,28 @@
                     <!-- Dubai Arena -->
                     <div class="arena-card" data-arena="dubai">
                         <div class="p-6 text-center">
-                            <div class="text-6xl mb-4">🏙️</div>
+                            <div
+                                class="w-20 h-20 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary/20">
+                                <span class="text-5xl">🏙️</span>
+                            </div>
                             <h3 class="text-xl font-display font-bold text-primary mb-2">Dubai Arena</h3>
                             <p class="text-gray-600 mb-4">Luxury Desert Gaming</p>
-                            
+
                             <div class="arena-stats bg-gray-50 rounded-lg p-4 mb-4">
                                 <div class="text-sm text-gray-600 mb-2">Entry Cost</div>
                                 <div class="text-2xl font-bold text-primary">500 Coins</div>
                                 <div class="text-sm text-gray-500">Winner gets 950 coins</div>
                             </div>
-                            
+
                             <div class="arena-timer bg-blue-50 rounded-lg p-3 mb-4">
-                                <div class="text-sm text-blue-700">⏰ Turn Timer: 30 seconds</div>
+                                <div class="text-sm text-blue-700 flex items-center justify-center">
+                                    <i data-lucide="clock" class="w-4 h-4 mr-2"></i> Turn Timer: 30 seconds
+                                </div>
                             </div>
-                            
-                            <button class="btn btn-primary w-full arena-btn" 
-                                    onclick="enterArena('Dubai', 500, 950, 30)"
-                                    data-cost="500">
-                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                                </svg>
+
+                            <button class="btn btn-primary w-full arena-btn" onclick="enterArena('Dubai', 500, 950, 30)"
+                                data-cost="500">
+                                <i data-lucide="play" class="w-5 h-5 mr-2"></i>
                                 Enter Dubai Arena
                             </button>
                         </div>
@@ -279,26 +410,28 @@
                     <!-- Cairo Arena -->
                     <div class="arena-card" data-arena="cairo">
                         <div class="p-6 text-center">
-                            <div class="text-6xl mb-4">🏛️</div>
+                            <div
+                                class="w-20 h-20 bg-warning/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-warning/20">
+                                <span class="text-5xl">🏛️</span>
+                            </div>
                             <h3 class="text-xl font-display font-bold text-primary mb-2">Cairo Temple</h3>
                             <p class="text-gray-600 mb-4">Ancient Pharaoh Gaming</p>
-                            
+
                             <div class="arena-stats bg-gray-50 rounded-lg p-4 mb-4">
                                 <div class="text-sm text-gray-600 mb-2">Entry Cost</div>
                                 <div class="text-2xl font-bold text-orange-600">1000 Coins</div>
                                 <div class="text-sm text-gray-500">Winner gets 1900 coins</div>
                             </div>
-                            
+
                             <div class="arena-timer bg-orange-50 rounded-lg p-3 mb-4">
-                                <div class="text-sm text-orange-700">⏰ Turn Timer: 20 seconds</div>
+                                <div class="text-sm text-orange-700 flex items-center justify-center">
+                                    <i data-lucide="clock" class="w-4 h-4 mr-2"></i> Turn Timer: 20 seconds
+                                </div>
                             </div>
-                            
-                            <button class="btn btn-warning w-full arena-btn" 
-                                    onclick="enterArena('Cairo', 1000, 1900, 20)"
-                                    data-cost="1000">
-                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                                </svg>
+
+                            <button class="btn btn-warning w-full arena-btn"
+                                onclick="enterArena('Cairo', 1000, 1900, 20)" data-cost="1000">
+                                <i data-lucide="play" class="w-5 h-5 mr-2"></i>
                                 Enter Cairo Temple
                             </button>
                         </div>
@@ -307,65 +440,73 @@
                     <!-- Oslo Arena -->
                     <div class="arena-card" data-arena="oslo">
                         <div class="p-6 text-center">
-                            <div class="text-6xl mb-4">🏔️</div>
+                            <div
+                                class="w-20 h-20 bg-info/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-info/20">
+                                <span class="text-5xl">🏔️</span>
+                            </div>
                             <h3 class="text-xl font-display font-bold text-primary mb-2">Oslo Fjord</h3>
                             <p class="text-gray-600 mb-4">Nordic Winter Gaming</p>
-                            
+
                             <div class="arena-stats bg-gray-50 rounded-lg p-4 mb-4">
                                 <div class="text-sm text-gray-600 mb-2">Entry Cost</div>
                                 <div class="text-2xl font-bold text-blue-600">5000 Coins</div>
                                 <div class="text-sm text-gray-500">Winner gets 9500 coins</div>
                             </div>
-                            
+
                             <div class="arena-timer bg-red-50 rounded-lg p-3 mb-4">
-                                <div class="text-sm text-red-700">⏰ Turn Timer: 10 seconds</div>
+                                <div class="text-sm text-red-700 flex items-center justify-center">
+                                    <i data-lucide="clock" class="w-4 h-4 mr-2"></i> Turn Timer: 10 seconds
+                                </div>
                             </div>
-                            
-                            <button class="btn btn-danger w-full arena-btn" 
-                                    onclick="enterArena('Oslo', 5000, 9500, 10)"
-                                    data-cost="5000">
-                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                                </svg>
+
+                            <button class="btn btn-danger w-full arena-btn" onclick="enterArena('Oslo', 5000, 9500, 10)"
+                                data-cost="5000">
+                                <i data-lucide="play" class="w-5 h-5 mr-2"></i>
                                 Enter Oslo Fjord
                             </button>
-                            </div>
                         </div>
                     </div>
+                </div>
 
                 <!-- Matchmaking Section (for when matched players select city) -->
                 <div id="matchmaking-section" class="mb-8" style="display: none;">
                     <div class="card card-premium text-center p-8 max-w-md mx-auto">
-                        <div class="text-6xl mb-4">🌍</div>
+                        <div
+                            class="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-primary/20">
+                            <i data-lucide="globe" class="w-10 h-10 text-primary"></i>
+                        </div>
                         <h3 class="text-2xl font-display font-bold text-primary mb-2">Find Random Player</h3>
                         <p class="text-gray-600 mb-6">Connect with players from around the world</p>
-                        
+
                         <!-- Matchmaking Status -->
                         <div id="matchmaking-status" class="mb-6">
                             <div id="matchmaking-idle" class="text-sm text-gray-500">
                                 Ready to find an opponent
-                </div>
-                            <div id="matchmaking-searching" class="text-sm text-info animate-pulse" style="display: none;">
-                                🔍 Looking for players...
                             </div>
-                            <div id="matchmaking-found" class="text-sm text-success" style="display: none;">
-                                ✅ Player found! Connecting...
+                            <div id="matchmaking-searching"
+                                class="text-sm text-info animate-pulse flex items-center justify-center"
+                                style="display: none;">
+                                <i data-lucide="search" class="w-4 h-4 mr-2"></i> Looking for players...
+                            </div>
+                            <div id="matchmaking-found" class="text-sm text-success flex items-center justify-center"
+                                style="display: none;">
+                                <i data-lucide="check-circle-2" class="w-4 h-4 mr-2"></i> Player found! Connecting...
                             </div>
                         </div>
-                        
+
                         <!-- Matchmaking Button -->
                         <div class="space-y-4">
-                            <button id="find-player-btn" class="btn btn-primary btn-lg w-full" onclick="findRandomPlayer()">
-                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                                </svg>
+                            <button id="find-player-btn" class="btn btn-primary btn-lg w-full"
+                                onclick="findRandomPlayer()">
+                                <i data-lucide="search" class="w-5 h-5 mr-2"></i>
                                 Find Random Player
                             </button>
-                            <button id="cancel-matchmaking-btn" class="btn btn-secondary w-full" onclick="cancelMatchmaking()" style="display: none;">
+                            <button id="cancel-matchmaking-btn" class="btn btn-secondary w-full"
+                                onclick="cancelMatchmaking()" style="display: none;">
                                 Cancel Search
                             </button>
                         </div>
-                        
+
                         <!-- Queue Info -->
                         <div id="queue-info" class="mt-4 text-xs text-gray-400" style="display: none;">
                             <span id="queue-position">Position in queue: 1</span>
@@ -376,17 +517,17 @@
                 <!-- Online Gaming Stats -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                     <div class="card text-center p-4">
-                        <div class="text-3xl mb-2">🎯</div>
+                        <div class="text-2xl mb-2 text-primary"><i data-lucide="users" class="mx-auto"></i></div>
                         <div class="text-sm text-gray-600">Players Online</div>
                         <div class="text-xl font-bold text-primary" id="online-players-count">...</div>
                     </div>
                     <div class="card text-center p-4">
-                        <div class="text-3xl mb-2">⚡</div>
+                        <div class="text-2xl mb-2 text-success"><i data-lucide="zap" class="mx-auto"></i></div>
                         <div class="text-sm text-gray-600">Avg Match Time</div>
                         <div class="text-xl font-bold text-success">5s</div>
                     </div>
                     <div class="card text-center p-4">
-                        <div class="text-3xl mb-2">🏆</div>
+                        <div class="text-2xl mb-2 text-warning"><i data-lucide="trophy" class="mx-auto"></i></div>
                         <div class="text-sm text-gray-600">Games Today</div>
                         <div class="text-xl font-bold text-warning" id="games-today-count">...</div>
                     </div>
@@ -396,18 +537,21 @@
 
         <!-- Page 3: Premium Dubai Game Screen -->
         <div id="page3" class="screen">
-            <div class="container mx-auto px-4 py-6">
+            <div class="container mx-auto px-4 pt-2 pb-6">
                 <!-- Premium game header -->
                 <header class="card mb-6">
                     <div class="flex items-center justify-between p-4">
                         <div class="flex items-center space-x-6">
-                            <div class="text-4xl">🏙️</div>
+                            <div class="w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                <i data-lucide="building-2" class="text-white"></i>
+                            </div>
                             <div>
-                                <h2 class="font-display font-bold text-primary">Dubai Arena</h2>
+                                <h3 class="menu-card-title truncate flex items-center"><i data-lucide="globe"
+                                        class="w-5 h-5 mr-2 text-blue-300"></i> Online Arenas</h3>
                                 <p class="text-sm text-gray-600">Luxury Gaming Experience</p>
                             </div>
                         </div>
-                        
+
                         <div class="flex items-center space-x-4">
                             <div class="card bg-primary text-white px-4 py-2 text-center">
                                 <div class="text-sm font-mono">Player 1</div>
@@ -419,18 +563,14 @@
                                 <div class="font-bold" id="player2-progress">(0/11)</div>
                             </div>
                         </div>
-                        
+
                         <div class="flex space-x-2">
                             <button class="btn btn-secondary" onclick="showScreen('page1')">
-                                <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-                                </svg>
+                                <i data-lucide="home" class="w-4 h-4 mr-1"></i>
                                 Home
                             </button>
                             <button class="btn btn-secondary" onclick="showHelp()">
-                                <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
-                                </svg>
+                                <i data-lucide="help-circle" class="w-4 h-4 mr-1"></i>
                                 Help
                             </button>
                         </div>
@@ -444,9 +584,7 @@
                         <div class="p-6">
                             <div class="flex items-center justify-between mb-4">
                                 <h3 class="font-display font-bold text-primary flex items-center">
-                                    <svg class="w-5 h-5 mr-2 text-primary" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                                    </svg>
+                                    <i data-lucide="user" class="w-5 h-5 mr-2 text-primary"></i>
                                     Player 1
                                 </h3>
                                 <div class="flex items-center space-x-2">
@@ -475,9 +613,7 @@
                         <div class="p-6">
                             <div class="flex items-center justify-between mb-4">
                                 <h3 class="font-display font-bold text-secondary-dark flex items-center">
-                                    <svg class="w-5 h-5 mr-2 text-secondary-dark" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                                    </svg>
+                                    <i data-lucide="user" class="w-5 h-5 mr-2 text-secondary-dark"></i>
                                     Player 2
                                 </h3>
                                 <div class="flex items-center space-x-2">
@@ -508,31 +644,25 @@
                         <div class="flex items-center justify-between">
                             <div class="flex items-center space-x-4">
                                 <button id="pick-poison-btn" class="btn btn-primary" onclick="pickPoison()">
-                                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M21,9L19,12H22A2,2 0 0,1 24,14V22A2,2 0 0,1 22,24H2A2,2 0 0,1 0,22V14A2,2 0 0,1 2,12H5L3,9H9.5L10.5,7L13.5,7L14.5,9H21M2,14V22H22V14H2Z"/>
-                                    </svg>
+                                    <i data-lucide="flask-conical" class="w-5 h-5 mr-2"></i>
                                     Pick Poison
                                 </button>
                                 <div id="game-status-display" class="btn btn-info cursor-default">
-                                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,6A1,1 0 0,1 13,7A1,1 0 0,1 12,8A1,1 0 0,1 11,7A1,1 0 0,1 12,6M12,10C12.5,10 13,10.5 13,11V17C13,17.5 12.5,18 12,18C11.5,18 11,17.5 11,17V11C11,10.5 11.5,10 12,10Z"/>
-                                    </svg>
+                                    <i data-lucide="info" class="w-5 h-5 mr-2"></i>
                                     <span id="game-status-text">Game Ready</span>
                                 </div>
                             </div>
                             <div class="flex items-center space-x-6">
-                                <div class="text-center">
+                                <div class="text-center mb-6">
                                     <div class="text-2xl font-bold font-mono text-primary" id="game-timer">00:00</div>
                                     <div class="text-xs text-gray-500">Game Time</div>
                                 </div>
-                                <div class="text-center">
+                                <div class="text-center mb-6">
                                     <div class="text-2xl font-bold font-mono text-secondary" id="round-counter">0</div>
                                     <div class="text-xs text-gray-500">Round</div>
                                 </div>
                                 <div class="timer-display" id="turn-timer-display" style="display: none;">
-                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12.5,7V12.25L16,14L15.25,15.25L11.5,13V7H12.5Z"/>
-                                    </svg>
+                                    <i data-lucide="clock" class="w-5 h-5"></i>
                                     <span id="turn-timer-seconds">10</span>s
                                 </div>
                             </div>
@@ -544,36 +674,38 @@
 
         <!-- Page 4: Poison Selection Screen -->
         <div id="page4" class="screen">
-            <div class="container mx-auto px-4 py-8">
-                <header class="flex items-center justify-between mb-8">
+            <div class="container mx-auto px-4 pt-2 pb-6">
+                <header class="flex items-center justify-between mb-4">
                     <button class="btn btn-secondary" onclick="showScreen('page1')">
-                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                        </svg>
+                        <i data-lucide="arrow-left" class="w-5 h-5 mr-2"></i>
                         Back
                     </button>
-                    <h2 class="text-2xl font-display font-bold text-primary">🧪 Select Your Poison</h2>
+                    <h2 class="text-2xl font-display font-bold text-primary"><i data-lucide="flask-conical"
+                            class="w-6 h-6 mr-2 inline-block"></i> Select Your Poison</h2>
                     <div class="w-20"></div>
                 </header>
-                
-                <div class="max-w-2xl mx-auto">
-                    <div class="card card-premium p-8 text-center">
-                        <div class="text-6xl mb-6">🧪</div>
+
+                <div class="card card-premium p-12 max-w-2xl mx-auto text-center">
+                    <div id="poison-selection-status" class="mb-8">
+                        <div
+                            class="w-32 h-32 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-primary/20">
+                            <i data-lucide="flask-conical" class="w-16 h-16 text-primary animate-pulse"></i>
+                        </div>
                         <h3 class="text-xl font-display font-bold text-primary mb-4">Choose Your Poison Candy</h3>
-                        <p class="text-gray-600 mb-8">Select one candy from your collection to poison. Your opponent will try to avoid it!</p>
-                        
+                        <p class="text-gray-600 mb-8">Select one candy from your collection to poison. Your opponent
+                            will try to avoid it!</p>
+
                         <div id="poison-candy-grid" class="mb-8">
                             <!-- Populated by JavaScript - 4x4 Matrix -->
                         </div>
-                        
+
                         <div id="selected-poison-display" class="mb-6 min-h-8">
                             <!-- Shows selected poison -->
                         </div>
-                        
-                        <button id="confirm-poison-btn" class="btn btn-primary btn-large" disabled onclick="confirmPoison()">
-                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                            </svg>
+
+                        <button id="confirm-poison-btn" class="btn btn-primary btn-large" disabled
+                            onclick="confirmPoison()">
+                            <i data-lucide="check-circle-2" class="w-5 h-5 mr-2"></i>
                             Confirm Poison Choice
                         </button>
                     </div>
@@ -583,992 +715,1014 @@
 
         <!-- Page 4b: Candy Selection Confirmation Screen (PRD Requirement) -->
         <div id="page4b" class="screen">
-            <div class="container mx-auto px-4 py-8">
-                <header class="flex items-center justify-between mb-8">
+            <div class="container mx-auto px-4 pt-2 pb-6">
+                <header class="flex items-center justify-between mb-4">
                     <button class="btn btn-secondary" onclick="showScreen('page1')">
-                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                        </svg>
+                        <i data-lucide="arrow-left" class="w-5 h-5 mr-2"></i>
                         Back
                     </button>
-                    <h2 class="text-2xl font-display font-bold text-primary">🍬 Confirm Your Candies</h2>
+                    <h2 class="text-2xl font-display font-bold text-primary"><i data-lucide="package"
+                            class="w-6 h-6 mr-2 inline-block"></i> Confirm Your Candies</h2>
                     <div class="w-20"></div>
                 </header>
-                
-                <div class="max-w-4xl mx-auto">
-                    <div class="card card-premium p-8">
-                        <div class="text-center mb-8">
-                            <div class="text-6xl mb-4">🍬</div>
-                            <h3 class="text-xl font-display font-bold text-primary mb-4">Review Your Candy Collection</h3>
-                            <p class="text-gray-600 mb-4">These are the candies you'll be playing with. Confirm your selection to continue.</p>
-                            
-                            <div class="bg-info bg-opacity-10 rounded-lg p-4 mb-6">
-                                <div class="text-info font-bold mb-2">⏳ Waiting for Opponent</div>
-                                <div class="text-sm text-gray-600">Game will start when both players confirm their candy collections</div>
-                            </div>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <!-- Your Candies -->
-                            <div class="text-center">
-                                <h4 class="font-display font-bold text-primary mb-4">Your Candies</h4>
-                                <div id="player-candy-confirmation-grid" class="grid grid-cols-4 gap-3 mb-6">
-                                    <!-- Populated by JavaScript -->
-                                </div>
-                                <div class="text-sm text-gray-600">
-                                    <div>Total: <span id="player-candy-count">0</span> candies</div>
-                                </div>
-                            </div>
-                            
-                            <!-- Opponent Status -->
-                            <div class="text-center">
-                                <h4 class="font-display font-bold text-secondary mb-4">Opponent Status</h4>
-                                <div class="bg-gray-50 rounded-lg p-6 mb-6">
-                                    <div id="opponent-status-display" class="text-gray-600">
-                                        <div class="text-4xl mb-2">⏳</div>
-                                        <div>Waiting for opponent to confirm...</div>
-                                    </div>
-                                </div>
-                                <div class="text-sm text-gray-600">
-                                    <div>Opponent: <span id="opponent-name-display">Unknown</span></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="text-center mt-8">
-                            <div id="candy-confirmation-status" class="mb-6">
-                                <div class="text-sm text-gray-600 mb-2">Are you ready to play with these candies?</div>
-                                <div class="text-xs text-gray-400">You have 20 seconds to confirm</div>
-                            </div>
-                            
-                            <button id="confirm-candy-selection-btn" class="btn btn-primary btn-large" onclick="confirmCandySelection()">
-                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                                </svg>
-                                Confirm My Candies
-                            </button>
-                            
-                            <div id="candy-confirmation-timer" class="mt-4 text-sm text-gray-500">
-                                <!-- Timer will show here -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Page 5: Game Results Screen -->
-        <div id="page5" class="screen">
-            <div class="container mx-auto px-4 py-8">
-                <div class="max-w-lg mx-auto">
-                    <div class="card card-premium p-8 text-center">
-                        <div id="result-icon" class="text-8xl mb-6">🏆</div>
-                        <h2 id="result-title" class="text-3xl font-display font-bold text-primary mb-4">Victory!</h2>
-                        <p id="result-message" class="text-gray-600 mb-6">You collected 11 different candies!</p>
-                        
-                        <div class="bg-gray-50 rounded-lg p-4 mb-6">
-                            <div class="grid grid-cols-2 gap-4 text-center">
-                                <div>
-                                    <div class="text-2xl font-bold text-primary" id="final-player-score">0</div>
-                                    <div class="text-sm text-gray-600">Your Collection</div>
-                                </div>
-                                <div>
-                                    <div class="text-2xl font-bold text-secondary" id="final-opponent-score">0</div>
-                                    <div class="text-sm text-gray-600">Opponent Collection</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="flex gap-4">
-                            <button class="btn btn-primary flex-1" onclick="startNewGameNew()">
-                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.59 5.58L20 12l-8-8-8 8z"/>
-                                </svg>
-                                Play Again
-                            </button>
-                            <button class="btn btn-secondary flex-1" onclick="showScreen('page1')">
-                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-                                </svg>
-                                Main Menu
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Page 6: Play with Friends (Room-Based P2P) -->
-        <div id="page6" class="screen">
-            <div class="container mx-auto px-4 py-8">
-                <header class="flex items-center justify-between mb-8">
-                    <button class="btn btn-secondary" onclick="showScreen('page1')">
-                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                        </svg>
-                        Back
-                    </button>
-                    <h2 class="text-2xl font-display font-bold text-primary">Play with Friends</h2>
-                    <div class="w-20"></div>
-                </header>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                    <!-- Create Room Section -->
-                    <div class="card card-premium p-8 text-center">
-                        <div class="text-6xl mb-4">🏠</div>
-                        <h3 class="text-xl font-display font-bold text-primary mb-4">Create Room</h3>
-                        <p class="text-gray-600 mb-6">Create a private room and share the code with your friend</p>
-                        
-                        <div class="bg-primary bg-opacity-10 rounded-lg p-4 mb-6">
-                            <div class="text-sm text-primary font-bold mb-2">How it works:</div>
-                            <div class="text-sm text-gray-600 space-y-1">
-                                <div>1. Click "Create Room" to get a room code</div>
-                                <div>2. Share the code with your friend</div>
-                                <div>3. Start playing when both are ready!</div>
-                            </div>
-                        </div>
-                        
-                        <button class="btn btn-primary w-full mb-4" onclick="createPrivateRoom()">
-                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                            </svg>
-                            Create Room
-                        </button>
-                        
-                        <div class="text-xs text-gray-400">
-                            <div>🔒 Private room with 6-character code</div>
-                            <div>👥 Direct P2P connection</div>
-                        </div>
-                    </div>
-
-                    <!-- Join Room Section -->
-                    <div class="card card-premium p-8 text-center">
-                        <div class="text-6xl mb-4">🚪</div>
-                        <h3 class="text-xl font-display font-bold text-primary mb-4">Join Room</h3>
-                        <p class="text-gray-600 mb-6">Enter your friend's room code to join their game</p>
-                        
-                        <div class="bg-secondary-light bg-opacity-50 rounded-lg p-4 mb-6">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Room Code</label>
-                            <input type="text" 
-                                   id="room-code-input" 
-                                   class="w-full p-3 border rounded-lg text-center text-2xl font-bold uppercase tracking-widest" 
-                                   placeholder="ABC123" 
-                                   maxlength="6"
-                                   style="text-transform: uppercase;">
-                            <div class="text-xs text-gray-500 mt-2">Enter the 6-character code from your friend</div>
-                        </div>
-                        
-                        <button class="btn btn-success w-full mb-4" onclick="joinPrivateRoom()">
-                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-                            </svg>
-                            Join Room
-                        </button>
-                        
-                        <div class="text-xs text-gray-400">
-                            <div>⚡ Instant connection</div>
-                            <div>🎮 Start playing immediately</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Friends Gaming Info -->
-                <div class="card mt-8 max-w-2xl mx-auto">
-                    <div class="p-6 text-center">
-                        <h4 class="font-display font-bold text-primary mb-4">Friends Gaming Features</h4>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-                            <div class="flex items-center space-x-2">
-                                <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                                </svg>
-                                <span>Free to play</span>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                                </svg>
-                                <span>Private rooms</span>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                                </svg>
-                                <span>Real-time gameplay</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Page 7: Enhanced Practice Mode -->
-        <div id="page7" class="screen">
-            <div class="container mx-auto px-4 py-8">
-                <!-- Breadcrumb Navigation -->
-                <nav class="breadcrumb mb-6">
-                    <ol class="flex items-center space-x-2 text-sm">
-                        <li><a href="#" onclick="showScreen('page1')" class="text-primary hover:text-primary-dark">🏠 Home</a></li>
-                        <li class="text-gray-400">›</li>
-                        <li class="text-gray-600">🤖 Practice Mode</li>
-                    </ol>
-                </nav>
-
-                <!-- Enhanced Header -->
-                <header class="flex items-center justify-between mb-8">
-                    <button class="btn btn-secondary" onclick="showScreen('page1')">
-                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                        </svg>
-                        Back to Menu
-                    </button>
-                    <div class="text-center">
-                        <h2 class="text-2xl font-display font-bold text-primary">Practice Mode</h2>
-                        <p class="text-sm text-gray-600">Perfect your skills against AI opponents</p>
-                    </div>
-                    <div class="w-32"></div>
-                </header>
-                
-                <!-- Practice Benefits -->
-                <div class="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-6 mb-8">
-                    <div class="text-center">
-                        <h3 class="text-xl font-bold text-gray-900 mb-2">🎯 Why Practice?</h3>
-                        <p class="text-gray-700 mb-4">Master your strategy without risking coins!</p>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                            <div class="bg-white rounded-lg p-3">
-                                <div class="text-2xl mb-1">🧠</div>
-                                <div class="font-semibold">Learn Strategy</div>
-                                <div class="text-gray-600">Understand AI patterns</div>
-                            </div>
-                            <div class="bg-white rounded-lg p-3">
-                                <div class="text-2xl mb-1">⚡</div>
-                                <div class="font-semibold">Improve Speed</div>
-                                <div class="text-gray-600">Practice quick decisions</div>
-                            </div>
-                            <div class="bg-white rounded-lg p-3">
-                                <div class="text-2xl mb-1">🎁</div>
-                                <div class="font-semibold">Earn Rewards</div>
-                                <div class="text-gray-600">Get practice coins</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- AI Difficulty Selection -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <!-- Easy AI -->
-                    <div class="arena-card" data-difficulty="easy">
-                        <div class="p-6 text-center">
-                            <div class="text-6xl mb-4">🟢</div>
-                            <h3 class="text-xl font-display font-bold text-success mb-2">Easy AI</h3>
-                            <p class="text-gray-600 mb-4">Perfect for beginners</p>
-                            
-                            <div class="arena-stats bg-green-50 rounded-lg p-4 mb-4">
-                                <div class="text-sm text-green-700 mb-2">Difficulty Stats</div>
-                                <div class="text-xs text-green-600 space-y-1">
-                                    <div>• Slow decision making</div>
-                                    <div>• Predictable patterns</div>
-                                    <div>• 70% win rate for players</div>
-                            </div>
-                        </div>
-                            
-                            <div class="arena-timer bg-green-100 rounded-lg p-3 mb-4">
-                                <div class="text-sm text-green-700">🎁 Reward: 10-25 coins</div>
-                    </div>
-                    
-                            <button class="btn btn-success w-full" onclick="startPracticeMode('easy')">
-                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z"/>
-                                </svg>
-                                Start Easy Practice
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Medium AI -->
-                    <div class="arena-card" data-difficulty="medium">
-                        <div class="p-6 text-center">
-                            <div class="text-6xl mb-4">🟡</div>
-                            <h3 class="text-xl font-display font-bold text-warning mb-2">Medium AI</h3>
-                            <p class="text-gray-600 mb-4">Balanced challenge</p>
-                            
-                            <div class="arena-stats bg-yellow-50 rounded-lg p-4 mb-4">
-                                <div class="text-sm text-yellow-700 mb-2">Difficulty Stats</div>
-                                <div class="text-xs text-yellow-600 space-y-1">
-                                    <div>• Moderate decision speed</div>
-                                    <div>• Some strategic thinking</div>
-                                    <div>• 50% win rate for players</div>
-                            </div>
-                        </div>
-                            
-                            <div class="arena-timer bg-yellow-100 rounded-lg p-3 mb-4">
-                                <div class="text-sm text-yellow-700">🎁 Reward: 25-50 coins</div>
-                    </div>
-                    
-                            <button class="btn btn-warning w-full" onclick="startPracticeMode('medium')">
-                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z"/>
-                                </svg>
-                                Start Medium Practice
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Hard AI -->
-                    <div class="arena-card" data-difficulty="hard">
-                        <div class="p-6 text-center">
-                            <div class="text-6xl mb-4">🔴</div>
-                            <h3 class="text-xl font-display font-bold text-danger mb-2">Hard AI</h3>
-                            <p class="text-gray-600 mb-4">Ultimate challenge</p>
-                            
-                            <div class="arena-stats bg-red-50 rounded-lg p-4 mb-4">
-                                <div class="text-sm text-red-700 mb-2">Difficulty Stats</div>
-                                <div class="text-xs text-red-600 space-y-1">
-                                    <div>• Fast decision making</div>
-                                    <div>• Advanced strategies</div>
-                                    <div>• 30% win rate for players</div>
-                            </div>
-                        </div>
-                            
-                            <div class="arena-timer bg-red-100 rounded-lg p-3 mb-4">
-                                <div class="text-sm text-red-700">🎁 Reward: 50-100 coins</div>
-                            </div>
-                            
-                            <button class="btn btn-danger w-full" onclick="startPracticeMode('hard')">
-                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z"/>
-                                </svg>
-                                Start Hard Practice
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Practice Statistics -->
-                <div class="card bg-gray-50 p-6">
-                    <h3 class="text-lg font-bold text-gray-900 mb-4">📊 Your Practice Statistics</h3>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                        <div>
-                            <div class="text-2xl font-bold text-success" id="practice-easy-wins">0</div>
-                            <div class="text-sm text-gray-600">Easy Wins</div>
-                        </div>
-                        <div>
-                            <div class="text-2xl font-bold text-warning" id="practice-medium-wins">0</div>
-                            <div class="text-sm text-gray-600">Medium Wins</div>
-                        </div>
-                        <div>
-                            <div class="text-2xl font-bold text-danger" id="practice-hard-wins">0</div>
-                            <div class="text-sm text-gray-600">Hard Wins</div>
-                        </div>
-                        <div>
-                            <div class="text-2xl font-bold text-primary" id="practice-total-coins">0</div>
-                            <div class="text-sm text-gray-600">Coins Earned</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Page 8: Enhanced Offline Game Board -->
-        <div id="page8" class="screen">
-            <div class="container mx-auto px-4 py-6">
-                <!-- Game Board Header with Profile Timers -->
-                <div class="game-board-header">
-                    <!-- Player 1 Profile -->
-                    <div class="player-profile">
-                        <div class="player-profile-wrapper">
-                            <div class="profile-logo">
-                                P1
-                            </div>
-                            <svg class="circular-timer" viewBox="0 0 80 80">
-                                <circle class="circular-timer-track" cx="40" cy="40" r="36"></circle>
-                                <circle class="circular-timer-progress" id="player1-timer-progress" cx="40" cy="40" r="36" 
-                                        style="stroke-dasharray: 226.2; stroke-dashoffset: 0;"></circle>
-                            </svg>
-                        </div>
-                        <div class="player-name">Player 1</div>
-                    </div>
-                    
-                    <!-- Round Counter -->
-                    <div class="round-counter">
-                        <span class="round-number" id="round-display">1</span>
-                        <span class="round-label">Round</span>
-                    </div>
-                    
-                    <!-- Player 2 Profile -->
-                    <div class="player-profile">
-                        <div class="player-profile-wrapper">
-                            <div class="profile-logo player2">
-                                AI
-                            </div>
-                            <svg class="circular-timer" viewBox="0 0 80 80">
-                                <circle class="circular-timer-track" cx="40" cy="40" r="36"></circle>
-                                <circle class="circular-timer-progress" id="player2-timer-progress" cx="40" cy="40" r="36" 
-                                        style="stroke-dasharray: 226.2; stroke-dashoffset: 0;"></circle>
-                            </svg>
-                        </div>
-                        <div class="player-name">AI Opponent</div>
-                    </div>
-                </div>
-
-                <!-- Horizontal Game Board -->
-                <div class="game-board-horizontal">
-                    <!-- Player 1 Section -->
-                    <div class="candy-section player-section">
-                        <div class="candy-section-header">
-                            <div class="candy-section-title">
-                                🏠 Your Candies
-                            </div>
-                            <div class="candy-counter" id="player-candy-count">12 left</div>
-                        </div>
-                        <div class="candy-grid-enhanced" id="player-candy-grid-enhanced">
-                            <!-- Player's candies populated by JavaScript -->
-                        </div>
-                    </div>
-
-                    <!-- Player 2 Section -->
-                    <div class="candy-section opponent-section">
-                        <div class="candy-section-header">
-                            <div class="candy-section-title">
-                                🎯 Opponent's Candies
-                            </div>
-                            <div class="candy-counter" id="opponent-candy-count">12 left</div>
-                        </div>
-                        <div class="candy-grid-enhanced" id="opponent-candy-grid-enhanced">
-                            <!-- Opponent's candies populated by JavaScript -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Game Status and Actions -->
-                <div class="card mt-6">
-                    <div class="p-6">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center space-x-4">
-                                <div id="game-status-display-enhanced" class="btn btn-info cursor-default">
-                                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,6A1,1 0 0,1 13,7A1,1 0 0,1 12,8A1,1 0 0,1 11,7A1,1 0 0,1 12,6M12,10C12.5,10 13,10.5 13,11V17C13,17.5 12.5,18 12,18C11.5,18 11,17.5 11,17V11C11,10.5 11.5,10 12,10Z"/>
-                                    </svg>
-                                    <span id="game-status-text-enhanced">🎯 Your Turn - Pick a candy!</span>
-                                </div>
-                                <div class="btn btn-secondary cursor-default">
-                                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M19,5V19H5V5H19Z"/>
-                                    </svg>
-                                    <span id="collection-status">0/11 collected</span>
-                                </div>
-                            </div>
-                            <div class="flex space-x-2">
-                                <button class="btn btn-secondary" onclick="showScreen('page1')">
-                                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-                                    </svg>
-                                    Home
-                                </button>
-                                <button class="btn btn-secondary" onclick="showHelp()">
-                                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
-                                    </svg>
-                                    Help
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Page 9: Rewards -->
-        <div id="page9" class="screen">
-            <div class="container mx-auto px-4 py-8">
-                <header class="flex items-center justify-between mb-8">
-                    <button class="btn btn-secondary" onclick="showScreen('page1')">
-                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                        </svg>
-                        Back
-                    </button>
-                    <h2 class="text-2xl font-display font-bold text-primary">Daily Rewards</h2>
-                    <div class="w-20"></div>
-                </header>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div class="card card-premium p-6">
-                        <div class="text-center mb-4">
-                            <div class="text-4xl mb-2">🎁</div>
-                            <h3 class="font-display font-bold text-primary">Daily Login</h3>
-                        </div>
-                        <div class="space-y-3">
-                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                <span>Day 1</span>
-                                <span class="text-warning font-bold">+50 coins +1 💎</span>
-                            </div>
-                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                <span>Day 2</span>
-                                <span class="text-warning font-bold">+75 coins +1 💎</span>
-                            </div>
-                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                <span>Day 3</span>
-                                <span class="text-warning font-bold">+100 coins +2 💎</span>
-                            </div>
-                        </div>
-                        <button class="btn btn-primary w-full mt-4" onclick="claimDailyReward()">
-                            Claim Today's Reward
-                        </button>
-                    </div>
-                    
-                    <div class="card card-premium p-6">
-                        <div class="text-center mb-4">
-                            <div class="text-4xl mb-2">🏆</div>
-                            <h3 class="font-display font-bold text-primary">Win Streak</h3>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-3xl font-bold text-success mb-2" id="current-streak">0</div>
-                            <p class="text-gray-600 mb-4">Current Win Streak</p>
-                            <div class="bg-success bg-opacity-10 rounded-lg p-3">
-                                <span class="text-success font-bold">Next: +200 coins at 5 wins</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="card card-premium p-6">
-                        <div class="text-center mb-4">
-                            <div class="text-4xl mb-2">💎</div>
-                            <h3 class="font-display font-bold text-primary">Achievements</h3>
-                        </div>
-                        <div class="space-y-2">
-                            <div class="flex items-center space-x-3 p-2 rounded-lg">
-                                <div class="w-3 h-3 bg-success rounded-full"></div>
-                                <span class="text-sm">First Win</span>
-                            </div>
-                            <div class="flex items-center space-x-3 p-2 rounded-lg">
-                                <div class="w-3 h-3 bg-gray-300 rounded-full"></div>
-                                <span class="text-sm text-gray-500">Win 10 Games</span>
-                            </div>
-                            <div class="flex items-center space-x-3 p-2 rounded-lg">
-                                <div class="w-3 h-3 bg-gray-300 rounded-full"></div>
-                                <span class="text-sm text-gray-500">Master Player</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Page 10: Rankings/Leaderboard -->
-        <div id="page10" class="screen">
-            <div class="container mx-auto px-4 py-8">
-                <header class="flex items-center justify-between mb-8">
-                    <button class="btn btn-secondary" onclick="showScreen('page1')">
-                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                        </svg>
-                        Back
-                    </button>
-                    <h2 class="text-2xl font-display font-bold text-primary">Global Rankings</h2>
-                    <div class="w-20"></div>
-                </header>
-                
-                <div class="card card-premium">
-                    <div class="p-6">
-                        <div class="flex space-x-4 mb-6">
-                            <button class="btn btn-primary" onclick="showLeaderboard('global')">Global</button>
-                            <button class="btn btn-secondary" onclick="showLeaderboard('weekly')">This Week</button>
-                            <button class="btn btn-secondary" onclick="showLeaderboard('friends')">Friends</button>
-                        </div>
-                        
-                        <div id="leaderboard-content">
-                            <div class="space-y-4">
-                                <div class="flex items-center justify-between p-4 bg-gradient-to-r from-yellow-100 to-yellow-200 rounded-lg border-2 border-yellow-300">
-                                    <div class="flex items-center space-x-4">
-                                        <div class="text-2xl">🥇</div>
-                                        <div>
-                                            <div class="font-bold text-yellow-800">CandyMaster2024</div>
-                                            <div class="text-sm text-yellow-600">1,247 wins</div>
-                                        </div>
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="font-bold text-yellow-800">2,350 pts</div>
-                                        <div class="text-sm text-yellow-600">98.5% win rate</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="flex items-center justify-between p-4 bg-gray-100 rounded-lg">
-                                    <div class="flex items-center space-x-4">
-                                        <div class="text-2xl">🥈</div>
-                                        <div>
-                                            <div class="font-bold">SweetTooth_Pro</div>
-                                            <div class="text-sm text-gray-600">892 wins</div>
-                                        </div>
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="font-bold">1,890 pts</div>
-                                        <div class="text-sm text-gray-600">94.2% win rate</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="flex items-center justify-between p-4 bg-orange-100 rounded-lg">
-                                    <div class="flex items-center space-x-4">
-                                        <div class="text-2xl">🥉</div>
-                                        <div>
-                                            <div class="font-bold text-orange-800">PoisonPicker</div>
-                                            <div class="text-sm text-orange-600">756 wins</div>
-                                        </div>
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="font-bold text-orange-800">1,654 pts</div>
-                                        <div class="text-sm text-orange-600">91.8% win rate</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Page 11: Profile -->
-        <div id="page11" class="screen">
-            <div class="container mx-auto px-4 py-8">
-                <header class="flex items-center justify-between mb-8">
-                    <button class="btn btn-secondary" onclick="showScreen('page1')">
-                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                        </svg>
-                        Back
-                    </button>
-                    <h2 class="text-2xl font-display font-bold text-primary">Profile</h2>
-                    <div class="w-20"></div>
-                </header>
-                
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div class="lg:col-span-1">
-                        <div class="card card-premium p-6 text-center">
-                            <div class="w-24 h-24 rounded-full bg-primary flex items-center justify-center mx-auto mb-4">
-                                <svg class="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                                </svg>
-                            </div>
-                            <h3 class="font-display font-bold text-primary mb-2">Player</h3>
-                            <p class="text-gray-600 mb-4">Candy Collector</p>
-                            <div class="space-y-2">
-                                <div class="flex justify-between">
-                                    <span>Level:</span>
-                                    <span class="font-bold">5</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span>XP:</span>
-                                    <span class="font-bold">1,250/2,000</span>
-                                </div>
-                            </div>
-                            <div class="w-full bg-gray-200 rounded-full h-2 mt-3">
-                                <div class="bg-primary h-2 rounded-full" style="width: 62.5%"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="lg:col-span-2">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div class="card card-premium p-6">
-                                <h3 class="font-display font-bold text-primary mb-4">Game Statistics</h3>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div class="text-center">
-                                        <div class="text-2xl font-bold text-primary" id="total-games">0</div>
-                                        <div class="text-xs text-gray-500">Total Games</div>
-                                    </div>
-                                    <div class="text-center">
-                                        <div class="text-2xl font-bold text-success" id="win-rate">0%</div>
-                                        <div class="text-xs text-gray-500">Win Rate</div>
-                                    </div>
-                                    <div class="text-center">
-                                        <div class="text-2xl font-bold text-warning" id="coins-profile">1000</div>
-                                        <div class="text-xs text-gray-500">Coins</div>
-                                    </div>
-                                    <div class="text-center">
-                                        <div class="text-2xl font-bold text-info" id="diamonds-profile">50</div>
-                                        <div class="text-xs text-gray-500">Diamonds</div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="card card-premium p-6">
-                                <h3 class="font-display font-bold text-primary mb-4">Premium Features</h3>
-                                <div class="space-y-4">
-                                    <button class="btn btn-success w-full" onclick="removeAds()">
-                                        <span class="icon">🚫</span>
-                                        <span class="text">
-                                            Remove Ads ($5)
-                                        </span>
-                                    </button>
-                                    <div class="flex items-center space-x-2 text-sm text-gray-600">
-                                        <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                                        </svg>
-                                        <span>Ad-free gaming experience</span>
-                                    </div>
-                                    <div class="flex items-center space-x-2 text-sm text-gray-600">
-                                        <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                                        </svg>
-                                        <span>Faster game loading</span>
-                                    </div>
-                                    <div class="flex items-center space-x-2 text-sm text-gray-600">
-                                        <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                                        </svg>
-                                        <span>Premium support</span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="card card-premium p-6">
-                                <h3 class="font-display font-bold text-primary mb-4">Settings</h3>
-                                <div class="space-y-3">
-                                    <button class="btn btn-secondary w-full" onclick="toggleSound()">
-                                        🔊 Sound Effects
-                                    </button>
-                                    <button class="btn btn-secondary w-full" onclick="toggleMusic()">
-                                        🎵 Background Music
-                                    </button>
-                                    <button class="btn btn-secondary w-full" onclick="resetStats()">
-                                        🔄 Reset Statistics
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Page 12: Global Matchmaking (Before City Selection) -->
-        <div id="page12" class="screen">
-            <div class="container mx-auto px-4 py-8">
-                <!-- Enhanced header -->
-                <header class="flex items-center justify-between mb-8">
-                    <button class="btn btn-secondary" onclick="showScreen('page1')">
-                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                        </svg>
-                        Back
-                    </button>
-                    <h2 class="text-2xl font-display font-bold text-primary">Global Matchmaking</h2>
-                    <div class="w-20"></div> <!-- Spacer for centering -->
-                </header>
-
-                <!-- Global Matchmaking Interface -->
-                <div class="max-w-2xl mx-auto">
-                    <!-- Player Balance Display -->
-                    <div class="card card-premium text-center p-4 mb-8">
-                        <div class="flex items-center justify-center space-x-4">
-                            <div class="text-2xl">💰</div>
-                            <div>
-                                <div class="text-sm text-gray-600">Your Balance</div>
-                                <div class="text-xl font-bold text-primary" id="player-balance-matchmaking">10000</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Main Matchmaking Section -->
-                    <div class="card card-premium text-center p-8 mb-8">
-                        <div class="text-8xl mb-6">🌍</div>
-                        <h3 class="text-3xl font-display font-bold text-primary mb-4">Find Your Opponent</h3>
-                        <p class="text-lg text-gray-600 mb-8">Connect with players from around the world for competitive candy duels</p>
-                        
-                        <!-- Matchmaking Status -->
-                        <div id="matchmaking-status-page" class="mb-8">
-                            <div id="matchmaking-idle-page" class="space-y-4">
-                                <div class="bg-blue-50 rounded-lg p-6">
-                                    <div class="text-4xl mb-2">🎯</div>
-                                    <div class="text-lg font-semibold text-blue-800">Ready to Find Match</div>
-                                    <div class="text-sm text-blue-600">Click below to start searching for opponents</div>
-                                </div>
-                            </div>
-                            
-                            <div id="matchmaking-searching-page" class="space-y-4" style="display: none;">
-                                <div class="bg-orange-50 rounded-lg p-6">
-                                    <div class="text-4xl mb-2 animate-pulse">🔍</div>
-                                    <div class="text-lg font-semibold text-orange-800">Searching for Players...</div>
-                                    <div class="text-sm text-orange-600">Finding the perfect opponent for you</div>
-                                    <div class="mt-4">
-                                        <div class="animate-spin inline-block w-8 h-8 border-4 border-current border-t-transparent text-orange-600 rounded-full"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div id="matchmaking-found-page" class="space-y-4" style="display: none;">
-                                <div class="bg-green-50 rounded-lg p-6">
-                                    <div class="text-4xl mb-2">✅</div>
-                                    <div class="text-lg font-semibold text-green-800">Opponent Found!</div>
-                                    <div class="text-sm text-green-600">Connecting to your match...</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Matchmaking Buttons -->
-                        <div class="space-y-4">
-                            <button id="find-player-btn-page" class="btn btn-primary btn-lg w-full text-lg py-4" onclick="startGlobalMatchmaking()">
-                                <svg class="w-6 h-6 mr-3" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                                </svg>
-                                Find Random Player
-                            </button>
-                            
-                            <button id="cancel-matchmaking-btn-page" class="btn btn-secondary w-full" onclick="cancelGlobalMatchmaking()" style="display: none;">
-                                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                                </svg>
-                                Cancel Search
-                            </button>
-                        </div>
-                        
-                        <!-- Queue Information -->
-                        <div id="queue-info-page" class="mt-6 p-4 bg-gray-50 rounded-lg" style="display: none;">
-                            <div class="text-sm text-gray-600">
-                                <div id="queue-position-page" class="font-semibold">Position in queue: 1</div>
-                                <div class="text-xs mt-1">Average wait time: 5-10 seconds</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Online Gaming Stats -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                        <div class="card text-center p-4">
-                            <div class="text-3xl mb-2">🎯</div>
-                            <div class="text-sm text-gray-600">Players Online</div>
-                            <div class="text-xl font-bold text-primary" id="online-players-count-page">247</div>
-                        </div>
-                        <div class="card text-center p-4">
-                            <div class="text-3xl mb-2">⚡</div>
-                            <div class="text-sm text-gray-600">Avg Match Time</div>
-                            <div class="text-xl font-bold text-success">8s</div>
-                        </div>
-                        <div class="card text-center p-4">
-                            <div class="text-3xl mb-2">🏆</div>
-                            <div class="text-sm text-gray-600">Games Today</div>
-                            <div class="text-xl font-bold text-warning" id="games-today-count-page">1,847</div>
-                        </div>
-                    </div>
-
-                    <!-- How It Works -->
-                    <div class="card card-premium p-6">
-                        <h3 class="text-xl font-display font-bold text-primary mb-4">How Global Matchmaking Works</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div class="text-center">
-                                <div class="text-3xl mb-2">🔍</div>
-                                <div class="text-sm font-semibold text-gray-800">1. Find Player</div>
-                                <div class="text-xs text-gray-600">Search for opponents worldwide</div>
-                            </div>
-                            <div class="text-center">
-                                <div class="text-3xl mb-2">🏙️</div>
-                                <div class="text-sm font-semibold text-gray-800">2. Choose Arena</div>
-                                <div class="text-xs text-gray-600">Select Dubai, Cairo, or Oslo</div>
-                            </div>
-                            <div class="text-center">
-                                <div class="text-3xl mb-2">⚔️</div>
-                                <div class="text-sm font-semibold text-gray-800">3. Battle!</div>
-                                <div class="text-xs text-gray-600">Compete for coins and glory</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Page 2b: Searching for Player (PRD Compliant) -->
-        <div id="page2b" class="screen">
-            <div class="container mx-auto px-4 py-8">
-                <!-- Breadcrumb Navigation -->
-                <nav class="breadcrumb mb-6">
-                    <ol class="flex items-center space-x-2 text-sm">
-                        <li><a href="#" onclick="showScreen('page1')" class="text-primary hover:text-primary-dark">🏠 Home</a></li>
-                        <li class="text-gray-400">›</li>
-                        <li><a href="#" onclick="showScreen('page2')" class="text-primary hover:text-primary-dark">🌍 Online Arenas</a></li>
-                        <li class="text-gray-400">›</li>
-                        <li class="text-gray-600">🔍 Finding Player</li>
-                    </ol>
-                </nav>
-
-                <!-- Searching Interface -->
-                <div class="max-w-2xl mx-auto text-center">
-                    <!-- City Display -->
+                <div class="card card-premium p-12 max-w-2xl mx-auto text-center">
                     <div class="mb-8">
-                        <div id="selected-city-icon" class="text-8xl mb-4">🏙️</div>
-                        <h2 class="text-3xl font-display font-bold text-primary mb-2">Finding Opponent</h2>
-                        <p id="searching-city-text" class="text-lg text-gray-600">Searching for players in Dubai...</p>
-                    </div>
+                        <div
+                            class="w-32 h-32 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-primary/20">
+                            <i data-lucide="package" class="w-16 h-16 text-primary"></i>
+                        </div>
+                        <h3 class="text-xl font-display font-bold text-primary mb-4">Review Your Candy Collection
+                        </h3>
+                        <p class="text-gray-600 mb-4">These are the candies you'll be playing with. Confirm your
+                            selection to continue.</p>
 
-                    <!-- Animated Loading Spinner -->
-                    <div class="relative mb-8">
-                        <div class="searching-spinner mx-auto mb-4"></div>
-                        <div id="searching-dots" class="text-2xl text-primary">
-                            <span class="animate-pulse">●</span>
-                            <span class="animate-pulse" style="animation-delay: 0.2s">●</span>
-                            <span class="animate-pulse" style="animation-delay: 0.4s">●</span>
+                        <div class="bg-info bg-opacity-10 rounded-lg p-4 mb-6">
+                            <div class="text-info font-bold mb-2">⏳ Waiting for Opponent</div>
+                            <div class="text-sm text-gray-600">Game will start when both players confirm their candy
+                                collections</div>
                         </div>
                     </div>
 
-                    <!-- Status Updates -->
-                    <div id="search-status" class="mb-8">
-                        <div class="bg-blue-50 rounded-lg p-4">
-                            <div class="text-blue-700 font-medium" id="search-status-text">
-                                🔍 Scanning for available players...
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- Your Candies -->
+                        <div class="text-center mb-6">
+                            <h4 class="font-display font-bold text-primary mb-4">Your Candies</h4>
+                            <div id="player-candy-confirmation-grid" class="grid grid-cols-4 gap-3 mb-6">
+                                <!-- Populated by JavaScript -->
                             </div>
-                            <div class="mt-2">
-                                <div class="text-sm text-blue-600" id="search-time-remaining">
-                                    Time remaining: <span id="countdown-timer">30</span> seconds
-                                </div>
-                                <div class="w-full bg-blue-200 rounded-full h-2 mt-2">
-                                    <div id="search-progress" class="bg-blue-600 h-2 rounded-full transition-all duration-1000" style="width: 100%"></div>
-                                </div>
+                            <div class="text-sm text-gray-600">
+                                <div>Total: <span id="player-candy-count">0</span> candies</div>
                             </div>
                         </div>
+
+                        <!-- Opponent Status -->
+                        <div class="text-center mb-6">
+                            <h4 class="font-display font-bold text-secondary mb-4">Opponent Status</h4>
+                            <div class="bg-gray-50 rounded-lg p-6 mb-6">
+                                <div id="opponent-status-display" class="text-gray-600">
+                                    <div class="text-4xl mb-2">⏳</div>
+                                    <div>Waiting for opponent to confirm...</div>
+                                </div>
+                            </div>
+                            <div class="text-sm text-gray-600">
+                                <div>Opponent: <span id="opponent-name-display">Unknown</span></div>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Search Stats -->
-                    <div class="grid grid-cols-2 gap-4 mb-8">
-                        <div class="bg-gray-50 rounded-lg p-4">
-                            <div class="text-2xl mb-2">👥</div>
-                            <div class="text-sm text-gray-600">Players Online</div>
-                            <div class="font-bold text-lg" id="players-online-count">Searching...</div>
+                    <div class="text-center mt-8">
+                        <div id="candy-confirmation-status" class="mb-6">
+                            <div class="text-sm text-gray-600 mb-2">Are you ready to play with these candies?</div>
+                            <div class="text-xs text-gray-400">You have 20 seconds to confirm</div>
                         </div>
-                        <div class="bg-gray-50 rounded-lg p-4">
-                            <div class="text-2xl mb-2">⚡</div>
-                            <div class="text-sm text-gray-600">Avg. Wait Time</div>
-                            <div class="font-bold text-lg" id="avg-wait-time">~15 sec</div>
+
+                        <button id="confirm-candy-selection-btn" class="btn btn-primary btn-large"
+                            onclick="confirmCandySelection()">
+                            <i data-lucide="check-circle-2" class="w-5 h-5 mr-2"></i>
+                            Confirm My Candies
+                        </button>
+
+                        <div id="candy-confirmation-timer" class="mt-4 text-sm text-gray-500">
+                            <!-- Timer will show here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 5: Game Results Screen -->
+    <div id="page5" class="screen">
+        <div class="container mx-auto px-4 pt-2 pb-6">
+            <div class="max-w-lg mx-auto">
+                <div class="card card-premium p-8 text-center">
+                    <div id="result-icon"
+                        class="w-32 h-32 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-yellow-200">
+                        <i data-lucide="trophy" class="w-16 h-16 text-yellow-600"></i>
+                    </div>
+                    <h2 id="result-title" class="text-3xl font-display font-bold text-primary mb-4">Victory!</h2>
+                    <p id="result-message" class="text-gray-600 mb-6">You collected 11 different candies!</p>
+
+                    <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                        <div class="grid grid-cols-2 gap-4 text-center">
+                            <div>
+                                <div class="text-2xl font-bold text-primary" id="final-player-score">0</div>
+                                <div class="text-sm text-gray-600">Your Collection</div>
+                            </div>
+                            <div>
+                                <div class="text-2xl font-bold text-secondary" id="final-opponent-score">0</div>
+                                <div class="text-sm text-gray-600">Opponent Collection</div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Action Buttons -->
-                    <div class="space-y-4">
-                        <button id="cancel-search-btn" class="btn btn-danger btn-lg w-full max-w-md" onclick="cancelPlayerSearch()">
-                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    <div class="flex gap-4">
+                        <button class="btn btn-primary flex-1" onclick="startNewGameNew()">
+                            <i data-lucide="rotate-ccw" class="w-5 h-5 mr-2"></i>
+                            Play Again
+                        </button>
+                        <button class="btn btn-secondary flex-1" onclick="showScreen('page1')">
+                            <i data-lucide="home" class="w-5 h-5 mr-2"></i>
+                            Main Menu
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 6: Play with Friends (Room-Based P2P) -->
+    <div id="page6" class="screen">
+        <div class="container mx-auto px-4 pt-2 pb-6">
+            <header class="flex items-center justify-between mb-4">
+                <button class="btn btn-secondary" onclick="showScreen('page1')">
+                    <i data-lucide="arrow-left" class="w-5 h-5 mr-2"></i>
+                    Back
+                </button>
+                <h2 class="text-2xl font-display font-bold text-primary">Play with Friends</h2>
+                <div class="w-20"></div>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                <!-- Create Room Section -->
+                <div class="card card-premium p-8 text-center">
+                    <div class="text-6xl mb-4">🏠</div>
+                    <h3 class="text-xl font-display font-bold text-primary mb-4">Create Room</h3>
+                    <p class="text-gray-600 mb-6">Create a private room and share the code with your friend</p>
+
+                    <div class="bg-primary bg-opacity-10 rounded-lg p-4 mb-6">
+                        <div class="text-sm text-primary font-bold mb-2">How it works:</div>
+                        <div class="text-sm text-gray-600 space-y-1">
+                            <div>1. Click "Create Room" to get a room code</div>
+                            <div>2. Share the code with your friend</div>
+                            <div>3. Start playing when both are ready!</div>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary w-full mb-4" onclick="createPrivateRoom()">
+                        <i data-lucide="plus-square" class="w-5 h-5 mr-2"></i>
+                        Create Room
+                    </button>
+
+                    <div class="text-xs text-gray-400">
+                        <div>🔒 Private room with 6-character code</div>
+                        <div class="flex items-center"><i data-lucide="zap" class="w-4 h-4 mr-2 text-primary"></i>
+                            Direct P2P connection</div>
+                    </div>
+                </div>
+
+                <!-- Join Room Section -->
+                <div class="card card-premium p-8 text-center">
+                    <div class="text-6xl mb-4">🚪</div>
+                    <h3 class="text-xl font-display font-bold text-primary mb-4">Join Room</h3>
+                    <p class="text-gray-600 mb-6">Enter your friend's room code to join their game</p>
+
+                    <div class="bg-secondary-light bg-opacity-50 rounded-lg p-4 mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Room Code</label>
+                        <input type="text" id="room-code-input"
+                            class="w-full p-3 border rounded-lg text-center text-2xl font-bold uppercase tracking-widest"
+                            placeholder="ABC123" maxlength="6" style="text-transform: uppercase;">
+                        <div class="text-xs text-gray-500 mt-2">Enter the 6-character code from your friend</div>
+                    </div>
+
+                    <button class="btn btn-success w-full mb-4" onclick="joinPrivateRoom()">
+                        <i data-lucide="log-in" class="w-5 h-5 mr-2"></i>
+                        Join Room
+                    </button>
+
+                    <div class="text-xs text-gray-400">
+                        <div>⚡ Instant connection</div>
+                        <div>🎮 Start playing immediately</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Friends Gaming Info -->
+            <div class="card mt-8 max-w-2xl mx-auto">
+                <div class="p-6 text-center">
+                    <h4 class="font-display font-bold text-primary mb-4">Friends Gaming Features</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                        <div class="flex items-center space-x-2">
+                            <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
                             </svg>
+                            <span>Free to play</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                            </svg>
+                            <span>Private rooms</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <svg class="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                            </svg>
+                            <span>Real-time gameplay</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 7: Enhanced Practice Mode -->
+    <div id="page7" class="screen">
+        <div class="container mx-auto px-4 pt-2 pb-6">
+            <!-- Breadcrumb Navigation -->
+            <nav class="breadcrumb mb-2">
+                <ol class="flex items-center space-x-2 text-sm">
+                    <li><a href="#" onclick="showScreen('page1')" class="text-primary hover:text-primary-dark">🏠
+                            Home</a></li>
+                    <li class="text-gray-400">›</li>
+                    <li class="text-gray-600 flex items-center">🤖 Practice Mode</li>
+                </ol>
+            </nav>
+
+            <!-- Enhanced Header -->
+            <header class="flex items-center justify-between mb-4">
+                <button class="btn btn-secondary" onclick="showScreen('page1')">
+                    <i data-lucide="arrow-left" class="w-5 h-5 mr-2"></i>
+                    Back to Menu
+                </button>
+                <div class="text-center">
+                    <h2 class="text-2xl font-display font-bold text-primary">Practice Mode</h2>
+                    <p class="text-sm text-gray-600">Perfect your skills against AI opponents</p>
+                </div>
+                <div class="w-32"></div>
+            </header>
+
+            <!-- Practice Benefits -->
+            <div class="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-6 mb-8">
+                <div class="text-center">
+                    <h3 class="text-xl font-bold text-gray-900 mb-2 flex items-center"><i data-lucide="target"
+                            class="w-5 h-5 mr-2 text-primary"></i> Why Practice?</h3>
+                    <p class="text-gray-700 mb-4">Master your strategy without risking coins!</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div class="bg-white rounded-lg p-3">
+                            <div class="text-2xl mb-1">🧠</div>
+                            <div class="font-semibold">Learn Strategy</div>
+                            <div class="text-gray-600">Understand AI patterns</div>
+                        </div>
+                        <div class="bg-white rounded-lg p-3">
+                            <div class="text-2xl mb-1">⚡</div>
+                            <div class="font-semibold">Improve Speed</div>
+                            <div class="text-gray-600">Practice quick decisions</div>
+                        </div>
+                        <div class="bg-white rounded-lg p-3">
+                            <div class="text-2xl mb-1">🎁</div>
+                            <div class="font-semibold">Earn Rewards</div>
+                            <div class="text-gray-600">Get practice coins</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Difficulty Selection -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <!-- Easy AI -->
+                <div class="arena-card" data-difficulty="easy">
+                    <div class="p-6 text-center">
+                        <div class="text-6xl mb-4">🟢</div>
+                        <h3 class="text-xl font-display font-bold text-success mb-2">Easy AI</h3>
+                        <p class="text-gray-600 mb-4">Perfect for beginners</p>
+
+                        <div class="arena-stats bg-green-50 rounded-lg p-4 mb-4">
+                            <div class="text-sm text-green-700 mb-2">Difficulty Stats</div>
+                            <div class="text-xs text-green-600 space-y-1">
+                                <div>• Slow decision making</div>
+                                <div>• Predictable patterns</div>
+                                <div>• 70% win rate for players</div>
+                            </div>
+                        </div>
+
+                        <div class="arena-timer bg-green-100 rounded-lg p-3 mb-4">
+                            <div class="text-sm text-green-700">🎁 Reward: 10-25 coins</div>
+                        </div>
+
+                        <button class="btn btn-success w-full" onclick="startPracticeMode('easy')">
+                            <i data-lucide="play-circle" class="w-5 h-5 mr-2"></i>
+                            Start Easy Practice
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Medium AI -->
+                <div class="arena-card" data-difficulty="medium">
+                    <div class="p-6 text-center">
+                        <div class="text-6xl mb-4">🟡</div>
+                        <h3 class="text-xl font-display font-bold text-warning mb-2">Medium AI</h3>
+                        <p class="text-gray-600 mb-4">Balanced challenge</p>
+
+                        <div class="arena-stats bg-yellow-50 rounded-lg p-4 mb-4">
+                            <div class="text-sm text-yellow-700 mb-2">Difficulty Stats</div>
+                            <div class="text-xs text-yellow-600 space-y-1">
+                                <div>• Moderate decision speed</div>
+                                <div>• Some strategic thinking</div>
+                                <div>• 50% win rate for players</div>
+                            </div>
+                        </div>
+
+                        <div class="arena-timer bg-yellow-100 rounded-lg p-3 mb-4">
+                            <div class="text-sm text-yellow-700">🎁 Reward: 25-50 coins</div>
+                        </div>
+
+                        <button class="btn btn-warning w-full" onclick="startPracticeMode('medium')">
+                            <i data-lucide="play-circle" class="w-5 h-5 mr-2"></i>
+                            Start Medium Practice
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Hard AI -->
+                <div class="arena-card" data-difficulty="hard">
+                    <div class="p-6 text-center">
+                        <div class="text-6xl mb-4">🔴</div>
+                        <h3 class="text-xl font-display font-bold text-danger mb-2">Hard AI</h3>
+                        <p class="text-gray-600 mb-4">Ultimate challenge</p>
+
+                        <div class="arena-stats bg-red-50 rounded-lg p-4 mb-4">
+                            <div class="text-sm text-red-700 mb-2">Difficulty Stats</div>
+                            <div class="text-xs text-red-600 space-y-1">
+                                <div>• Fast decision making</div>
+                                <div>• Advanced strategies</div>
+                                <div>• 30% win rate for players</div>
+                            </div>
+                        </div>
+
+                        <div class="arena-timer bg-red-100 rounded-lg p-3 mb-4">
+                            <div class="text-sm text-red-700">🎁 Reward: 50-100 coins</div>
+                        </div>
+
+                        <button class="btn btn-danger w-full" onclick="startPracticeMode('hard')">
+                            <i data-lucide="play-circle" class="w-5 h-5 mr-2"></i>
+                            Start Hard Practice
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Practice Statistics -->
+            <div class="card bg-gray-50 p-6">
+                <h3 class="text-lg font-bold text-gray-900 mb-4">📊 Your Practice Statistics</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                    <div>
+                        <div class="text-2xl font-bold text-success" id="practice-easy-wins">0</div>
+                        <div class="text-sm text-gray-600">Easy Wins</div>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold text-warning" id="practice-medium-wins">0</div>
+                        <div class="text-sm text-gray-600">Medium Wins</div>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold text-danger" id="practice-hard-wins">0</div>
+                        <div class="text-sm text-gray-600">Hard Wins</div>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold text-primary" id="practice-total-coins">0</div>
+                        <div class="text-sm text-gray-600">Coins Earned</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 8: Enhanced Offline Game Board -->
+    <div id="page8" class="screen">
+        <div class="container mx-auto px-4 pt-2 pb-6">
+            <!-- Game Board Header with Profile Timers -->
+            <div class="game-board-header">
+                <!-- Player 1 Profile -->
+                <div class="player-profile">
+                    <div class="player-profile-wrapper">
+                        <div class="profile-logo">
+                            P1
+                        </div>
+                        <svg class="circular-timer" viewBox="0 0 80 80">
+                            <circle class="circular-timer-track" cx="40" cy="40" r="36"></circle>
+                            <circle class="circular-timer-progress" id="player1-timer-progress" cx="40" cy="40" r="36"
+                                style="stroke-dasharray: 226.2; stroke-dashoffset: 0;"></circle>
+                        </svg>
+                    </div>
+                    <div class="player-name">Player 1</div>
+                </div>
+
+                <!-- Round Counter -->
+                <div class="round-counter">
+                    <span class="round-number" id="round-display">1</span>
+                    <span class="round-label">Round</span>
+                </div>
+
+                <!-- Player 2 Profile -->
+                <div class="player-profile">
+                    <div class="player-profile-wrapper">
+                        <div class="profile-logo player2">
+                            AI
+                        </div>
+                        <svg class="circular-timer" viewBox="0 0 80 80">
+                            <circle class="circular-timer-track" cx="40" cy="40" r="36"></circle>
+                            <circle class="circular-timer-progress" id="player2-timer-progress" cx="40" cy="40" r="36"
+                                style="stroke-dasharray: 226.2; stroke-dashoffset: 0;"></circle>
+                        </svg>
+                    </div>
+                    <div class="player-name">AI Opponent</div>
+                </div>
+            </div>
+
+            <!-- Horizontal Game Board -->
+            <div class="game-board-horizontal">
+                <!-- Player 1 Section -->
+                <div class="candy-section player-section">
+                    <div class="candy-section-header">
+                        <div class="candy-section-title">
+                            🏠 Your Candies
+                        </div>
+                        <div class="candy-counter" id="player-candy-count">12 left</div>
+                    </div>
+                    <div class="candy-grid-enhanced" id="player-candy-grid-enhanced">
+                        <!-- Player's candies populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Player 2 Section -->
+                <div class="candy-section opponent-section">
+                    <div class="candy-section-header">
+                        <div class="candy-section-title">
+                            🎯 Opponent's Candies
+                        </div>
+                        <div class="candy-counter" id="opponent-candy-count">12 left</div>
+                    </div>
+                    <div class="candy-grid-enhanced" id="opponent-candy-grid-enhanced">
+                        <!-- Opponent's candies populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Game Status and Actions -->
+            <div class="card mt-6">
+                <div class="p-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-4">
+                            <div id="game-status-display-enhanced" class="btn btn-info cursor-default">
+                                <i data-lucide="info" class="w-5 h-5 mr-2"></i>
+                                <span id="game-status-text-enhanced" class="flex items-center"><i data-lucide="target"
+                                        class="w-4 h-4 mr-2"></i> Your Turn - Pick a candy!</span>
+                            </div>
+                            <div class="btn btn-secondary cursor-default">
+                                <i data-lucide="box" class="w-5 h-5 mr-2"></i>
+                                <span id="collection-status">0/11 collected</span>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button class="btn btn-secondary" onclick="showScreen('page1')">
+                                <i data-lucide="home" class="w-4 h-4 mr-1"></i>
+                                Home
+                            </button>
+                            <button class="btn btn-secondary" onclick="showHelp()">
+                                <i data-lucide="help-circle" class="w-4 h-4 mr-1"></i>
+                                Help
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 9: Rewards -->
+    <div id="page9" class="screen">
+        <div class="container mx-auto px-4 pt-2 pb-6">
+            <header class="flex items-center justify-between mb-4">
+                <button class="btn btn-secondary" onclick="showScreen('page1')">
+                    <i data-lucide="arrow-left" class="w-5 h-5 mr-2"></i>
+                    Back
+                </button>
+                <h2 class="text-2xl font-display font-bold text-primary">Daily Rewards</h2>
+                <div class="w-20"></div>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="card card-premium p-6">
+                    <div class="text-center mb-4">
+                        <div class="text-4xl mb-2">🎁</div>
+                        <h3 class="font-display font-bold text-primary">Daily Login</h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <span>Day 1</span>
+                            <span class="text-warning font-bold">+50 coins +1 💎</span>
+                        </div>
+                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <span>Day 2</span>
+                            <span class="text-warning font-bold">+75 coins +1 💎</span>
+                        </div>
+                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <span>Day 3</span>
+                            <span class="text-warning font-bold">+100 coins +2 💎</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary w-full mt-4" onclick="claimDailyReward()">
+                        Claim Today's Reward
+                    </button>
+                </div>
+
+                <div class="card card-premium p-6">
+                    <div class="text-center mb-4">
+                        <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mx-auto mb-2"><i
+                                data-lucide="trophy" class="text-yellow-600"></i></div>
+                        <h3 class="font-display font-bold text-primary">Win Streak</h3>
+                    </div>
+                    <div class="text-center mb-6">
+                        <div class="text-3xl font-bold text-success mb-2" id="current-streak">0</div>
+                        <p class="text-gray-600 mb-4">Current Win Streak</p>
+                        <div class="bg-success bg-opacity-10 rounded-lg p-3">
+                            <span class="text-success font-bold">Next: +200 coins at 5 wins</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-premium p-6">
+                    <div class="text-center mb-4">
+                        <div class="text-4xl mb-2">💎</div>
+                        <h3 class="font-display font-bold text-primary">Achievements</h3>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex items-center space-x-3 p-2 rounded-lg">
+                            <div class="w-3 h-3 bg-success rounded-full"></div>
+                            <span class="text-sm">First Win</span>
+                        </div>
+                        <div class="flex items-center space-x-3 p-2 rounded-lg">
+                            <div class="w-3 h-3 bg-gray-300 rounded-full"></div>
+                            <span class="text-sm text-gray-500">Win 10 Games</span>
+                        </div>
+                        <div class="flex items-center space-x-3 p-2 rounded-lg">
+                            <div class="w-3 h-3 bg-gray-300 rounded-full"></div>
+                            <span class="text-sm text-gray-500">Master Player</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 10: Rankings/Leaderboard -->
+    <div id="page10" class="screen">
+        <div class="container mx-auto px-4 pt-2 pb-6">
+            <header class="flex items-center justify-between mb-4">
+                <button class="btn btn-secondary" onclick="showScreen('page1')">
+                    <i data-lucide="arrow-left" class="w-5 h-5 mr-2"></i>
+                    Back
+                </button>
+                <h2 class="text-2xl font-display font-bold text-primary">Global Rankings</h2>
+                <div class="w-20"></div>
+            </header>
+
+            <div class="card card-premium">
+                <div class="p-6">
+                    <div class="flex space-x-4 mb-6">
+                        <button class="btn btn-primary" onclick="showLeaderboard('global')">Global</button>
+                        <button class="btn btn-secondary" onclick="showLeaderboard('weekly')">This Week</button>
+                        <button class="btn btn-secondary" onclick="showLeaderboard('friends')">Friends</button>
+                    </div>
+
+                    <div id="leaderboard-content">
+                        <div class="space-y-4">
+                            <div
+                                class="flex items-center justify-between p-4 bg-gradient-to-r from-yellow-100 to-yellow-200 rounded-lg border-2 border-yellow-300">
+                                <div class="flex items-center space-x-4">
+                                    <div class="text-2xl">🥇</div>
+                                    <div>
+                                        <div class="font-bold text-yellow-800">CandyMaster2024</div>
+                                        <div class="text-sm text-yellow-600">1,247 wins</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="font-bold text-yellow-800">2,350 pts</div>
+                                    <div class="text-sm text-yellow-600">98.5% win rate</div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between p-4 bg-gray-100 rounded-lg">
+                                <div class="flex items-center space-x-4">
+                                    <div class="text-2xl">🥈</div>
+                                    <div>
+                                        <div class="font-bold">SweetTooth_Pro</div>
+                                        <div class="text-sm text-gray-600">892 wins</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="font-bold">1,890 pts</div>
+                                    <div class="text-sm text-gray-600">94.2% win rate</div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between p-4 bg-orange-100 rounded-lg">
+                                <div class="flex items-center space-x-4">
+                                    <div class="text-2xl">🥉</div>
+                                    <div>
+                                        <div class="font-bold text-orange-800">PoisonPicker</div>
+                                        <div class="text-sm text-orange-600">756 wins</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="font-bold text-orange-800">1,654 pts</div>
+                                    <div class="text-sm text-orange-600">91.8% win rate</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 11: Profile -->
+    <div id="page11" class="screen">
+        <div class="container mx-auto px-4 pt-2 pb-6">
+            <header class="flex items-center justify-between mb-4">
+                <button class="btn btn-secondary" onclick="showScreen('page1')">
+                    <i data-lucide="arrow-left" class="w-5 h-5 mr-2"></i>
+                    Back
+                </button>
+                <h2 class="text-2xl font-display font-bold text-primary">Profile</h2>
+                <div class="w-20"></div>
+            </header>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-1">
+                    <div class="card card-premium p-6 text-center">
+                        <div class="w-24 h-24 rounded-full bg-primary flex items-center justify-center mx-auto mb-4">
+                            <i data-lucide="user" class="w-12 h-12 text-white"></i>
+                        </div>
+                        <h3 class="font-display font-bold text-primary mb-1" id="player-name-profile">Player</h3>
+                        <div
+                            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary mb-4 player-id-display">
+                            ID: Loading...
+                        </div>
+                        <p class="text-gray-600 mb-4">Candy Collector</p>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span>Level:</span>
+                                <span class="font-bold">5</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>XP:</span>
+                                <span class="font-bold">1,250/2,000</span>
+                            </div>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2 mt-3">
+                            <div class="bg-primary h-2 rounded-full" style="width: 62.5%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="card card-premium p-6">
+                            <h3 class="font-display font-bold text-primary mb-4">Game Statistics</h3>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="text-center mb-6">
+                                    <div class="text-2xl font-bold text-primary" id="total-games">0</div>
+                                    <div class="text-xs text-gray-500">Total Games</div>
+                                </div>
+                                <div class="text-center mb-6">
+                                    <div class="text-2xl font-bold text-success" id="win-rate">0%</div>
+                                    <div class="text-xs text-gray-500">Win Rate</div>
+                                </div>
+                                <div class="text-center mb-6">
+                                    <div class="text-2xl font-bold text-warning" id="coins-profile">1000</div>
+                                    <div class="text-xs text-gray-500">Coins</div>
+                                </div>
+                                <div class="text-center mb-6">
+                                    <div class="text-2xl font-bold text-info" id="diamonds-profile">50</div>
+                                    <div class="text-xs text-gray-500">Diamonds</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card card-premium p-6">
+                            <h3 class="font-display font-bold text-primary mb-4">Premium Features</h3>
+                            <div class="space-y-4">
+                                <button class="btn btn-success w-full" onclick="removeAds()">
+                                    <span class="icon">🚫</span>
+                                    <span class="text">
+                                        Remove Ads ($5)
+                                    </span>
+                                </button>
+                                <div class="flex items-center space-x-2 text-sm text-gray-600">
+                                    <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                                    </svg>
+                                    <span>Ad-free gaming experience</span>
+                                </div>
+                                <div class="flex items-center space-x-2 text-sm text-gray-600">
+                                    <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                                    </svg>
+                                    <span>Faster game loading</span>
+                                </div>
+                                <div class="flex items-center space-x-2 text-sm text-gray-600">
+                                    <svg class="w-4 h-4 text-success" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                                    </svg>
+                                    <span>Premium support</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card card-premium p-6 col-span-1 md:col-span-2">
+                            <h3 class="font-display font-bold text-primary mb-4">Account Settings</h3>
+                            <div class="flex flex-col sm:flex-row gap-4">
+                                <button class="btn btn-secondary flex-1" onclick="authManager.logout()">
+                                    <i data-lucide="log-out" class="w-4 h-4 mr-2"></i>
+                                    Logout / Switch Account
+                                </button>
+                                <button class="btn btn-danger flex-1" onclick="resetStats()">
+                                    <i data-lucide="trash-2" class="w-4 h-4 mr-2"></i>
+                                    Reset All Data
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="card card-premium p-6">
+                            <h3 class="font-display font-bold text-primary mb-4">Settings</h3>
+                            <div class="space-y-3">
+                                <button class="btn btn-secondary w-full" onclick="toggleSound()">
+                                    🔊 Sound Effects
+                                </button>
+                                <button class="btn btn-secondary w-full" onclick="toggleMusic()">
+                                    🎵 Background Music
+                                </button>
+                                <button class="btn btn-secondary w-full" onclick="resetStats()">
+                                    <i data-lucide="history" class="w-4 h-4 mr-2"></i> Reset Statistics
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 12: Global Matchmaking (Before City Selection) -->
+    <div id="page12" class="screen">
+        <div class="container mx-auto px-4 pt-2 pb-6">
+            <!-- Enhanced header -->
+            <header class="flex items-center justify-between mb-4">
+                <button class="btn btn-secondary" onclick="showScreen('page1')">
+                    <i data-lucide="arrow-left" class="w-5 h-5 mr-2"></i>
+                    Back
+                </button>
+                <h2 class="text-2xl font-display font-bold text-primary">Global Matchmaking</h2>
+                <div class="w-20"></div> <!-- Spacer for centering -->
+            </header>
+
+            <!-- Global Matchmaking Interface -->
+            <div class="max-w-2xl mx-auto">
+                <!-- Player Balance Display -->
+                <div class="card card-premium text-center p-4 mb-8">
+                    <div class="flex items-center justify-center space-x-4">
+                        <div class="w-12 h-12 bg-warning/10 rounded-lg flex items-center justify-center mx-auto mb-2"><i
+                                data-lucide="wallet" class="text-warning"></i></div>
+                        <div>
+                            <div class="text-sm text-gray-600">Your Balance</div>
+                            <div class="text-xl font-bold text-primary" id="player-balance-matchmaking">10000</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Matchmaking Section -->
+                <div class="card card-premium text-center p-8 mb-8">
+                    <div class="text-8xl mb-6">🌍</div>
+                    <h3 class="text-3xl font-display font-bold text-primary mb-4">Find Your Opponent</h3>
+                    <p class="text-lg text-gray-600 mb-8">Connect with players from around the world for competitive
+                        candy duels</p>
+
+                    <!-- Matchmaking Status -->
+                    <div id="matchmaking-status-page" class="mb-8">
+                        <div id="matchmaking-idle-page" class="space-y-4">
+                            <div class="bg-blue-50 rounded-lg p-6">
+                                <div
+                                    class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                    <i data-lucide="target" class="text-primary"></i>
+                                </div>
+                                <div class="text-lg font-semibold text-blue-800">Ready to Find Match</div>
+                                <div class="text-sm text-blue-600">Click below to start searching for opponents
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="matchmaking-searching-page" class="space-y-4" style="display: none;">
+                            <div class="bg-orange-50 rounded-lg p-6">
+                                <div
+                                    class="w-12 h-12 bg-info/10 rounded-lg flex items-center justify-center mx-auto mb-2 animate-pulse">
+                                    <i data-lucide="search" class="text-info"></i>
+                                </div>
+                                <div class="text-lg font-semibold text-orange-800">Searching for Players...</div>
+                                <div class="text-sm text-orange-600">Finding the perfect opponent for you</div>
+                                <div class="mt-4">
+                                    <div
+                                        class="animate-spin inline-block w-8 h-8 border-4 border-current border-t-transparent text-orange-600 rounded-full">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="matchmaking-found-page" class="space-y-4" style="display: none;">
+                            <div class="bg-green-50 rounded-lg p-6">
+                                <div
+                                    class="w-12 h-12 bg-success/10 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                    <i data-lucide="check-circle-2" class="text-success"></i>
+                                </div>
+                                <div class="text-lg font-semibold text-green-800">Opponent Found!</div>
+                                <div class="text-sm text-green-600">Connecting to your match...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Matchmaking Buttons -->
+                    <div class="space-y-4">
+                        <button id="find-player-btn-page" class="btn btn-primary btn-lg w-full text-lg py-4"
+                            onclick="startGlobalMatchmaking()">
+                            <i data-lucide="search" class="w-6 h-6 mr-3"></i>
+                            Find Random Player
+                        </button>
+
+                        <button id="cancel-matchmaking-btn-page" class="btn btn-secondary w-full"
+                            onclick="cancelGlobalMatchmaking()" style="display: none;">
+                            <i data-lucide="x-circle" class="w-5 h-5 mr-2"></i>
                             Cancel Search
                         </button>
-                        
-                        <div class="text-sm text-gray-500">
-                            Having trouble finding players? 
-                            <button class="text-primary hover:text-primary-dark underline" onclick="showSearchTips()">
-                                Get tips
-                            </button>
+                    </div>
+
+                    <!-- Queue Information -->
+                    <div id="queue-info-page" class="mt-6 p-4 bg-gray-50 rounded-lg" style="display: none;">
+                        <div class="text-sm text-gray-600">
+                            <div id="queue-position-page" class="font-semibold">Position in queue: 1</div>
+                            <div class="text-xs mt-1">Average wait time: 5-10 seconds</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Match Found Animation (Hidden by default) -->
-                <div id="match-found-overlay" class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center z-50">
-                    <div class="bg-white rounded-lg p-8 max-w-md mx-4 text-center">
-                        <div class="text-6xl mb-4 animate-bounce">🎯</div>
-                        <h3 class="text-2xl font-bold text-green-600 mb-2">Match Found!</h3>
-                        <p class="text-gray-600 mb-4">Opponent located. Preparing game...</p>
-                        <div class="text-sm text-gray-500">
-                            <span id="opponent-info">Connecting to opponent...</span>
+                <!-- Online Gaming Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div class="card text-center p-4">
+                        <div class="text-3xl mb-2">🎯</div>
+                        <div class="text-sm text-gray-600">Players Online</div>
+                        <div class="text-xl font-bold text-primary" id="online-players-count-page">247</div>
+                    </div>
+                    <div class="card text-center p-4">
+                        <div class="text-3xl mb-2">⚡</div>
+                        <div class="text-sm text-gray-600">Avg Match Time</div>
+                        <div class="text-xl font-bold text-success">8s</div>
+                    </div>
+                    <div class="card text-center p-4">
+                        <div class="text-3xl mb-2">🏆</div>
+                        <div class="text-sm text-gray-600">Games Today</div>
+                        <div class="text-xl font-bold text-warning" id="games-today-count-page">1,847</div>
+                    </div>
+                </div>
+
+                <!-- How It Works -->
+                <div class="card card-premium p-6">
+                    <h3 class="text-xl font-display font-bold text-primary mb-4">How Global Matchmaking Works</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="text-center mb-6">
+                            <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                <i data-lucide="search" class="text-blue-600"></i>
+                            </div>
+                            <div class="text-sm font-semibold text-gray-800">1. Find Player</div>
+                            <div class="text-xs text-gray-600">Search for opponents worldwide</div>
+                        </div>
+                        <div class="text-center mb-6">
+                            <div
+                                class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                <i data-lucide="building-2" class="text-orange-600"></i>
+                            </div>
+                            <div class="text-sm font-semibold text-gray-800">2. Choose Arena</div>
+                            <div class="text-xs text-gray-600">Select Dubai, Cairo, or Oslo</div>
+                        </div>
+                        <div class="text-center mb-6">
+                            <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+                                <i data-lucide="swords" class="text-red-600"></i>
+                            </div>
+                            <div class="text-sm font-semibold text-gray-800">3. Battle!</div>
+                            <div class="text-xs text-gray-600">Compete for coins and glory</div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Page 2b: Searching for Player (PRD Compliant) -->
+    <div id="page2b" class="screen">
+        <div class="container mx-auto px-4 pt-2 pb-6">
+            <!-- Breadcrumb Navigation -->
+            <nav class="breadcrumb mb-2">
+                <ol class="flex items-center space-x-2 text-sm">
+                    <li><a href="#" onclick="showScreen('page1')" class="text-primary hover:text-primary-dark">🏠
+                            Home</a></li>
+                    <li class="text-gray-400">›</li>
+                    <li><a href="#" onclick="showScreen('page2')" class="text-primary hover:text-primary-dark">🌍
+                            Online Arenas</a></li>
+                    <li class="text-gray-400">›</li>
+                    <li class="text-gray-600 flex items-center"><i data-lucide="search" class="w-4 h-4 mr-2"></i>
+                        Finding Player</li>
+                </ol>
+            </nav>
+
+            <!-- Searching Interface -->
+            <div class="max-w-2xl mx-auto text-center">
+                <!-- City Display -->
+                <div class="mb-4">
+                    <div id="selected-city-icon"
+                        class="w-40 h-40 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-8 border-4 border-white/20 shadow-2xl animate-pulse">
+                        <i data-lucide="building-2" class="w-24 h-24 text-white"></i>
+                    </div>
+                    <h2 class="text-3xl font-display font-bold text-primary mb-2">Finding Opponent</h2>
+                    <p id="searching-city-text" class="text-lg text-gray-600">Searching for players in Dubai...</p>
+                </div>
+
+                <!-- Animated Loading Spinner -->
+                <div class="relative mb-8">
+                    <div class="searching-spinner mx-auto mb-4"></div>
+                    <div id="searching-dots" class="text-2xl text-primary">
+                        <span class="animate-pulse">●</span>
+                        <span class="animate-pulse" style="animation-delay: 0.2s">●</span>
+                        <span class="animate-pulse" style="animation-delay: 0.4s">●</span>
+                    </div>
+                </div>
+
+                <!-- Status Updates -->
+                <div id="search-status" class="mb-8">
+                    <div class="bg-blue-50 rounded-lg p-4">
+                        <div class="text-blue-700 font-medium" id="search-status-text">
+                            🔍 Scanning for available players...
+                        </div>
+                        <div class="mt-2">
+                            <div class="text-sm text-blue-600" id="search-time-remaining">
+                                Time remaining: <span id="countdown-timer">30</span> seconds
+                            </div>
+                            <div class="w-full bg-blue-200 rounded-full h-2 mt-2">
+                                <div id="search-progress"
+                                    class="bg-blue-600 h-2 rounded-full transition-all duration-1000"
+                                    style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Search Stats -->
+                <div class="grid grid-cols-2 gap-4 mb-8">
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center mx-auto mb-2"><i
+                                data-lucide="users" class="text-indigo-600"></i></div>
+                        <div class="text-sm text-gray-600">Players Online</div>
+                        <div class="font-bold text-lg" id="players-online-count">Searching...</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-2xl mb-2">⚡</div>
+                        <div class="text-sm text-gray-600">Avg. Wait Time</div>
+                        <div class="font-bold text-lg" id="avg-wait-time">~15 sec</div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="space-y-4">
+                    <button id="cancel-search-btn" class="btn btn-danger btn-lg w-full max-w-md"
+                        onclick="cancelPlayerSearch()">
+                        <i data-lucide="x-circle" class="w-5 h-5 mr-2"></i>
+                        Cancel Search
+                    </button>
+
+                    <div class="text-sm text-gray-500">
+                        Having trouble finding players?
+                        <button class="text-primary hover:text-primary-dark underline" onclick="showSearchTips()">
+                            Get tips
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Match Found Animation (Hidden by default) -->
+            <div id="match-found-overlay"
+                class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center z-50">
+                <div class="bg-white rounded-lg p-8 max-w-md mx-4 text-center">
+                    <div
+                        class="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                        <i data-lucide="target" class="w-12 h-12 text-primary"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-green-600 mb-2">Match Found!</h3>
+                    <p class="text-gray-600 mb-4">Opponent located. Preparing game...</p>
+                    <div class="text-sm text-gray-500">
+                        <span id="opponent-info">Connecting to opponent...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     </div>
 
     <!-- Loading overlay -->
@@ -1579,12 +1733,15 @@
 
     <!-- Turn Timer Overlay -->
     <div id="turn-timer-overlay" class="turn-timer">
-        <div class="mb-4">⏰ Your Turn!</div>
+        <div class="mb-4 flex items-center justify-center"><i data-lucide="clock" class="w-5 h-5 mr-2"></i> Your Turn!
+        </div>
         <div class="text-6xl font-mono" id="timer-countdown">10</div>
         <div class="text-lg mt-2">seconds remaining</div>
     </div>
 
     <!-- Scripts -->
+    <script src="js/auth-manager.js"></script>
+    <script src="js/game.js"></script>
     <script src="js/currency-manager.js"></script>
     <script src="js/ux-improvements.js"></script>
     <script src="js/enhanced-candy-pool.js"></script>
@@ -1596,136 +1753,38 @@
     <script src="js/prd-p2p-integration.js"></script>
     <script src="js/game-initializer.js"></script>
     <script src="js/button-manager.js"></script>
-    <script src="js/game.js"></script>
     <script src="js/matchmaking.js"></script>
     <script src="js/startup-test.js"></script>
 
-    
+
     <!-- Complete Navigation Test Script -->
+    <script src="js/navigation-test.js"></script>
+
+    <!-- Initialize Lucide Icons -->
     <script>
-        // ===== COMPLETE NAVIGATION TEST SCRIPT =====
-        console.log('🧪 Complete Navigation Test Script Loading...');
-        
-        window.navigationTestSuite = {
-            runQuickTest: function() {
-                console.log('🧪 Running quick navigation test...');
-                
-                // Test functions
-                const functions = ['showScreen', 'startNewGameNew', 'startAIGameNew', 'startOnlineGameNew'];
-                functions.forEach(funcName => {
-                    if (typeof window[funcName] === 'function') {
-                        console.log(`✅ ${funcName} - Available`);
-                    } else {
-                        console.log(`❌ ${funcName} - Missing`);
-                    }
-                });
-                
-                // Test buttons
-                const playAgainBtns = document.querySelectorAll('button[onclick*="startNewGameNew()"]');
-                const mainMenuBtns = document.querySelectorAll('button[onclick*="showScreen(\'page1\')"]');
-                
-                console.log(`🔘 Play Again buttons: ${playAgainBtns.length}`);
-                console.log(`🔘 Main Menu buttons: ${mainMenuBtns.length}`);
-                
-                // Test Page 5
-                const page5 = document.getElementById('page5');
-                if (page5) {
-                    console.log('✅ Page 5 (Game Results) exists');
-                    const playAgainInPage5 = page5.querySelector('button[onclick*="startNewGameNew()"]');
-                    const mainMenuInPage5 = page5.querySelector('button[onclick*="showScreen(\'page1\')"]');
-                    
-                    if (playAgainInPage5) {
-                        console.log('✅ Play Again button found in Page 5');
-                    } else {
-                        console.log('❌ Play Again button NOT found in Page 5');
-                    }
-                    
-                    if (mainMenuInPage5) {
-                        console.log('✅ Main Menu button found in Page 5');
-                    } else {
-                        console.log('❌ Main Menu button NOT found in Page 5');
-                    }
-                } else {
-                    console.log('❌ Page 5 (Game Results) NOT found');
-                }
-                
-                // Test game state
-                if (typeof gameState !== 'undefined' && gameState) {
-                    console.log('✅ Game state exists');
-                } else {
-                    console.log('❌ Game state missing');
-                }
-            },
-            
-            testButtonClicks: function() {
-                console.log('🧪 Testing button clicks...');
-                
-                // Test Main Menu button
-                const mainMenuBtn = document.querySelector('button[onclick*="showScreen(\'page1\')"]');
-                if (mainMenuBtn) {
-                    console.log('🔘 Testing Main Menu button...');
-                    try {
-                        mainMenuBtn.click();
-                        console.log('✅ Main Menu button clicked successfully');
-                    } catch (error) {
-                        console.log('❌ Main Menu button click failed:', error.message);
-                    }
-                } else {
-                    console.log('❌ Main Menu button not found');
-                }
-                
-                // Test Play Again button
-                const playAgainBtn = document.querySelector('button[onclick*="startNewGameNew()"]');
-                if (playAgainBtn) {
-                    console.log('🔘 Testing Play Again button...');
-                    try {
-                        // Don't actually click it as it would restart the game
-                        console.log('✅ Play Again button found and clickable');
-                    } catch (error) {
-                        console.log('❌ Play Again button issue:', error.message);
-                    }
-                } else {
-                    console.log('❌ Play Again button not found');
-                }
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
             }
-        };
-        
-        // Auto-run tests
-        document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(() => {
-                console.log('🚀 Auto-running navigation tests...');
-                navigationTestSuite.runQuickTest();
-            }, 3000);
+            // Initialize Auth
+            if (typeof authManager !== 'undefined') {
+                authManager.init();
+            }
         });
-        
-        console.log('✅ Complete Navigation Test Script Loaded');
+
+        // Re-initialize Lucide icons when screens change
+        const originalShowScreen = window.showScreen;
+        window.showScreen = function (screenId) {
+            if (typeof originalShowScreen === 'function') {
+                originalShowScreen(screenId);
+            }
+            setTimeout(() => {
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+            }, 200);
+        };
     </script>
-    
-    <!-- Button State CSS -->
-    <style>
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .btn-loading {
-            opacity: 0.8;
-            cursor: not-allowed;
-        }
-        
-        .btn-success {
-            background-color: #28a745 !important;
-            border-color: #28a745 !important;
-        }
-        
-        .btn-error {
-            background-color: #dc3545 !important;
-            border-color: #dc3545 !important;
-        }
-        
-        .loading-spinner {
-            animation: spin 1s linear infinite;
-        }
-    </style>
 </body>
+
 </html>

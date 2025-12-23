@@ -1,12 +1,42 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel, EmailStr
 from typing import Dict, List, Optional, Any
 import json
 import asyncio
+import hashlib
+import secrets
+import time
 from game_engine import PoisonedCandyDuel, GameState, GameResult
 from database import db_service
 from config import settings
+
+# In-memory user storage (replace with database in production)
+users_db: Dict[str, dict] = {}
+tokens_db: Dict[str, str] = {}  # token -> user_id
+
+security = HTTPBearer(auto_error=False)
+
+def hash_password(password: str) -> str:
+    """Hash password using SHA-256 with salt."""
+    salt = "pcd_salt_v1"  # In production, use unique salt per user
+    return hashlib.sha256(f"{salt}{password}".encode()).hexdigest()
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify password against hash."""
+    return hash_password(password) == hashed
+
+def generate_token() -> str:
+    """Generate a secure random token."""
+    return secrets.token_urlsafe(32)
+
+def get_user_from_token(token: str) -> Optional[dict]:
+    """Get user data from token."""
+    user_id = tokens_db.get(token)
+    if user_id and user_id in users_db:
+        return users_db[user_id]
+    return None
 
 app = FastAPI(title="Poisoned Candy Duel API", version="1.0.0")
 
@@ -78,11 +108,30 @@ class CityMatchmakingQueue:
         self.player_timers: Dict[str, Any] = {}  # Track timeout timers for each player
     
     async def add_player(self, player_id: str, player_name: str, city: str, websocket: WebSocket):
-        """Add a player to a city-specific matchmaking queue."""
+        """Add a player to a city's matchmaking queue."""
         city_lower = city.lower()
         if city_lower not in self.city_queues:
-            raise ValueError(f"Invalid city: {city}. Valid cities: dubai, cairo, oslo")
+            await websocket.send_text(json.dumps({
+                "type": "error",
+                "message": f"Invalid city: {city}. Valid cities: Dubai, Cairo, Oslo"
+            }))
+            return
         
+        # Check player balance before adding to queue
+        try:
+            player_data = await db_service.get_player(player_name)
+            current_balance = player_data["coin_balance"] if player_data else 10000
+            entry_cost = self.get_city_entry_cost(city_lower)
+            
+            if current_balance < entry_cost:
+                await websocket.send_text(json.dumps({
+                    "type": "matchmaking_error",
+                    "message": f"Insufficient balance. {city.title()} requires {entry_cost} coins (you have {current_balance})."
+                }))
+                return
+        except Exception as e:
+            print(f"Error checking balance for {player_name}: {e}")
+
         player = {
             "id": player_id,
             "name": player_name,
@@ -104,6 +153,7 @@ class CityMatchmakingQueue:
         
         # Try to match players immediately within the same city
         await self.try_match_players(city_lower)
+
     
     def remove_player(self, player_id: str):
         """Remove a player from their city's matchmaking queue."""
@@ -162,17 +212,21 @@ class CityMatchmakingQueue:
             if player2["id"] in self.player_cities:
                 del self.player_cities[player2["id"]]
             
-            # Create game with city information
-            game_id = game_engine.create_game(player1["name"], player2["name"])
-            game_state = game_engine.get_game_state(game_id)
-            
-            # Add city information to game state
-            game_state["city"] = city
-            game_state["entry_cost"] = self.get_city_entry_cost(city)
-            game_state["prize_pool"] = self.get_city_prize_pool(city)
-            game_state["turn_timer"] = self.get_city_turn_timer(city)
-            
-            print(f"🎮 Matched {city} players: {player1['name']} vs {player2['name']} (Game: {game_id})")
+            # Deduct entry fees
+            entry_cost = self.get_city_entry_cost(city)
+            for p in [player1, player2]:
+                try:
+                    await db_service.update_player_balance(p["name"], -entry_cost, 0)
+                    await db_service.create_transaction({
+                        "player_name": p["name"],
+                        "game_id": game_id,
+                        "transaction_type": "game_entry",
+                        "amount": -entry_cost,
+                        "description": f"Entry fee for {city.title()} Arena",
+                        "arena_type": city
+                    })
+                except Exception as e:
+                    print(f"Error deducting entry fee for {p['name']}: {e}")
             
             # Notify both players
             match_data = {
@@ -350,6 +404,140 @@ async def get_server_time():
         "server_id": "pcd-game-server-1"
     }
 
+# ===== AUTHENTICATION ENDPOINTS =====
+
+class RegisterRequest(BaseModel):
+    """Request model for user registration."""
+    email: str
+    password: str
+    username: str
+
+class LoginRequest(BaseModel):
+    """Request model for user login."""
+    email: str
+    password: str
+
+@app.post("/auth/register")
+async def register_user(request: RegisterRequest):
+    """Register a new user with email and password."""
+    # Validate email format
+    if "@" not in request.email or "." not in request.email:
+        return {"success": False, "message": "Invalid email format"}
+    
+    # Check if email already exists
+    for user_id, user in users_db.items():
+        if user["email"] == request.email.lower():
+            return {"success": False, "message": "Email already registered"}
+    
+    # Check if username already exists
+    for user_id, user in users_db.items():
+        if user["username"].lower() == request.username.lower():
+            return {"success": False, "message": "Username already taken"}
+    
+    # Validate password length
+    if len(request.password) < 6:
+        return {"success": False, "message": "Password must be at least 6 characters"}
+    
+    # Create user
+    user_id = f"U_{secrets.token_hex(8)}"
+    user = {
+        "id": user_id,
+        "email": request.email.lower(),
+        "username": request.username,
+        "password_hash": hash_password(request.password),
+        "created_at": int(time.time()),
+        "coin_balance": 10000,
+        "diamonds_balance": 500,
+        "total_games": 0,
+        "wins": 0,
+        "losses": 0
+    }
+    
+    users_db[user_id] = user
+    
+    # Create player profile in database
+    try:
+        await db_service.update_player_balance(request.username, 0, 0)
+    except Exception as e:
+        print(f"⚠️ Failed to create player profile for {request.username}: {e}")
+    
+    # Generate token
+    token = generate_token()
+    tokens_db[token] = user_id
+    
+    print(f"👤 New user registered: {request.username} ({user_id})")
+    
+    # Return user data without password
+    user_public = {k: v for k, v in user.items() if k != "password_hash"}
+    
+    return {
+        "success": True,
+        "message": "Registration successful",
+        "data": {
+            "token": token,
+            "user": user_public
+        }
+    }
+
+@app.post("/auth/login")
+async def login_user(request: LoginRequest):
+    """Login with email and password."""
+    email = request.email.lower()
+    
+    # Find user by email
+    user = None
+    user_id = None
+    for uid, u in users_db.items():
+        if u["email"] == email:
+            user = u
+            user_id = uid
+            break
+    
+    if not user:
+        return {"success": False, "message": "Invalid email or password"}
+    
+    # Verify password
+    if not verify_password(request.password, user["password_hash"]):
+        return {"success": False, "message": "Invalid email or password"}
+    
+    # Generate new token
+    token = generate_token()
+    tokens_db[token] = user_id
+    
+    print(f"👤 User logged in: {user['username']} ({user_id})")
+    
+    # Return user data without password
+    user_public = {k: v for k, v in user.items() if k != "password_hash"}
+    
+    return {
+        "success": True,
+        "message": "Login successful",
+        "data": {
+            "token": token,
+            "user": user_public
+        }
+    }
+
+@app.get("/auth/me")
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Get current user from token."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = credentials.credentials
+    user = get_user_from_token(token)
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    # Return user data without password
+    user_public = {k: v for k, v in user.items() if k != "password_hash"}
+    
+    return {
+        "success": True,
+        "data": {"user": user_public}
+    }
+
 @app.post("/games", response_model=GameResponse)
 async def create_game(request: CreateGameRequest):
     """Create a new game."""
@@ -479,10 +667,28 @@ async def pick_candy(game_id: str, request: PickCandyRequest):
     # Get updated game state
     updated_game_state = game_engine.get_game_state(game_id)
     
-    # Determine game result
-    game_result = result.get("result", "ongoing")
-    
     print(f"✅ Move successful, game result: {game_result}")
+    
+    # Process rewards if game ended
+    if game_result == "win":
+        winner_name = updated_game_state.get("winner", None)
+        if winner_name:
+            prize_pool = updated_game_state.get("prize_pool", 950)
+            city = updated_game_state.get("city", "dubai")
+            
+            print(f"🏆 Game ended, paying prize {prize_pool} to {winner_name}")
+            try:
+                await db_service.update_player_balance(winner_name, prize_pool, 0)
+                await db_service.create_transaction({
+                    "player_name": winner_name,
+                    "game_id": game_id,
+                    "transaction_type": "prize_payout",
+                    "amount": prize_pool,
+                    "description": f"Prize for winning in {city.title()} Arena",
+                    "arena_type": city
+                })
+            except Exception as e:
+                print(f"Error paying prize to {winner_name}: {e}")
     
     return GameResponse(
         success=True,
@@ -589,19 +795,18 @@ async def get_player_balance(request: PlayerBalanceRequest):
     """Get player's current coin and diamond balance."""
     try:
         # First try to get from database
-        if hasattr(db_service, 'supabase'):
-            result = db_service.supabase.table("players").select("coin_balance, diamonds_balance").eq("name", request.player_name).execute()
-            
-            if result.data:
-                return GameResponse(
-                    success=True,
-                    message="Balance retrieved",
-                    data={
-                        "player_name": request.player_name,
-                        "coin_balance": result.data[0]["coin_balance"],
-                        "diamonds_balance": result.data[0]["diamonds_balance"]
-                    }
-                )
+        player = await db_service.get_player(request.player_name)
+        
+        if player:
+            return GameResponse(
+                success=True,
+                message="Balance retrieved",
+                data={
+                    "player_name": request.player_name,
+                    "coin_balance": player["coin_balance"],
+                    "diamonds_balance": player["diamonds_balance"]
+                }
+            )
         
         # Return default balance if player not found
         return GameResponse(
@@ -624,92 +829,53 @@ async def get_player_balance(request: PlayerBalanceRequest):
 async def process_coin_transaction(request: CoinTransactionRequest):
     """Process a coin transaction (debit or credit)."""
     try:
-        # Get current balance or create player if not exists
-        current_balance = 10000  # Default
-        current_diamonds = 500   # Default - PRD: 500 diamonds for new players
+        # Get current balance
+        player = await db_service.get_player(request.player_name)
+        current_balance = player["coin_balance"] if player else 10000
         
-        if hasattr(db_service, 'supabase'):
-            # Check if player exists
-            player_result = db_service.supabase.table("players").select("*").eq("name", request.player_name).execute()
-            
-            if player_result.data:
-                # Player exists, get current balance
-                player = player_result.data[0]
-                current_balance = player["coin_balance"]
-                current_diamonds = player["diamonds_balance"]
-            else:
-                # Create new player
-                new_player = {
-                    "name": request.player_name,
-                    "coin_balance": 10000,
-                    "diamonds_balance": 500,  # PRD: 500 diamonds for new players
-                    "total_coins_earned": 0,
-                    "total_coins_spent": 0
-                }
-                db_service.supabase.table("players").insert(new_player).execute()
-            
-            # Calculate new balance
-            new_balance = current_balance + request.amount
-            
-            # Validate sufficient funds for negative transactions
-            if new_balance < 0:
-                return GameResponse(
-                    success=False,
-                    message="Insufficient funds",
-                    data={
-                        "current_balance": current_balance,
-                        "requested_amount": request.amount,
-                        "shortfall": abs(new_balance)
-                    }
-                )
-            
-            # Update player balance
-            update_data = {
-                "coin_balance": new_balance,
-                "last_active": "NOW()"
-            }
-            
-            # Update lifetime stats
-            if request.amount > 0:
-                update_data["total_coins_earned"] = player.get("total_coins_earned", 0) + request.amount
-            else:
-                update_data["total_coins_spent"] = player.get("total_coins_spent", 0) + abs(request.amount)
-            
-            db_service.supabase.table("players").update(update_data).eq("name", request.player_name).execute()
-            
-            # Record transaction
-            transaction_data = {
-                "player_name": request.player_name,
-                "game_id": request.game_id,
-                "transaction_type": request.transaction_type,
-                "amount": request.amount,
-                "balance_after": new_balance,
-                "description": request.description,
-                "arena_type": request.arena_type
-            }
-            
-            db_service.supabase.table("coin_transactions").insert(transaction_data).execute()
-            
+        # Calculate new balance
+        new_balance = current_balance + request.amount
+        
+        # Validate sufficient funds for negative transactions
+        if new_balance < 0:
             return GameResponse(
-                success=True,
-                message="Transaction processed successfully",
+                success=False,
+                message="Insufficient funds",
                 data={
-                    "player_name": request.player_name,
-                    "transaction_amount": request.amount,
-                    "previous_balance": current_balance,
-                    "new_balance": new_balance,
-                    "transaction_type": request.transaction_type
+                    "current_balance": current_balance,
+                    "requested_amount": request.amount,
+                    "shortfall": abs(new_balance)
                 }
             )
         
-        # Fallback for in-memory mode
+        # Update player balance
+        success = await db_service.update_player_balance(request.player_name, request.amount, 0)
+        
+        if not success:
+            raise Exception("Failed to update player balance")
+            
+        # Record transaction
+        transaction_data = {
+            "player_name": request.player_name,
+            "game_id": request.game_id,
+            "transaction_type": request.transaction_type,
+            "amount": request.amount,
+            "balance_after": new_balance,
+            "description": request.description,
+            "arena_type": request.arena_type
+        }
+        
+        await db_service.create_transaction(transaction_data)
+        
         return GameResponse(
             success=True,
-            message="Transaction processed (in-memory mode)",
+            message="Transaction processed successfully",
             data={
                 "player_name": request.player_name,
                 "transaction_amount": request.amount,
-                "new_balance": max(0, current_balance + request.amount)
+                "previous_balance": current_balance,
+                "new_balance": new_balance,
+                "transaction_type": request.transaction_type
             }
         )
         
@@ -825,6 +991,84 @@ async def get_arena_economics():
             "success": False,
             "message": f"Failed to get arena economics: {str(e)}"
         }
+
+# ===== LEADERBOARD ENDPOINTS =====
+
+@app.get("/leaderboard/{sort_by}")
+async def get_leaderboard(sort_by: str = "wins", limit: int = 10):
+    """Get leaderboard sorted by specified field.
+    
+    Args:
+        sort_by: One of 'wins', 'winrate', 'coins', 'games'
+        limit: Maximum number of players to return (default 10)
+    """
+    try:
+        valid_sort_options = ["wins", "winrate", "coins", "games"]
+        if sort_by not in valid_sort_options:
+            return {
+                "success": False,
+                "message": f"Invalid sort option. Valid options: {', '.join(valid_sort_options)}"
+            }
+        
+        players = await db_service.get_leaderboard(sort_by, limit)
+        
+        # Format response with calculated win rates
+        leaderboard = []
+        for i, player in enumerate(players):
+            games = player.get("games_played", 0)
+            wins = player.get("games_won", 0)
+            winrate = round((wins / games * 100) if games > 0 else 0, 1)
+            
+            leaderboard.append({
+                "rank": i + 1,
+                "name": player.get("name", "Anonymous"),
+                "wins": wins,
+                "games": games,
+                "winrate": winrate,
+                "coins": player.get("coin_balance", 0)
+            })
+        
+        return {
+            "success": True,
+            "data": {
+                "sort_by": sort_by,
+                "leaderboard": leaderboard
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Failed to get leaderboard: {str(e)}"
+        }
+
+class PlayerStatsUpdate(BaseModel):
+    """Request model for updating player stats."""
+    player_name: str
+    won: bool
+
+@app.post("/players/stats/update", response_model=GameResponse)
+async def update_player_stats(request: PlayerStatsUpdate):
+    """Update player statistics after a game."""
+    try:
+        success = await db_service.update_player_stats(request.player_name, request.won)
+        
+        if success:
+            return GameResponse(
+                success=True,
+                message=f"Stats updated for {request.player_name}"
+            )
+        else:
+            return GameResponse(
+                success=False,
+                message="Failed to update player stats"
+            )
+    except Exception as e:
+        return GameResponse(
+            success=False,
+            message=f"Error updating stats: {str(e)}"
+        )
+
 
 @app.post("/matchmaking/join", response_model=GameResponse)
 async def join_matchmaking_queue(request: JoinMatchmakingCityRequest):
@@ -1154,6 +1398,76 @@ async def cleanup_p2p_connection(player_id: str):
     # Remove from waiting players
     for city, players in p2p_waiting_players.items():
         p2p_waiting_players[city] = [p for p in players if p["id"] != player_id]
+
+# ===== DAILY REWARD ENDPOINTS =====
+
+@app.post("/players/daily-reward", response_model=GameResponse)
+async def claim_daily_reward(request: PlayerBalanceRequest):
+    """Claim daily coin reward (once every 24 hours)."""
+    try:
+        player = await db_service.get_player(request.player_name)
+        if not player:
+            return GameResponse(success=False, message="Player not found")
+            
+        last_reward = player.get("last_daily_reward")
+        now = datetime.now(timezone.utc)
+        
+        if last_reward:
+            # Parse last reward time
+            if isinstance(last_reward, str):
+                last_reward_time = datetime.fromisoformat(last_reward.replace('Z', '+00:00'))
+            else:
+                last_reward_time = last_reward
+                
+            # Check if 24 hours have passed
+            time_diff = now - last_reward_time
+            if time_diff.total_seconds() < 24 * 3600:
+                seconds_remaining = (24 * 3600) - time_diff.total_seconds()
+                hours = int(seconds_remaining // 3600)
+                minutes = int((seconds_remaining % 3600) // 60)
+                
+                return GameResponse(
+                    success=False,
+                    message=f"Daily reward is on cooldown. Next claim available in {hours}h {minutes}m.",
+                    data={"cooldown_seconds_remaining": int(seconds_remaining)}
+                )
+        
+        # Grant reward
+        reward_amount = 1000
+        await db_service.update_player_balance(request.player_name, reward_amount, 0)
+        
+        # Update last_daily_reward timestamp
+        update_data = {"last_daily_reward": now.isoformat()}
+        if hasattr(db_service, 'supabase'):
+            db_service.supabase.table("players").update(update_data).eq("name", request.player_name).execute()
+        else:
+            # For in-memory, we already updated balance, now update the dict manually
+            if request.player_name in db_service.players:
+                db_service.players[request.player_name]["last_daily_reward"] = now.isoformat()
+        
+        # Record transaction
+        await db_service.create_transaction({
+            "player_name": request.player_name,
+            "transaction_type": "reward",
+            "amount": reward_amount,
+            "description": "Daily login reward"
+        })
+        
+        # Get updated balance
+        updated_player = await db_service.get_player(request.player_name)
+        
+        return GameResponse(
+            success=True,
+            message=f"Successfully claimed {reward_amount} coins!",
+            data={
+                "reward_amount": reward_amount,
+                "new_balance": updated_player["coin_balance"]
+            }
+        )
+        
+    except Exception as e:
+        print(f"Error in claim_daily_reward: {e}")
+        return GameResponse(success=False, message=f"Failed to claim reward: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

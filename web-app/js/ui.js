@@ -9,9 +9,9 @@ function showNotification(message, type = 'info', duration = 3000) {
         top: 20px;
         right: 20px;
         padding: 1rem 1.5rem;
-        background: ${type === 'success' ? 'var(--success-color)' : 
-                    type === 'error' ? 'var(--danger-color)' : 
-                    type === 'warning' ? 'var(--warning-color)' : 'var(--primary-color)'};
+        background: ${type === 'success' ? 'var(--success-color)' :
+            type === 'error' ? 'var(--danger-color)' :
+                type === 'warning' ? 'var(--warning-color)' : 'var(--primary-color)'};
         color: white;
         border-radius: var(--radius-lg);
         box-shadow: var(--shadow-xl);
@@ -22,14 +22,14 @@ function showNotification(message, type = 'info', duration = 3000) {
         font-weight: 600;
     `;
     notification.textContent = message;
-    
+
     document.body.appendChild(notification);
-    
+
     // Animate in
     setTimeout(() => {
         notification.style.transform = 'translateX(0)';
     }, 10);
-    
+
     // Animate out and remove
     setTimeout(() => {
         notification.style.transform = 'translateX(100%)';
@@ -43,11 +43,11 @@ function showNotification(message, type = 'info', duration = 3000) {
 function animateCandyPick(element, callback) {
     element.style.transform = 'scale(1.2) rotate(10deg)';
     element.style.transition = 'all 0.3s ease-out';
-    
+
     setTimeout(() => {
         element.style.transform = 'scale(0) rotate(360deg)';
         element.style.opacity = '0';
-        
+
         setTimeout(() => {
             if (callback) callback();
         }, 300);
@@ -57,7 +57,7 @@ function animateCandyPick(element, callback) {
 function animateCandyAdd(element) {
     element.style.transform = 'scale(0)';
     element.style.opacity = '0';
-    
+
     setTimeout(() => {
         element.style.transition = 'all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
         element.style.transform = 'scale(1)';
@@ -77,15 +77,15 @@ function createFloatingCandy(candy, startX, startY, endX, endY, callback) {
         pointer-events: none;
         transition: all 1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     `;
-    
+
     document.body.appendChild(floatingCandy);
-    
+
     setTimeout(() => {
         floatingCandy.style.left = `${endX}px`;
         floatingCandy.style.top = `${endY}px`;
         floatingCandy.style.transform = 'scale(0.8)';
         floatingCandy.style.opacity = '0.8';
-        
+
         setTimeout(() => {
             document.body.removeChild(floatingCandy);
             if (callback) callback();
@@ -97,13 +97,13 @@ function createFloatingCandy(candy, startX, startY, endX, endY, callback) {
 function fadeTransition(fromScreen, toScreen, callback) {
     fromScreen.style.opacity = '0';
     fromScreen.style.transform = 'translateY(-20px)';
-    
+
     setTimeout(() => {
         fromScreen.classList.remove('active');
         toScreen.classList.add('active');
         toScreen.style.opacity = '0';
         toScreen.style.transform = 'translateY(20px)';
-        
+
         setTimeout(() => {
             toScreen.style.opacity = '1';
             toScreen.style.transform = 'translateY(0)';
@@ -116,7 +116,7 @@ function fadeTransition(fromScreen, toScreen, callback) {
 function showLoadingState(element, message = 'Loading...') {
     const originalContent = element.innerHTML;
     element.dataset.originalContent = originalContent;
-    
+
     element.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
             <div style="width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid white; border-radius: 50%; animation: spin 1s linear infinite;"></div>
@@ -143,7 +143,7 @@ function createConfetti(x, y, colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb
         const size = Math.random() * 8 + 4;
         const angle = (Math.PI * 2 * i) / 15;
         const velocity = Math.random() * 100 + 50;
-        
+
         particle.style.cssText = `
             position: fixed;
             left: ${x}px;
@@ -155,12 +155,12 @@ function createConfetti(x, y, colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb
             pointer-events: none;
             z-index: 10000;
         `;
-        
+
         document.body.appendChild(particle);
-        
+
         const endX = x + Math.cos(angle) * velocity;
         const endY = y + Math.sin(angle) * velocity + Math.random() * 100;
-        
+
         particle.animate([
             { transform: 'translate(0, 0) scale(1)', opacity: 1 },
             { transform: `translate(${endX - x}px, ${endY - y}px) scale(0)`, opacity: 0 }
@@ -180,42 +180,42 @@ class SoundManager {
         this.volume = 0.5;
         this.enabled = true;
     }
-    
+
     createAudioContext() {
         // Create simple beep sounds using Web Audio API
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        
+
         this.sounds.pick = (frequency = 440, duration = 0.1) => {
             if (!this.enabled) return;
-            
+
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
-            
+
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
-            
+
             oscillator.frequency.value = frequency;
             oscillator.type = 'sine';
-            
+
             gainNode.gain.setValueAtTime(this.volume * 0.3, audioContext.currentTime);
             gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-            
+
             oscillator.start(audioContext.currentTime);
             oscillator.stop(audioContext.currentTime + duration);
         };
-        
+
         this.sounds.success = () => {
             if (!this.enabled) return;
             this.sounds.pick(523.25, 0.2); // C5
             setTimeout(() => this.sounds.pick(659.25, 0.2), 100); // E5
             setTimeout(() => this.sounds.pick(783.99, 0.3), 200); // G5
         };
-        
+
         this.sounds.error = () => {
             if (!this.enabled) return;
             this.sounds.pick(200, 0.3);
         };
-        
+
         this.sounds.win = () => {
             if (!this.enabled) return;
             const notes = [261.63, 329.63, 392.00, 523.25]; // C-E-G-C
@@ -223,18 +223,50 @@ class SoundManager {
                 setTimeout(() => this.sounds.pick(note, 0.4), index * 150);
             });
         };
+
+        // Poison selected sound - descending ominous tones
+        this.sounds.poison = () => {
+            if (!this.enabled) return;
+            const notes = [392.00, 349.23, 293.66]; // G-F-D descending
+            notes.forEach((note, index) => {
+                setTimeout(() => this.sounds.pick(note, 0.25), index * 120);
+            });
+        };
+
+        // Timer tick sound - quick beep for last 5 seconds
+        this.sounds.tick = () => {
+            if (!this.enabled) return;
+            this.sounds.pick(880, 0.05); // High A, very short
+        };
+
+        // Lose sound - sad descending notes
+        this.sounds.lose = () => {
+            if (!this.enabled) return;
+            const notes = [329.63, 293.66, 261.63, 196.00]; // E-D-C-G (low)
+            notes.forEach((note, index) => {
+                setTimeout(() => this.sounds.pick(note, 0.3), index * 200);
+            });
+        };
+
+        // Turn start - your turn notification
+        this.sounds.turnStart = () => {
+            if (!this.enabled) return;
+            this.sounds.pick(587.33, 0.15); // D5
+            setTimeout(() => this.sounds.pick(783.99, 0.2), 100); // G5
+        };
     }
-    
+
+
     play(soundName, ...args) {
         if (this.sounds[soundName]) {
             this.sounds[soundName](...args);
         }
     }
-    
+
     setVolume(volume) {
         this.volume = Math.max(0, Math.min(1, volume));
     }
-    
+
     setEnabled(enabled) {
         this.enabled = enabled;
     }
@@ -259,7 +291,7 @@ function loadSettings() {
         autoConfirm: localStorage.getItem('pcd_auto_confirm') === 'true',
         showHints: localStorage.getItem('pcd_show_hints') !== 'false'
     };
-    
+
     // Apply settings to UI
     const sfxSlider = document.getElementById('sfx-volume');
     const musicSlider = document.getElementById('music-volume');
@@ -267,7 +299,7 @@ function loadSettings() {
     const animationsToggle = document.getElementById('animations-toggle');
     const autoConfirmToggle = document.getElementById('auto-confirm');
     const showHintsToggle = document.getElementById('show-hints');
-    
+
     if (sfxSlider) {
         sfxSlider.value = settings.sfxVolume;
         sfxSlider.addEventListener('input', (e) => {
@@ -276,14 +308,14 @@ function loadSettings() {
             localStorage.setItem('pcd_sfx_volume', volume.toString());
         });
     }
-    
+
     if (musicSlider) {
         musicSlider.value = settings.musicVolume;
         musicSlider.addEventListener('input', (e) => {
             localStorage.setItem('pcd_music_volume', e.target.value);
         });
     }
-    
+
     if (themeSelector) {
         themeSelector.value = settings.theme;
         themeSelector.addEventListener('change', (e) => {
@@ -291,7 +323,7 @@ function loadSettings() {
             localStorage.setItem('pcd_theme', e.target.value);
         });
     }
-    
+
     if (animationsToggle) {
         animationsToggle.checked = settings.animations;
         animationsToggle.addEventListener('change', (e) => {
@@ -299,28 +331,28 @@ function loadSettings() {
             localStorage.setItem('pcd_animations', e.target.checked.toString());
         });
     }
-    
+
     if (autoConfirmToggle) {
         autoConfirmToggle.checked = settings.autoConfirm;
         autoConfirmToggle.addEventListener('change', (e) => {
             localStorage.setItem('pcd_auto_confirm', e.target.checked.toString());
         });
     }
-    
+
     if (showHintsToggle) {
         showHintsToggle.checked = settings.showHints;
         showHintsToggle.addEventListener('change', (e) => {
             localStorage.setItem('pcd_show_hints', e.target.checked.toString());
         });
     }
-    
+
     // Apply initial settings
     soundManager.setVolume(settings.sfxVolume / 100);
     applyTheme(settings.theme);
     if (!settings.animations) {
         document.body.classList.add('no-animations');
     }
-    
+
     return settings;
 }
 
@@ -354,12 +386,12 @@ document.addEventListener('keydown', (e) => {
             }
         }
     }
-    
+
     // Space key - confirm/continue
     if (e.key === ' ' || e.key === 'Enter') {
         const confirmBtn = document.querySelector('.confirm-btn:not(:disabled)');
         const primaryBtn = document.querySelector('.menu-btn.primary, .start-game-btn, .end-btn.primary');
-        
+
         if (confirmBtn) {
             e.preventDefault();
             confirmBtn.click();
@@ -373,28 +405,28 @@ document.addEventListener('keydown', (e) => {
 // ===== TOUCH GESTURES =====
 if (isTouch()) {
     let startX, startY;
-    
+
     document.addEventListener('touchstart', (e) => {
         startX = e.touches[0].clientX;
         startY = e.touches[0].clientY;
     });
-    
+
     document.addEventListener('touchend', (e) => {
         if (!startX || !startY) return;
-        
+
         const endX = e.changedTouches[0].clientX;
         const endY = e.changedTouches[0].clientY;
-        
+
         const deltaX = endX - startX;
         const deltaY = endY - startY;
-        
+
         // Swipe right - go back
         if (deltaX > 100 && Math.abs(deltaY) < 50) {
             if (gameState.currentScreen !== 'page1') {
                 showScreen('page1');
             }
         }
-        
+
         startX = startY = null;
     });
 }
@@ -402,9 +434,9 @@ if (isTouch()) {
 // ===== PERFORMANCE MONITORING =====
 function trackPerformance(action, callback) {
     const start = performance.now();
-    
+
     const result = callback();
-    
+
     if (result instanceof Promise) {
         return result.then(value => {
             const end = performance.now();
@@ -425,7 +457,7 @@ function updateVolumeDisplay(type) {
     if (slider && display) {
         const value = slider.value;
         display.textContent = `${value}%`;
-        
+
         // Update sound manager
         if (type === 'sfx') {
             soundManager.setVolume(value / 100);
@@ -441,15 +473,15 @@ function updateVolumeDisplay(type) {
 function applyTheme() {
     const themeSelector = document.getElementById('theme-selector');
     const theme = themeSelector.value;
-    
+
     // Remove existing theme classes
     document.body.className = document.body.className.replace(/theme-\w+/g, '');
-    
+
     // Apply new theme
     if (theme !== 'default') {
         document.body.classList.add(`theme-${theme}`);
     }
-    
+
     localStorage.setItem('pcd_theme', theme);
     showNotification(`Theme changed to ${theme}`, 'success', 2000);
 }
@@ -457,13 +489,13 @@ function applyTheme() {
 function toggleAnimations() {
     const toggle = document.getElementById('animations-toggle');
     const enabled = toggle.checked;
-    
+
     if (enabled) {
         document.body.classList.remove('no-animations');
     } else {
         document.body.classList.add('no-animations');
     }
-    
+
     localStorage.setItem('pcd_animations', enabled.toString());
     showNotification(`Animations ${enabled ? 'enabled' : 'disabled'}`, 'info', 2000);
 }
@@ -471,13 +503,13 @@ function toggleAnimations() {
 function toggleReducedMotion() {
     const toggle = document.getElementById('reduce-motion');
     const enabled = toggle.checked;
-    
+
     if (enabled) {
         document.body.classList.add('reduce-motion');
     } else {
         document.body.classList.remove('reduce-motion');
     }
-    
+
     localStorage.setItem('pcd_reduce_motion', enabled.toString());
     showNotification(`Reduced motion ${enabled ? 'enabled' : 'disabled'}`, 'info', 2000);
 }
@@ -485,7 +517,7 @@ function toggleReducedMotion() {
 function toggleAutoConfirm() {
     const toggle = document.getElementById('auto-confirm');
     const enabled = toggle.checked;
-    
+
     localStorage.setItem('pcd_auto_confirm', enabled.toString());
     showNotification(`Auto-confirm ${enabled ? 'enabled' : 'disabled'}`, 'info', 2000);
 }
@@ -493,7 +525,7 @@ function toggleAutoConfirm() {
 function toggleHints() {
     const toggle = document.getElementById('show-hints');
     const enabled = toggle.checked;
-    
+
     localStorage.setItem('pcd_show_hints', enabled.toString());
     showNotification(`Hints ${enabled ? 'enabled' : 'disabled'}`, 'info', 2000);
 }
@@ -501,7 +533,7 @@ function toggleHints() {
 function setGameSpeed() {
     const selector = document.getElementById('game-speed');
     const speed = selector.value;
-    
+
     localStorage.setItem('pcd_game_speed', speed);
     showNotification(`Game speed set to ${speed}`, 'info', 2000);
 }
@@ -509,7 +541,7 @@ function setGameSpeed() {
 function toggleDebugMode() {
     const toggle = document.getElementById('debug-mode');
     const enabled = toggle.checked;
-    
+
     if (enabled) {
         document.body.classList.add('debug-mode');
         console.log('Debug mode enabled');
@@ -517,7 +549,7 @@ function toggleDebugMode() {
         document.body.classList.remove('debug-mode');
         console.log('Debug mode disabled');
     }
-    
+
     localStorage.setItem('pcd_debug_mode', enabled.toString());
     showNotification(`Debug mode ${enabled ? 'enabled' : 'disabled'}`, enabled ? 'warning' : 'info', 2000);
 }
@@ -525,7 +557,7 @@ function toggleDebugMode() {
 function toggleOfflineMode() {
     const toggle = document.getElementById('offline-mode');
     const enabled = toggle.checked;
-    
+
     localStorage.setItem('pcd_offline_mode', enabled.toString());
     showNotification(`Offline mode ${enabled ? 'enabled' : 'disabled'}`, enabled ? 'warning' : 'info', 2000);
 }
@@ -535,7 +567,7 @@ function resetAllSettings() {
         // Clear all localStorage settings
         const keys = Object.keys(localStorage).filter(key => key.startsWith('pcd_'));
         keys.forEach(key => localStorage.removeItem(key));
-        
+
         // Reset all form elements to defaults
         document.getElementById('sfx-volume').value = 50;
         document.getElementById('music-volume').value = 30;
@@ -548,16 +580,16 @@ function resetAllSettings() {
         document.getElementById('game-speed').value = 'normal';
         document.getElementById('debug-mode').checked = false;
         document.getElementById('offline-mode').checked = false;
-        
+
         // Update volume displays
         updateVolumeDisplay('sfx');
         updateVolumeDisplay('music');
         updateVolumeDisplay('master');
-        
+
         // Apply defaults
         applyTheme();
         toggleAnimations();
-        
+
         showNotification('All settings reset to default', 'success', 3000);
     }
 }
@@ -565,21 +597,21 @@ function resetAllSettings() {
 // ===== INITIALIZE UI HELPERS =====
 document.addEventListener('DOMContentLoaded', () => {
     loadSettings();
-    
+
     // Initialize volume displays
     setTimeout(() => {
         updateVolumeDisplay('sfx');
         updateVolumeDisplay('music');
         updateVolumeDisplay('master');
     }, 100);
-    
+
     // Add visual feedback for all interactive elements
     document.addEventListener('click', (e) => {
         if (e.target.matches('button, .candy-item, .mode-card, .difficulty-card')) {
             soundManager.play('pick', 440, 0.1);
         }
     });
-    
+
     // Add hover effects for touch devices
     if (isTouch()) {
         document.addEventListener('touchstart', (e) => {
@@ -587,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.target.classList.add('touch-active');
             }
         });
-        
+
         document.addEventListener('touchend', (e) => {
             setTimeout(() => {
                 document.querySelectorAll('.touch-active').forEach(el => {
