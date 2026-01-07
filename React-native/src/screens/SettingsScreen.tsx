@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import ScreenContainer from '../components/layout/ScreenContainer';
 import { THEME } from '../utils/theme';
 import { useAuth } from '../hooks/useAuth';
+import { scale, moderateScale, spacing, radii, platformValue } from '../utils/responsive';
 
 const SettingsScreen = ({ navigation }: any) => {
     const { logout } = useAuth();
@@ -20,10 +21,10 @@ const SettingsScreen = ({ navigation }: any) => {
 
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <ChevronLeft color="#FFF" size={28} />
+                    <ChevronLeft color="#FFF" size={moderateScale(28)} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Settings</Text>
-                <View style={{ width: 40 }} />
+                <View style={{ width: scale(40) }} />
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
@@ -31,7 +32,7 @@ const SettingsScreen = ({ navigation }: any) => {
                     <Text style={styles.sectionTitle}>Preferences</Text>
                     <View style={styles.settingItem}>
                         <View style={styles.settingLabelGroup}>
-                            <Bell color="#94A3B8" size={20} />
+                            <Bell color="#94A3B8" size={moderateScale(20)} />
                             <Text style={styles.settingLabel}>Notifications</Text>
                         </View>
                         <Switch
@@ -42,7 +43,7 @@ const SettingsScreen = ({ navigation }: any) => {
                     </View>
                     <View style={styles.settingItem}>
                         <View style={styles.settingLabelGroup}>
-                            <Moon color="#94A3B8" size={20} />
+                            <Moon color="#94A3B8" size={moderateScale(20)} />
                             <Text style={styles.settingLabel}>Haptic Feedback</Text>
                         </View>
                         <Switch
@@ -57,13 +58,13 @@ const SettingsScreen = ({ navigation }: any) => {
                     <Text style={styles.sectionTitle}>Account</Text>
                     <TouchableOpacity style={styles.settingItem}>
                         <View style={styles.settingLabelGroup}>
-                            <Shield color="#94A3B8" size={20} />
+                            <Shield color="#94A3B8" size={moderateScale(20)} />
                             <Text style={styles.settingLabel}>Privacy Policy</Text>
                         </View>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => logout()} style={[styles.settingItem, { borderBottomWidth: 0 }]}>
                         <View style={styles.settingLabelGroup}>
-                            <LogOut color="#FDA4AF" size={20} />
+                            <LogOut color="#FDA4AF" size={moderateScale(20)} />
                             <Text style={[styles.settingLabel, { color: '#FDA4AF' }]}>Logout</Text>
                         </View>
                     </TouchableOpacity>
@@ -80,40 +81,40 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingTop: 60,
-        paddingBottom: 20,
+        paddingHorizontal: spacing.md,
+        paddingTop: platformValue(spacing.xxl + spacing.sm, spacing.xxl + spacing.md),
+        paddingBottom: spacing.lg,
     },
     backButton: {
-        padding: 8,
+        padding: spacing.xs,
     },
     headerTitle: {
         color: '#FFF',
-        fontSize: 20,
+        fontSize: moderateScale(20),
         fontWeight: 'bold',
     },
     content: {
-        padding: 20,
+        padding: spacing.lg,
     },
     section: {
         backgroundColor: '#1E293B',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 24,
+        borderRadius: radii.lg,
+        padding: spacing.md,
+        marginBottom: spacing.lg,
     },
     sectionTitle: {
         color: '#3B82F6',
-        fontSize: 14,
+        fontSize: moderateScale(14),
         fontWeight: 'bold',
         textTransform: 'uppercase',
-        marginBottom: 16,
+        marginBottom: spacing.md,
         letterSpacing: 1,
     },
     settingItem: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: 12,
+        paddingVertical: spacing.sm,
         borderBottomWidth: 1,
         borderBottomColor: '#334155',
     },
@@ -123,14 +124,14 @@ const styles = StyleSheet.create({
     },
     settingLabel: {
         color: '#F1F5F9',
-        fontSize: 16,
-        marginLeft: 12,
+        fontSize: moderateScale(16),
+        marginLeft: spacing.sm,
     },
     version: {
         textAlign: 'center',
         color: '#475569',
-        fontSize: 12,
-        marginTop: 20,
+        fontSize: moderateScale(12),
+        marginTop: spacing.lg,
     },
 });
 

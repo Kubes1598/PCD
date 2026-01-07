@@ -4,14 +4,19 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Navigation from './src/navigation';
 import ErrorBoundary from './src/components/common/ErrorBoundary';
 
+import { GluestackUIProvider } from '@/components/ui/gluestack-ui-provider';
+import '@/global.css';
+
 export default function App() {
     return (
-        <ErrorBoundary>
-            <SafeAreaProvider>
-                <NavigationContainer>
-                    <Navigation />
-                </NavigationContainer>
-            </SafeAreaProvider>
-        </ErrorBoundary>
+        <GluestackUIProvider mode="dark">
+            <ErrorBoundary>
+                <SafeAreaProvider>
+                    <NavigationContainer>
+                        <Navigation />
+                    </NavigationContainer>
+                </SafeAreaProvider>
+            </ErrorBoundary>
+        </GluestackUIProvider>
     );
 }

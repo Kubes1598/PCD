@@ -3,6 +3,7 @@ import json
 from datetime import datetime, timezone
 from config import settings
 import uuid
+import secrets
 
 # Try to import Supabase, but don't fail if it's not configured
 try:
@@ -139,7 +140,10 @@ class InMemoryDatabaseService:
                     "games_played": 0,
                     "games_won": 0,
                     "last_active": datetime.now(timezone.utc).isoformat(),
-                    "last_daily_reward": None
+                    "last_daily_reward": None,
+                    "profile_id": f"PCD-{secrets.token_hex(4).upper()}",
+                    "friends": [],
+                    "claimed_quests": []
                 }
             
             player = self.players[player_name]
@@ -185,7 +189,10 @@ class InMemoryDatabaseService:
                     "games_played": 0,
                     "games_won": 0,
                     "last_active": datetime.now(timezone.utc).isoformat(),
-                    "last_daily_reward": None
+                    "last_daily_reward": None,
+                    "profile_id": f"PCD-{secrets.token_hex(4).upper()}",
+                    "friends": [],
+                    "claimed_quests": []
                 }
             
             player = self.players[player_name]
@@ -196,6 +203,44 @@ class InMemoryDatabaseService:
             return True
         except Exception as e:
             print(f"❌ Error updating player stats: {e}")
+            return False
+
+    async def get_player_by_profile_id(self, profile_id: str) -> Optional[Dict[str, Any]]:
+        """Find a player by their unique profile ID."""
+        for player in self.players.values():
+            if player.get("profile_id") == profile_id:
+                return player
+        return None
+
+    async def add_friend(self, player_name: str, friend_name: str) -> bool:
+        """Add a friend to a player's friends list."""
+        try:
+            player = await self.get_player(player_name)
+            friend = await self.get_player(friend_name)
+            if not player or not friend:
+                return False
+            
+            if "friends" not in player: player["friends"] = []
+            if friend_name not in player["friends"]:
+                player["friends"].append(friend_name)
+                return True
+            return False
+        except Exception as e:
+            print(f"❌ Error adding friend: {e}")
+            return False
+
+    async def claim_quest(self, player_name: str, quest_id: str) -> bool:
+        """Mark a quest as claimed for a player."""
+        try:
+            player = await self.get_player(player_name)
+            if not player: return False
+            if "claimed_quests" not in player: player["claimed_quests"] = []
+            if quest_id not in player["claimed_quests"]:
+                player["claimed_quests"].append(quest_id)
+                return True
+            return False
+        except Exception as e:
+            print(f"❌ Error claiming quest: {e}")
             return False
 
     async def get_leaderboard(self, sort_by: str = "wins", limit: int = 10) -> List[Dict[str, Any]]:
@@ -402,7 +447,10 @@ class SupabaseService:
                     "diamonds_balance": 500 + diamond_delta,
                     "total_coins_earned": max(0, coin_delta),
                     "total_coins_spent": abs(min(0, coin_delta)),
-                    "last_active": datetime.now(timezone.utc).isoformat()
+                    "last_active": datetime.now(timezone.utc).isoformat(),
+                    "profile_id": f"PCD-{secrets.token_hex(4).upper()}",
+                    "friends": [],
+                    "claimed_quests": []
                 }
                 result = self.supabase.table("players").insert(new_player).execute()
                 return len(result.data) > 0
@@ -455,7 +503,10 @@ class SupabaseService:
                     "diamonds_balance": 500,
                     "games_played": 1,
                     "games_won": 1 if won else 0,
-                    "last_active": datetime.now(timezone.utc).isoformat()
+                    "last_active": datetime.now(timezone.utc).isoformat(),
+                    "profile_id": f"PCD-{secrets.token_hex(4).upper()}",
+                    "friends": [],
+                    "claimed_quests": []
                 }
                 self.supabase.table("players").insert(new_player).execute()
                 return True
@@ -469,6 +520,51 @@ class SupabaseService:
             return True
         except Exception as e:
             print(f"Error updating player stats in database: {e}")
+            return False
+
+    async def get_player_by_profile_id(self, profile_id: str) -> Optional[Dict[str, Any]]:
+        """Find a player by their unique profile ID in Supabase."""
+        try:
+            result = self.supabase.table("players").select("*").eq("profile_id", profile_id).execute()
+            if result.data and len(result.data) > 0:
+                return result.data[0]
+            return None
+        except Exception as e:
+            print(f"Error retrieving player by profile ID from database: {e}")
+            return None
+
+    async def add_friend(self, player_name: str, friend_name: str) -> bool:
+        """Add a friend to a player's friends list in Supabase."""
+        try:
+            player = await self.get_player(player_name)
+            friend = await self.get_player(friend_name)
+            if not player or not friend:
+                return False
+            
+            friends = player.get("friends", [])
+            if friend_name not in friends:
+                friends.append(friend_name)
+                self.supabase.table("players").update({"friends": friends}).eq("name", player_name).execute()
+                return True
+            return False
+        except Exception as e:
+            print(f"Error adding friend in database: {e}")
+            return False
+
+    async def claim_quest(self, player_name: str, quest_id: str) -> bool:
+        """Mark a quest as claimed for a player in Supabase."""
+        try:
+            player = await self.get_player(player_name)
+            if not player: return False
+            
+            claimed = player.get("claimed_quests", [])
+            if quest_id not in claimed:
+                claimed.append(quest_id)
+                self.supabase.table("players").update({"claimed_quests": claimed}).eq("name", player_name).execute()
+                return True
+            return False
+        except Exception as e:
+            print(f"Error claiming quest in database: {e}")
             return False
 
     async def get_leaderboard(self, sort_by: str = "wins", limit: int = 10) -> List[Dict[str, Any]]:
@@ -510,4 +606,4 @@ if SUPABASE_AVAILABLE:
         db_service = InMemoryDatabaseService()
 else:
     print("⚠️  Supabase configuration not found")
-    db_service = InMemoryDatabaseService() 
+    db_service = InMemoryDatabaseService()

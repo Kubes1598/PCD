@@ -24,6 +24,7 @@ interface CurrencyState {
     spendDiamonds: (amount: number, description: string) => boolean;
     claimDailyReward: () => { coins: number; diamonds: number; streak: number } | null;
     canClaimDailyReward: () => boolean;
+    setBalances: (coins: number, diamonds: number) => void;
 }
 
 export const useCurrencyStore = create<CurrencyState>()(
@@ -132,6 +133,10 @@ export const useCurrencyStore = create<CurrencyState>()(
                 });
 
                 return { coins: coinsReward, diamonds: diamondsReward, streak: newStreak };
+            },
+
+            setBalances: (coins, diamonds) => {
+                set({ coins, diamonds });
             },
         }),
         {

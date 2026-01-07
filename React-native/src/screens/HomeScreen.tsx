@@ -1,27 +1,25 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Dimensions, Platform } from 'react-native';
-import { LogOut, Sword, Globe, Users, X, Gift, Settings, User, Trophy, Coins as CoinIcon, Gem, Bell } from 'lucide-react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Platform } from 'react-native';
+import { Menu, Sword, Globe, Users, X, Gift, User, Coins as CoinIcon, Gem, Monitor, Trophy, Target, UserPlus } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import ScreenContainer from '../components/layout/ScreenContainer';
-import { THEME } from '../utils/theme';
 import { useAuth } from '../hooks/useAuth';
 import { useGame } from '../hooks/useGame';
 import { useCurrencyStore } from '../store/currencyStore';
-import { StackNavigationProp } from '@react-navigation/stack';
-
-const { width } = Dimensions.get('window');
-const IS_SMALL_DEVICE = width < 375;
+import { DrawerNavigationProp } from '@react-navigation/drawer';
+import { scale, moderateScale, spacing, radii, SCREEN_WIDTH, isSmallDevice, platformValue } from '../utils/responsive';
 
 type HomeScreenProps = {
-    navigation: StackNavigationProp<any, any>;
+    navigation: DrawerNavigationProp<any, any>;
 };
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
     const { initGame, isSearching, startSearching, stopSearching, queuePosition, totalWaiting, gameId } = useGame();
     const { coins, diamonds, claimDailyReward, canClaimDailyReward } = useCurrencyStore();
     const [reward, setReward] = React.useState<{ coins: number, diamonds: number, streak: number } | null>(null);
     const [showArenaSelection, setShowArenaSelection] = React.useState(false);
+    const [showDifficultySelection, setShowDifficultySelection] = React.useState(false);
 
     useEffect(() => {
         if (gameId && !isSearching) {
@@ -45,6 +43,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 setShowArenaSelection(false);
                 startSearching(arena);
             }
+        } else if (mode === 'ai') {
+            setShowDifficultySelection(false);
+            await initGame(mode as any, difficulty, arena);
+            navigation.navigate('Game');
         } else {
             await initGame(mode as any, difficulty, arena);
             navigation.navigate('Game');
@@ -63,138 +65,36 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Top Profile Header */}
+                {/* Top Header - Hamburger Menu (Left) | Profile Icon with Username (Right) */}
                 <View style={styles.topHeader}>
-                    <View style={styles.userInfo}>
+                    <TouchableOpacity
+                        style={styles.menuButton}
+                        onPress={() => navigation.openDrawer()}
+                    >
+                        <Menu color="#F1F5F9" size={moderateScale(24)} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.profileSection}
+                        onPress={() => navigation.navigate('Profile')}
+                    >
                         <View style={styles.avatarContainer}>
-                            <User color="#CBD5E1" size={24} />
+                            <User color="#CBD5E1" size={moderateScale(20)} />
                         </View>
-                        <View>
-                            <Text style={styles.greetingText}>Welcome back,</Text>
-                            <Text style={styles.usernameText}>{user?.username || 'Hunter'}</Text>
-                        </View>
-                    </View>
-                    <View style={styles.topActions}>
-                        <TouchableOpacity style={styles.iconCircle}>
-                            <Bell color="#F1F5F9" size={20} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => logout()} style={[styles.iconCircle, { marginLeft: 12 }]}>
-                            <LogOut color="#FDA4AF" size={20} />
-                        </TouchableOpacity>
-                    </View>
+                        <Text style={styles.usernameText}>{user?.username || 'Hunter'}</Text>
+                    </TouchableOpacity>
                 </View>
 
-                {/* Balance Row - Modern Premium Badges */}
+                {/* Currency Balance Row - 18px */}
                 <View style={styles.balanceRow}>
                     <View style={styles.balanceBadge}>
-                        <LinearGradient
-                            colors={['rgba(245, 158, 11, 0.2)', 'rgba(217, 119, 6, 0.1)'] as any}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.badgeGradient}
-                        />
-                        <View style={[styles.currencyIcon, { backgroundColor: '#F59E0B' }]}>
-                            <CoinIcon color="#FFF" size={14} />
-                        </View>
+                        <CoinIcon color="#F59E0B" size={scale(18)} />
                         <Text style={styles.balanceValue}>{coins.toLocaleString()}</Text>
                     </View>
-
                     <View style={styles.balanceBadge}>
-                        <LinearGradient
-                            colors={['rgba(6, 182, 212, 0.2)', 'rgba(8, 145, 178, 0.1)'] as any}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.badgeGradient}
-                        />
-                        <View style={[styles.currencyIcon, { backgroundColor: '#06B6D4' }]}>
-                            <Gem color="#FFF" size={14} />
-                        </View>
+                        <Gem color="#06B6D4" size={scale(18)} />
                         <Text style={styles.balanceValue}>{diamonds.toLocaleString()}</Text>
                     </View>
                 </View>
-
-                {/* Quick Actions Grid - 2x2 Modern Style */}
-                <View style={styles.actionGrid}>
-                    <TouchableOpacity
-                        style={styles.actionCard}
-                        onPress={() => navigation.navigate('Profile')}
-                    >
-                        <View style={[styles.actionIconContainer, { backgroundColor: '#3B82F620' }]}>
-                            <User color="#3B82F6" size={24} />
-                        </View>
-                        <Text style={styles.actionLabel}>Profile</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.actionCard}
-                        onPress={() => navigation.navigate('Friends')}
-                    >
-                        <View style={[styles.actionIconContainer, { backgroundColor: '#8B5CF620' }]}>
-                            <Users color="#8B5CF6" size={24} />
-                        </View>
-                        <Text style={styles.actionLabel}>Friends</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.actionCard}
-                        onPress={() => navigation.navigate('Rewards')}
-                    >
-                        <View style={[styles.actionIconContainer, { backgroundColor: '#10B98120' }]}>
-                            <Trophy color="#10B981" size={24} />
-                        </View>
-                        <Text style={styles.actionLabel}>Rewards</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.actionCard}
-                        onPress={() => navigation.navigate('Settings')}
-                    >
-                        <View style={[styles.actionIconContainer, { backgroundColor: '#64748B20' }]}>
-                            <Settings color="#64748B" size={24} />
-                        </View>
-                        <Text style={styles.actionLabel}>Settings</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Featured Events - Horizontal Pagination */}
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>FEATURED EVENTS</Text>
-                    <TouchableOpacity>
-                        <Text style={styles.seeAllText}>See All</Text>
-                    </TouchableOpacity>
-                </View>
-
-                <ScrollView
-                    horizontal
-                    pagingEnabled
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.eventsScroll}
-                    decelerationRate="fast"
-                    snapToInterval={width - 40}
-                >
-                    {[
-                        { id: 1, title: 'Lunar Festival', prize: '5,000', color: '#FCD34D', type: 'Timed Event' },
-                        { id: 2, title: 'Pro League', prize: '10 Diamonds', color: '#60A5FA', type: 'Ranked' },
-                    ].map(event => (
-                        <TouchableOpacity key={event.id} style={[styles.eventCard, { backgroundColor: event.color + '15' }]}>
-                            <LinearGradient
-                                colors={[event.color + '20', 'transparent'] as any}
-                                style={StyleSheet.absoluteFill}
-                            />
-                            <View style={styles.eventInfo}>
-                                <Text style={[styles.eventTypeText, { color: event.color }]}>{event.type}</Text>
-                                <Text style={styles.eventTitleText}>{event.title}</Text>
-                                <View style={styles.prizeBadge}>
-                                    <Trophy color={event.color} size={14} />
-                                    <Text style={[styles.prizeText, { color: event.color }]}>{event.prize} Prize</Text>
-                                </View>
-                            </View>
-                            <TouchableOpacity style={[styles.joinBtn, { backgroundColor: event.color }]}>
-                                <Text style={styles.joinBtnText}>JOIN</Text>
-                            </TouchableOpacity>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
 
                 {/* Main Battle Modes Section */}
                 <View style={styles.sectionDivider}>
@@ -216,7 +116,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                     />
                     <View style={styles.premiumCardContent}>
                         <View style={styles.premiumCardIcon}>
-                            <Globe color="#DDD6FE" size={32} />
+                            <Globe color="#DDD6FE" size={moderateScale(32)} />
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.battleTitleText}>World Online Duel</Text>
@@ -234,31 +134,52 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                         style={styles.secondaryModeCard}
                         onPress={() => handleStartGame('offline')}
                     >
-                        <Users color="#94A3B8" size={24} />
+                        <Users color="#94A3B8" size={moderateScale(24)} />
                         <Text style={styles.secondaryModeTitle}>Local Duel</Text>
                         <Text style={styles.secondaryModeSubtitle}>Pass & Play</Text>
                     </TouchableOpacity>
 
-                    <View style={styles.aiModeContainer}>
-                        <Text style={styles.aiLabel}>VS COMPUTER</Text>
-                        <View style={styles.aiButtonsRow}>
-                            {['easy', 'medium', 'hard'].map((level) => (
-                                <TouchableOpacity
-                                    key={level}
-                                    onPress={() => handleStartGame('ai', level as any)}
-                                    style={[
-                                        styles.aiLevelBtn,
-                                        level === 'hard' && { backgroundColor: 'rgba(239, 68, 68, 0.1)' }
-                                    ]}
-                                >
-                                    <Sword
-                                        color={level === 'hard' ? '#EF4444' : level === 'medium' ? '#F59E0B' : '#10B981'}
-                                        size={16}
-                                    />
-                                </TouchableOpacity>
-                            ))}
+                    <TouchableOpacity
+                        style={styles.secondaryModeCard}
+                        onPress={() => setShowDifficultySelection(true)}
+                    >
+                        <Monitor color="#94A3B8" size={moderateScale(24)} />
+                        <Text style={styles.secondaryModeTitle}>VS Computer</Text>
+                        <Text style={styles.secondaryModeSubtitle}>Select Difficulty</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Quick Access Section - Ranking, Quests, Friends */}
+                <View style={styles.quickAccessRow}>
+                    <TouchableOpacity
+                        style={styles.quickAccessCard}
+                        onPress={() => navigation.navigate('Rewards')}
+                    >
+                        <View style={[styles.quickAccessIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
+                            <Trophy color="#F59E0B" size={moderateScale(20)} />
                         </View>
-                    </View>
+                        <Text style={styles.quickAccessLabel}>Ranking</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.quickAccessCard}
+                        onPress={() => navigation.navigate('Rewards')}
+                    >
+                        <View style={[styles.quickAccessIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
+                            <Target color="#6366F1" size={moderateScale(20)} />
+                        </View>
+                        <Text style={styles.quickAccessLabel}>Quests</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.quickAccessCard}
+                        onPress={() => navigation.navigate('Friends')}
+                    >
+                        <View style={[styles.quickAccessIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+                            <UserPlus color="#10B981" size={moderateScale(20)} />
+                        </View>
+                        <Text style={styles.quickAccessLabel}>Friends</Text>
+                    </TouchableOpacity>
                 </View>
 
                 {/* Daily Gift Banner if available */}
@@ -276,8 +197,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                             end={{ x: 1, y: 0 }}
                             style={styles.giftBannerGradient}
                         />
-                        <Gift color="#FFF" size={24} />
-                        <View style={{ marginLeft: 15, flex: 1 }}>
+                        <Gift color="#FFF" size={moderateScale(24)} />
+                        <View style={{ marginLeft: spacing.md, flex: 1 }}>
                             <Text style={styles.giftTitle}>Daily Reward Ready!</Text>
                             <Text style={styles.giftSub}>Claim your free coins & diamonds</Text>
                         </View>
@@ -296,14 +217,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                             colors={['#1E293B', '#0F172A'] as any}
                             style={StyleSheet.absoluteFill}
                         />
-                        <Globe color="#6366F1" size={64} />
+                        <Globe color="#6366F1" size={moderateScale(64)} />
                         <Text style={styles.modalTitle}>MATCHMAKING</Text>
                         <Text style={styles.modalText}>
                             Position: {queuePosition} • Online: {totalWaiting}
                         </Text>
-                        <ActivityIndicator size="large" color="#6366F1" style={{ marginVertical: 30 }} />
+                        <ActivityIndicator size="large" color="#6366F1" style={{ marginVertical: spacing.xl }} />
                         <TouchableOpacity style={styles.cancelButton} onPress={() => stopSearching()}>
-                            <X color="#FFF" size={20} />
+                            <X color="#FFF" size={moderateScale(20)} />
                             <Text style={styles.cancelText}>CANCEL SEARCH</Text>
                         </TouchableOpacity>
                     </View>
@@ -311,9 +232,95 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </Modal>
 
             {/* Arena Selection */}
-            <Modal visible={!!showArenaSelection} transparent={true} animationType="slide">
+            {/* (Omitted for brevity, but I will keep it in the final file) */}
+
+            {/* Difficulty Selection Modal */}
+            <Modal visible={!!showDifficultySelection} transparent={true} animationType="slide">
                 <View style={styles.overlay}>
-                    <View style={styles.arenaModal}>
+                    <View style={styles.difficultyModal}>
+                        <LinearGradient
+                            colors={['#1E293B', '#0F172A'] as any}
+                            style={StyleSheet.absoluteFill}
+                        />
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>SELECT DIFFICULTY</Text>
+                            <TouchableOpacity onPress={() => setShowDifficultySelection(false)}>
+                                <X color="#94A3B8" size={moderateScale(24)} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.difficultyOptions}>
+                            {[
+                                { level: 'easy', label: 'Easy', fee: 0, color: '#10B981', desc: 'Relaxed gameplay' },
+                                { level: 'medium', label: 'Medium', fee: 100, color: '#F59E0B', desc: 'Balanced challenge' },
+                                { level: 'hard', label: 'Hard', fee: 250, color: '#EF4444', desc: 'Expert mode' },
+                            ].map((diff) => (
+                                <TouchableOpacity
+                                    key={diff.level}
+                                    style={[styles.difficultyItem, { borderColor: diff.color + '40' }]}
+                                    onPress={() => handleStartGame('ai', diff.level as any)}
+                                >
+                                    <View style={[styles.difficultyIcon, { backgroundColor: diff.color + '20' }]}>
+                                        <Sword color={diff.color} size={moderateScale(24)} />
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: spacing.md }}>
+                                        <Text style={[styles.difficultyLabel, { color: diff.color }]}>{diff.label}</Text>
+                                        <Text style={styles.difficultyDesc}>{diff.desc}</Text>
+                                    </View>
+                                    {diff.fee > 0 && (
+                                        <View style={styles.difficultyFee}>
+                                            <CoinIcon color="#F59E0B" size={moderateScale(12)} />
+                                            <Text style={styles.difficultyFeeText}>{diff.fee}</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Reward Modal */}
+            {reward && reward.coins > 0 && (
+                <Modal visible={true} transparent={true} animationType="fade">
+                    <View style={styles.overlay}>
+                        <View style={styles.modal}>
+                            <LinearGradient
+                                colors={['#1E293B', '#0F172A'] as any}
+                                style={StyleSheet.absoluteFill}
+                            />
+                            <Gift color="#F59E0B" size={moderateScale(64)} />
+                            <Text style={styles.modalTitle}>DAILY REWARD</Text>
+                            <Text style={styles.modalText}>You received:</Text>
+
+                            <View style={styles.rewardRow}>
+                                <View style={styles.rewardItem}>
+                                    <CoinIcon color="#F59E0B" size={moderateScale(24)} />
+                                    <Text style={styles.rewardAmount}>+{reward.coins}</Text>
+                                </View>
+                                <View style={styles.rewardItem}>
+                                    <Gem color="#06B6D4" size={moderateScale(24)} />
+                                    <Text style={styles.rewardAmount}>+{reward.diamonds}</Text>
+                                </View>
+                            </View>
+
+                            <Text style={styles.streakText}>Current Streak: {reward.streak} Days</Text>
+
+                            <TouchableOpacity
+                                style={[styles.cancelButton, { backgroundColor: '#6366F1', borderColor: '#818CF8' }]}
+                                onPress={() => setReward(null)}
+                            >
+                                <Text style={[styles.cancelText, { color: '#FFF' }]}>AWESOME!</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
+            )}
+
+            {/* Arena Selection Modal */}
+            <Modal visible={showArenaSelection} transparent={true} animationType="slide">
+                <View style={styles.overlay}>
+                    <View style={styles.difficultyModal}>
                         <LinearGradient
                             colors={['#1E293B', '#0F172A'] as any}
                             style={StyleSheet.absoluteFill}
@@ -321,64 +328,34 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>SELECT ARENA</Text>
                             <TouchableOpacity onPress={() => setShowArenaSelection(false)}>
-                                <X color="#94A3B8" size={24} />
+                                <X color="#94A3B8" size={moderateScale(24)} />
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView style={{ width: '100%' }}>
+                        <View style={styles.difficultyOptions}>
                             {[
-                                { name: 'Dubai', fee: 500, prize: 950, timer: 30, emoji: '🏙️', color: '#3B82F6' },
-                                { name: 'Cairo', fee: 1000, prize: 1900, timer: 20, emoji: '🏛️', color: '#F59E0B' },
-                                { name: 'Oslo', fee: 5000, prize: 9500, timer: 10, emoji: '🏔️', color: '#EF4444' },
+                                { name: 'Dubai', fee: 500, prize: 900, color: '#F59E0B', desc: 'Standard Arena' },
+                                { name: 'Cairo', fee: 1000, prize: 1800, color: '#3B82F6', desc: 'Pro Arena' },
+                                { name: 'Oslo', fee: 5000, prize: 9000, color: '#8B5CF6', desc: 'Elite Arena' },
                             ].map((arena) => (
                                 <TouchableOpacity
                                     key={arena.name}
-                                    style={styles.arenaItem}
+                                    style={[styles.difficultyItem, { borderColor: arena.color + '40' }]}
                                     onPress={() => handleStartGame('online', undefined, arena.name as any)}
                                 >
-                                    <View style={[styles.arenaItemIcon, { backgroundColor: arena.color + '20' }]}>
-                                        <Text style={{ fontSize: 24 }}>{arena.emoji}</Text>
+                                    <View style={[styles.difficultyIcon, { backgroundColor: arena.color + '20' }]}>
+                                        <Globe color={arena.color} size={moderateScale(24)} />
                                     </View>
-                                    <View style={{ flex: 1, marginLeft: 15 }}>
-                                        <Text style={[styles.arenaItemName, { color: arena.color }]}>{arena.name}</Text>
-                                        <Text style={styles.arenaItemDetails}>Fee: {arena.fee} • Prize: {arena.prize}</Text>
+                                    <View style={{ flex: 1, marginLeft: spacing.md }}>
+                                        <Text style={[styles.difficultyLabel, { color: arena.color }]}>{arena.name}</Text>
+                                        <Text style={styles.difficultyDesc}>{arena.desc}</Text>
                                     </View>
-                                    <View style={styles.arenaTimerBadge}>
-                                        <Text style={styles.arenaTimerText}>{arena.timer}s</Text>
+                                    <View style={styles.difficultyFee}>
+                                        <Text style={styles.difficultyFeeText}>Fee: {arena.fee}</Text>
                                     </View>
                                 </TouchableOpacity>
                             ))}
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* Reward Modal */}
-            <Modal visible={!!reward} transparent={true} animationType="fade">
-                <View style={styles.overlay}>
-                    <View style={styles.modal}>
-                        <LinearGradient
-                            colors={['#1E293B', '#0F172A'] as any}
-                            style={StyleSheet.absoluteFill}
-                        />
-                        <Text style={{ fontSize: 80 }}>🎁</Text>
-                        <Text style={styles.modalTitle}>DAILY LOOT!</Text>
-                        <Text style={styles.modalText}>You've earned a streak of {reward?.streak} days</Text>
-
-                        <View style={styles.rewardContainer}>
-                            <View style={styles.rewardPiece}>
-                                <CoinIcon color="#F59E0B" size={24} />
-                                <Text style={styles.rewardValueText}>+{reward?.coins}</Text>
-                            </View>
-                            <View style={styles.rewardPiece}>
-                                <Gem color="#06B6D4" size={24} />
-                                <Text style={styles.rewardValueText}>+{reward?.diamonds}</Text>
-                            </View>
                         </View>
-
-                        <TouchableOpacity style={styles.finalClaimBtn} onPress={() => setReward(null)}>
-                            <Text style={styles.finalClaimText}>COLLECT</Text>
-                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
@@ -388,200 +365,75 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
 const styles = StyleSheet.create({
     content: {
-        padding: 24,
-        paddingTop: Platform.OS === 'ios' ? 20 : 40,
+        padding: spacing.lg,
+        paddingTop: platformValue(spacing.lg, spacing.xl),
     },
     topHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 30,
+        marginBottom: spacing.md,
     },
-    userInfo: {
-        flexDirection: 'row',
+    menuButton: {
+        width: scale(44),
+        height: scale(44),
+        borderRadius: radii.md,
+        backgroundColor: '#334155',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#475569',
+    },
+    profileSection: {
         alignItems: 'center',
     },
     avatarContainer: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+        width: scale(44),
+        height: scale(44),
+        borderRadius: scale(22),
         backgroundColor: '#334155',
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 12,
-        borderWidth: 1,
-        borderColor: '#475569',
-    },
-    greetingText: {
-        color: '#94A3B8',
-        fontSize: 14,
+        borderWidth: 2,
+        borderColor: '#6366F1',
+        marginBottom: spacing.xs,
     },
     usernameText: {
         color: '#F1F5F9',
-        fontSize: 20,
-        fontWeight: 'bold',
-    },
-    topActions: {
-        flexDirection: 'row',
-    },
-    iconCircle: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#334155',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#475569',
+        fontSize: moderateScale(12),
+        fontWeight: '600',
     },
     balanceRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 30,
-        gap: 12,
+        justifyContent: 'center',
+        marginBottom: spacing.lg,
+        gap: spacing.lg,
     },
     balanceBadge: {
-        flex: 1,
-        height: 54,
-        borderRadius: 16,
-        overflow: 'hidden',
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.05)',
-    },
-    badgeGradient: {
-        ...StyleSheet.absoluteFillObject,
-    },
-    currencyIcon: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 8,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        paddingHorizontal: spacing.sm,
+        paddingVertical: spacing.xs,
+        borderRadius: radii.lg,
+        gap: spacing.xs,
     },
     balanceValue: {
         color: '#FFF',
-        fontSize: 16,
-        fontWeight: '900',
-    },
-    actionGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        gap: 12,
-        marginBottom: 35,
-    },
-    actionCard: {
-        width: (width - 48 - 12) / 2,
-        backgroundColor: '#1E293B',
-        borderRadius: 20,
-        padding: 16,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#334155',
-    },
-    actionIconContainer: {
-        width: 44,
-        height: 44,
-        borderRadius: 14,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 10,
-    },
-    actionLabel: {
-        color: '#CBD5E1',
-        fontSize: 13,
-        fontWeight: '600',
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        marginBottom: 12,
-        marginTop: 10,
-    },
-    seeAllText: {
-        color: '#3B82F6',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    eventsScroll: {
-        paddingHorizontal: 20,
-        paddingBottom: 20,
-    },
-    eventCard: {
-        width: width - 40,
-        height: 140,
-        borderRadius: 24,
-        marginRight: 20,
-        padding: 20,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.05)',
-    },
-    eventInfo: {
-        flex: 1,
-    },
-    eventTypeText: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-        marginBottom: 4,
-    },
-    eventTitleText: {
-        color: '#FFF',
-        fontSize: 22,
-        fontWeight: '900',
-        marginBottom: 12,
-    },
-    prizeBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.2)',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 20,
-        alignSelf: 'flex-start',
-    },
-    prizeText: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        marginLeft: 6,
-    },
-    joinBtn: {
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        borderRadius: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 5,
-    },
-    joinBtnText: {
-        color: '#000',
-        fontWeight: '900',
-        fontSize: 14,
+        fontSize: scale(18),
+        fontWeight: '800',
     },
     sectionDivider: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: spacing.lg,
     },
     sectionTitle: {
         color: '#6366F1',
-        fontSize: 12,
+        fontSize: moderateScale(12),
         fontWeight: '900',
         letterSpacing: 2,
-        marginRight: 15,
+        marginRight: spacing.md,
     },
     dividerLine: {
         flex: 1,
@@ -590,15 +442,15 @@ const styles = StyleSheet.create({
     },
     premiumBattleCard: {
         width: '100%',
-        height: 100,
-        borderRadius: 24,
+        height: scale(100),
+        borderRadius: radii.xl,
         overflow: 'hidden',
-        marginBottom: 20,
+        marginBottom: spacing.lg,
         elevation: 10,
         shadowColor: '#4F46E5',
-        shadowOffset: { width: 0, height: 10 },
+        shadowOffset: { width: 0, height: scale(10) },
         shadowOpacity: 0.3,
-        shadowRadius: 20,
+        shadowRadius: scale(20),
     },
     premiumCardBg: {
         ...StyleSheet.absoluteFillObject,
@@ -607,131 +459,129 @@ const styles = StyleSheet.create({
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 20,
+        paddingHorizontal: spacing.lg,
     },
     premiumCardIcon: {
-        width: 56,
-        height: 56,
-        borderRadius: 18,
+        width: scale(56),
+        height: scale(56),
+        borderRadius: radii.lg,
         backgroundColor: 'rgba(255,255,255,0.1)',
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 15,
+        marginRight: spacing.md,
     },
     battleTitleText: {
         color: '#FFF',
-        fontSize: 18,
+        fontSize: moderateScale(18),
         fontWeight: 'bold',
     },
     battleDescText: {
         color: 'rgba(255,255,255,0.7)',
-        fontSize: 12,
+        fontSize: moderateScale(12),
     },
     battleCta: {
         backgroundColor: '#FFF',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 12,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.xs,
+        borderRadius: radii.md,
     },
     ctaText: {
         color: '#4F46E5',
         fontWeight: '900',
-        fontSize: 12,
+        fontSize: moderateScale(12),
     },
     secondaryModesRow: {
         flexDirection: 'row',
-        gap: 12,
-        marginBottom: 25,
+        gap: spacing.sm,
+        marginBottom: spacing.lg,
     },
     secondaryModeCard: {
         flex: 1,
         backgroundColor: '#1E293B',
-        borderRadius: 24,
-        padding: 20,
+        borderRadius: radii.xl,
+        padding: spacing.lg,
         borderWidth: 1,
         borderColor: '#334155',
     },
     secondaryModeTitle: {
         color: '#F1F5F9',
-        fontSize: 16,
+        fontSize: moderateScale(16),
         fontWeight: 'bold',
-        marginTop: 10,
     },
     secondaryModeSubtitle: {
-        color: '#64748B',
-        fontSize: 12,
+        color: '#94A3B8',
+        fontSize: moderateScale(12),
+        marginTop: 2,
     },
-    aiModeContainer: {
-        flex: 1,
-        backgroundColor: '#1E293B',
-        borderRadius: 24,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: '#334155',
-        justifyContent: 'center',
-    },
-    aiLabel: {
-        color: '#6366F1',
-        fontSize: 10,
-        fontWeight: '900',
-        textAlign: 'center',
-        marginBottom: 12,
-    },
-    aiButtonsRow: {
+    quickAccessRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        gap: 8,
+        marginBottom: spacing.lg,
+        gap: spacing.sm,
     },
-    aiLevelBtn: {
+    quickAccessCard: {
         flex: 1,
-        height: 40,
-        backgroundColor: '#334155',
-        borderRadius: 10,
+        backgroundColor: '#1E293B',
+        borderRadius: radii.lg,
+        padding: spacing.md,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#334155',
+    },
+    quickAccessIcon: {
+        width: scale(40),
+        height: scale(40),
+        borderRadius: scale(20),
         justifyContent: 'center',
         alignItems: 'center',
+        marginBottom: spacing.xs,
+    },
+    quickAccessLabel: {
+        color: '#CBD5E1',
+        fontSize: moderateScale(11),
+        fontWeight: '600',
     },
     giftBanner: {
-        width: '100%',
-        padding: 20,
-        borderRadius: 24,
-        overflow: 'hidden',
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 20,
+        padding: spacing.lg,
+        borderRadius: radii.xl,
+        overflow: 'hidden',
+        marginBottom: spacing.xl,
     },
     giftBannerGradient: {
         ...StyleSheet.absoluteFillObject,
     },
     giftTitle: {
         color: '#FFF',
-        fontSize: 16,
+        fontSize: moderateScale(16),
         fontWeight: 'bold',
     },
     giftSub: {
         color: 'rgba(255,255,255,0.8)',
-        fontSize: 12,
+        fontSize: moderateScale(12),
     },
     claimBadge: {
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 8,
+        backgroundColor: '#FFF',
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.xs,
+        borderRadius: radii.md,
     },
     claimBadgeText: {
-        color: '#FFF',
-        fontWeight: 'bold',
-        fontSize: 10,
+        color: '#B45309',
+        fontWeight: '900',
+        fontSize: moderateScale(12),
     },
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(2, 6, 23, 0.9)',
+        backgroundColor: 'rgba(0,0,0,0.85)',
         justifyContent: 'center',
         alignItems: 'center',
     },
     modal: {
         width: '90%',
-        padding: 30,
-        borderRadius: 32,
+        padding: spacing.xl,
+        borderRadius: radii.xl,
         backgroundColor: '#1E293B',
         alignItems: 'center',
         overflow: 'hidden',
@@ -740,35 +590,57 @@ const styles = StyleSheet.create({
     },
     modalTitle: {
         color: '#FFF',
-        fontSize: 24,
+        fontSize: moderateScale(24),
         fontWeight: '900',
-        marginTop: 20,
+        marginTop: spacing.lg,
         letterSpacing: 2,
     },
     modalText: {
         color: '#94A3B8',
-        fontSize: 14,
-        marginTop: 5,
+        fontSize: moderateScale(16),
+        marginTop: spacing.sm,
+    },
+    rewardRow: {
+        flexDirection: 'row',
+        marginVertical: spacing.lg,
+        gap: spacing.xl,
+    },
+    rewardItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+    },
+    rewardAmount: {
+        color: '#FFF',
+        fontSize: moderateScale(20),
+        fontWeight: 'bold',
+    },
+    streakText: {
+        color: '#10B981',
+        fontSize: moderateScale(14),
+        fontWeight: 'bold',
+        marginBottom: spacing.lg,
     },
     cancelButton: {
         flexDirection: 'row',
-        paddingVertical: 14,
-        paddingHorizontal: 25,
-        backgroundColor: '#EF4444',
-        borderRadius: 16,
         alignItems: 'center',
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.md,
+        borderRadius: radii.lg,
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(239, 68, 68, 0.3)',
+        gap: spacing.sm,
     },
     cancelText: {
-        color: '#FFF',
-        fontWeight: '900',
-        marginLeft: 10,
-        fontSize: 13,
+        color: '#F87171',
+        fontWeight: 'bold',
+        fontSize: moderateScale(14),
     },
-    arenaModal: {
+    difficultyModal: {
         width: '90%',
-        height: '70%',
-        padding: 24,
-        borderRadius: 32,
+        padding: spacing.lg,
+        borderRadius: radii.xl,
         backgroundColor: '#1E293B',
         overflow: 'hidden',
         borderWidth: 1,
@@ -778,78 +650,49 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 25,
+        marginBottom: spacing.lg,
     },
-    arenaItem: {
+    difficultyOptions: {
+        gap: spacing.sm,
+    },
+    difficultyItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
+        padding: spacing.md,
         backgroundColor: '#334155',
-        borderRadius: 20,
-        marginBottom: 12,
+        borderRadius: radii.xl,
         borderWidth: 1,
-        borderColor: '#475569',
     },
-    arenaItemIcon: {
-        width: 52,
-        height: 52,
-        borderRadius: 16,
+    difficultyIcon: {
+        width: scale(48),
+        height: scale(48),
+        borderRadius: radii.lg,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    arenaItemName: {
-        fontSize: 18,
+    difficultyLabel: {
+        fontSize: moderateScale(18),
         fontWeight: 'bold',
     },
-    arenaItemDetails: {
+    difficultyDesc: {
         color: '#94A3B8',
-        fontSize: 12,
+        fontSize: moderateScale(12),
         marginTop: 2,
     },
-    arenaTimerBadge: {
-        backgroundColor: 'rgba(0,0,0,0.3)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
+    difficultyFee: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        paddingHorizontal: spacing.sm,
+        paddingVertical: spacing.xs,
+        borderRadius: radii.full,
+        gap: 4,
     },
-    arenaTimerText: {
-        color: '#FFF',
-        fontSize: 10,
+    difficultyFeeText: {
+        color: '#F59E0B',
+        fontSize: moderateScale(12),
         fontWeight: 'bold',
     },
-    rewardContainer: {
-        flexDirection: 'row',
-        gap: 15,
-        marginVertical: 30,
-    },
-    rewardPiece: {
-        padding: 20,
-        backgroundColor: '#334155',
-        borderRadius: 20,
-        alignItems: 'center',
-        minWidth: 100,
-        borderWidth: 1,
-        borderColor: '#475569',
-    },
-    rewardValueText: {
-        color: '#FFF',
-        fontSize: 20,
-        fontWeight: '900',
-        marginTop: 8,
-    },
-    finalClaimBtn: {
-        width: '100%',
-        paddingVertical: 18,
-        backgroundColor: '#10B981',
-        borderRadius: 20,
-        alignItems: 'center',
-    },
-    finalClaimText: {
-        color: '#FFF',
-        fontWeight: '900',
-        fontSize: 16,
-        letterSpacing: 1,
-    }
 });
 
 export default HomeScreen;

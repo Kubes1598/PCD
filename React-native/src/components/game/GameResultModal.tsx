@@ -1,9 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Animated, Modal, Dimensions } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Animated, Modal } from 'react-native';
 import { Trophy, Frown, Home, RefreshCw } from 'lucide-react-native';
 import { THEME } from '../../utils/theme';
-
-const { width } = Dimensions.get('window');
+import { scale, moderateScale, SCREEN_WIDTH } from '../../utils/responsive';
 
 interface GameResultModalProps {
     visible: boolean;
@@ -15,7 +14,7 @@ interface GameResultModalProps {
 }
 
 const GameResultModal: React.FC<GameResultModalProps> = ({ visible, winner, onHome, onRematch, score, reward }) => {
-    const scale = useRef(new Animated.Value(0)).current;
+    const scaleAnim = useRef(new Animated.Value(0)).current;
     const opacity = useRef(new Animated.Value(0)).current;
 
     const isWin = winner === 'player';
@@ -24,7 +23,7 @@ const GameResultModal: React.FC<GameResultModalProps> = ({ visible, winner, onHo
     useEffect(() => {
         if (visible) {
             Animated.parallel([
-                Animated.spring(scale, {
+                Animated.spring(scaleAnim, {
                     toValue: 1,
                     friction: 6,
                     useNativeDriver: true,
@@ -36,7 +35,7 @@ const GameResultModal: React.FC<GameResultModalProps> = ({ visible, winner, onHo
                 }),
             ]).start();
         } else {
-            scale.setValue(0);
+            scaleAnim.setValue(0);
             opacity.setValue(0);
         }
     }, [visible]);
@@ -48,9 +47,10 @@ const GameResultModal: React.FC<GameResultModalProps> = ({ visible, winner, onHo
     };
 
     const getStatusIcon = () => {
-        if (isWin) return <Trophy color={THEME.colors.white} size={64} />;
-        if (isDraw) return <RefreshCw color={THEME.colors.white} size={64} />;
-        return <Frown color={THEME.colors.white} size={64} />;
+        const iconSize = scale(48);
+        if (isWin) return <Trophy color={THEME.colors.white} size={iconSize} />;
+        if (isDraw) return <RefreshCw color={THEME.colors.white} size={iconSize} />;
+        return <Frown color={THEME.colors.white} size={iconSize} />;
     };
 
     const getStatusTitle = () => {
@@ -70,7 +70,7 @@ const GameResultModal: React.FC<GameResultModalProps> = ({ visible, winner, onHo
             <View style={styles.overlay}>
                 <Animated.View style={[
                     styles.modal,
-                    { transform: [{ scale }], opacity }
+                    { transform: [{ scale: scaleAnim }], opacity }
                 ]}>
                     <View style={[styles.iconContainer, { backgroundColor: getStatusColor() }]}>
                         {getStatusIcon()}
@@ -88,12 +88,12 @@ const GameResultModal: React.FC<GameResultModalProps> = ({ visible, winner, onHo
 
                     <View style={styles.buttonRow}>
                         <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={onHome}>
-                            <Home color={THEME.colors.primary} size={20} />
+                            <Home color={THEME.colors.primary} size={scale(18)} />
                             <Text style={styles.secondaryButtonText}>Home</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity style={styles.button} onPress={onRematch}>
-                            <RefreshCw color={THEME.colors.white} size={20} />
+                            <RefreshCw color={THEME.colors.white} size={scale(18)} />
                             <Text style={styles.buttonText}>Rematch</Text>
                         </TouchableOpacity>
                     </View>
@@ -111,57 +111,57 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     modal: {
-        width: width * 0.85,
+        width: SCREEN_WIDTH * 0.85,
         backgroundColor: THEME.colors.white,
-        borderRadius: THEME.radius.xxl,
-        padding: THEME.spacing.xl,
+        borderRadius: scale(24),
+        padding: scale(20),
         alignItems: 'center',
         ...THEME.shadows.lg,
     },
     iconContainer: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
+        width: scale(90),
+        height: scale(90),
+        borderRadius: scale(45),
         justifyContent: 'center',
         alignItems: 'center',
-        marginTop: -THEME.spacing.xxl - 40,
-        borderWidth: 8,
+        marginTop: -scale(65),
+        borderWidth: scale(6),
         borderColor: THEME.colors.white,
         ...THEME.shadows.md,
     },
     title: {
-        fontSize: 32,
+        fontSize: moderateScale(26),
         fontWeight: '900',
         color: THEME.colors.primaryDark,
-        marginTop: THEME.spacing.lg,
+        marginTop: scale(12),
     },
     subtitle: {
-        fontSize: 16,
+        fontSize: moderateScale(14),
         color: THEME.colors.gray600,
         textAlign: 'center',
-        marginVertical: THEME.spacing.md,
-        paddingHorizontal: THEME.spacing.md,
+        marginVertical: scale(10),
+        paddingHorizontal: scale(12),
     },
     buttonRow: {
         flexDirection: 'row',
-        gap: THEME.spacing.md,
+        gap: scale(10),
         width: '100%',
-        marginTop: THEME.spacing.lg,
+        marginTop: scale(16),
     },
     button: {
         flex: 1,
         flexDirection: 'row',
-        height: 55,
+        height: scale(46),
         backgroundColor: THEME.colors.primary,
-        borderRadius: THEME.radius.lg,
+        borderRadius: scale(12),
         justifyContent: 'center',
         alignItems: 'center',
-        gap: 8,
+        gap: scale(6),
     },
     buttonText: {
         color: THEME.colors.white,
         fontWeight: 'bold',
-        fontSize: 16,
+        fontSize: moderateScale(14),
     },
     secondaryButton: {
         backgroundColor: 'transparent',
@@ -171,24 +171,24 @@ const styles = StyleSheet.create({
     secondaryButtonText: {
         color: THEME.colors.primary,
         fontWeight: 'bold',
-        fontSize: 16,
+        fontSize: moderateScale(14),
     },
     rewardBox: {
         backgroundColor: 'rgba(245, 158, 11, 0.1)',
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderRadius: THEME.radius.md,
+        paddingVertical: scale(8),
+        paddingHorizontal: scale(16),
+        borderRadius: scale(10),
         alignItems: 'center',
-        marginBottom: THEME.spacing.lg,
+        marginBottom: scale(12),
     },
     rewardLabel: {
-        fontSize: 10,
+        fontSize: moderateScale(9),
         fontWeight: 'bold',
         color: THEME.colors.warning,
         letterSpacing: 1,
     },
     rewardValue: {
-        fontSize: 18,
+        fontSize: moderateScale(16),
         fontWeight: 'bold',
         color: THEME.colors.primary,
     },

@@ -209,7 +209,7 @@ function checkGameWinCondition(gameState) {
 // ===== CANDY DEFINITIONS =====
 // User-specified candy set to avoid repetition and ensure consistency
 const CANDY_TYPES = [
-    '🍏', '🍋', '🍇', '🍒', '🍎', '🍋', '🍓', '🍑', '🍐', '🍌',
+    '🍏', '🍋', '🍇', '🍒', '🍎', '🍓', '🍑', '🍐', '🍌',
     '🫐', '🥭', '🍊', '🍉', '🍈', '🍍', '🥥', '🥑', '🥒', '🥕',
     '🥝', '🌶️', '🫒', '🍅', '🥦', '🫑', '🧄', '🍆', '🥬',
     '🌽', '🧅', '🥔', '🍠', '🥖', '🍞', '🥚', '🧇', '🧀',

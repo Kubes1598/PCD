@@ -46,7 +46,7 @@ class EnhancedCandyPoolManager {
         // City-specific difficulty mapping
         this.cityDifficulty = {
             'Dubai': 'balanced',
-            'Cairo': 'competitive', 
+            'Cairo': 'competitive',
             'Oslo': 'expert'
         };
 
@@ -59,7 +59,7 @@ class EnhancedCandyPoolManager {
 
     generateSynchronizedCandyPools(city = 'Dubai', sessionId = null) {
         console.log(`🍭 Generating synchronized candy pools for ${city}`);
-        
+
         // Create or retrieve session
         if (!sessionId) {
             sessionId = this.createNewSession(city);
@@ -78,7 +78,7 @@ class EnhancedCandyPoolManager {
 
         // Distribute candies between players
         const playerAllocation = this.distributePlayerCandies(session.masterPool);
-        
+
         session.player1Candies = playerAllocation.player1;
         session.player2Candies = playerAllocation.player2;
         session.sharedPool = playerAllocation.shared;
@@ -105,40 +105,56 @@ class EnhancedCandyPoolManager {
     generateMasterPool(city) {
         const difficulty = this.cityDifficulty[city] || 'balanced';
         const rules = this.poolRules[difficulty];
-        
+
         console.log(`🎯 Generating ${difficulty} pool for ${city}:`, rules);
-        
-        let masterPool = [];
-        
-        // Add candies by category according to rules
+
+        const masterPoolSet = new Set();
+        const minPoolSize = 24; // 12 per player
+
+        // 1. Add candies by category according to rules
         Object.entries(rules).forEach(([category, count]) => {
             if (count > 0 && this.candyPools[category]) {
-                const selectedCandies = this.selectRandomFromCategory(category, count);
-                masterPool = masterPool.concat(selectedCandies);
-                console.log(`  Added ${count} ${category} candies:`, selectedCandies);
+                const pool = this.candyPools[category];
+                const shuffled = this.shuffleArray([...pool]);
+                let added = 0;
+                for (const candy of shuffled) {
+                    if (added >= count) break;
+                    if (!masterPoolSet.has(candy)) {
+                        masterPoolSet.add(candy);
+                        added++;
+                    }
+                }
             }
         });
 
-        // Shuffle the master pool
-        masterPool = this.shuffleArray(masterPool);
-        
-        // Add extra candies if needed to reach minimum pool size
-        const minPoolSize = 24; // 12 per player
-        if (masterPool.length < minPoolSize) {
-            const extraNeeded = minPoolSize - masterPool.length;
-            const extraCandies = this.selectRandomFromCategory('common', extraNeeded);
-            masterPool = masterPool.concat(extraCandies);
-            console.log(`  Added ${extraNeeded} extra common candies for minimum pool size`);
+        // 2. Add extra unique candies if needed to reach exactly 24
+        if (masterPoolSet.size < minPoolSize) {
+            console.log(`  Current pool size ${masterPoolSet.size}, need ${minPoolSize}. Adding extras...`);
+
+            // Collect all possible candies available in the system
+            const allAvailable = this.shuffleArray([
+                ...this.candyPools.common,
+                ...this.candyPools.uncommon,
+                ...this.candyPools.rare,
+                ...this.candyPools.special
+            ]);
+
+            for (const candy of allAvailable) {
+                if (masterPoolSet.size >= minPoolSize) break;
+                masterPoolSet.add(candy);
+            }
         }
 
-        return masterPool;
+        const finalPool = Array.from(masterPoolSet);
+        console.log(`✅ Master pool generation complete. Size: ${finalPool.length}`);
+        return this.shuffleArray(finalPool);
     }
 
     // Distribute master pool between two players
     distributePlayerCandies(masterPool) {
         const shuffled = this.shuffleArray([...masterPool]);
         const midPoint = Math.floor(shuffled.length / 2);
-        
+
         return {
             player1: shuffled.slice(0, midPoint),
             player2: shuffled.slice(midPoint),
@@ -150,7 +166,7 @@ class EnhancedCandyPoolManager {
 
     createNewSession(city) {
         const sessionId = `session_${++this.sessionCounter}_${Date.now()}`;
-        
+
         this.activeSessions.set(sessionId, {
             id: sessionId,
             city: city,
@@ -227,9 +243,9 @@ class EnhancedCandyPoolManager {
     // Generate candies for PRD matchmaking system
     generatePRDCandies(city = 'Dubai') {
         console.log(`🎮 PRD: Generating enhanced candies for ${city}`);
-        
+
         const pools = this.generateSynchronizedCandyPools(city);
-        
+
         return {
             playerCandies: pools.player1Candies,
             opponentCandies: pools.player2Candies,
@@ -243,7 +259,7 @@ class EnhancedCandyPoolManager {
     // Generate candies compatible with existing game system
     generateLegacyCompatibleCandies(city = 'Dubai') {
         const enhanced = this.generatePRDCandies(city);
-        
+
         return {
             playerCandies: enhanced.playerCandies,
             opponentCandies: enhanced.opponentCandies,
@@ -306,18 +322,18 @@ class EnhancedCandyPoolManager {
     // Test method for development
     runBalanceTest() {
         console.log('🧪 Running candy pool balance test...');
-        
+
         Object.entries(this.cityDifficulty).forEach(([city, difficulty]) => {
             console.log(`\n🏙️ Testing ${city} (${difficulty}):`);
             const pools = this.generateSynchronizedCandyPools(city);
-            
+
             console.log('Player 1 Balance:');
             this.validatePoolBalance(pools.player1Candies);
-            
+
             console.log('Player 2 Balance:');
             this.validatePoolBalance(pools.player2Candies);
         });
-        
+
         console.log('\n📈 Overall Statistics:');
         console.log(this.getPoolStatistics());
     }
@@ -338,13 +354,13 @@ function getEnhancedCandyPool() {
 // Enhanced version of existing generateUniqueGameCandies function
 function generateEnhancedGameCandies(city = 'Dubai') {
     console.log('🍭 Using enhanced candy pool system...');
-    
+
     try {
         const candyPool = getEnhancedCandyPool();
         return candyPool.generateLegacyCompatibleCandies(city);
     } catch (error) {
         console.error('❌ Enhanced candy pool failed, falling back to legacy system:', error);
-        
+
         // Fallback to original system
         if (typeof generateUniqueGameCandies === 'function') {
             return generateUniqueGameCandies();
@@ -357,10 +373,10 @@ function generateEnhancedGameCandies(city = 'Dubai') {
 // PRD Integration function
 function generatePRDEnhancedCandies(city = 'Dubai') {
     console.log(`🎯 PRD: Generating enhanced candies for ${city}`);
-    
+
     const candyPool = getEnhancedCandyPool();
     const result = candyPool.generatePRDCandies(city);
-    
+
     console.log(`✅ PRD Enhanced candies generated:`, {
         city: result.city,
         difficulty: result.difficulty,
@@ -368,7 +384,7 @@ function generatePRDEnhancedCandies(city = 'Dubai') {
         opponentCandies: result.opponentCandies.length,
         sessionId: result.sessionId
     });
-    
+
     return result;
 }
 

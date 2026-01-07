@@ -86,12 +86,18 @@ class PoisonedCandyDuel:
         
         import random
         
-        # Each player gets 12 random different candies (corrected gameplay)
-        all_candies = candy_emojis.copy()
-        random.shuffle(all_candies)
+        # Use unique set to avoid any duplicates in the source
+        unique_source = list(dict.fromkeys(candy_emojis))
+        random.shuffle(unique_source)
         
-        player1_candies = set(all_candies[:12])
-        player2_candies = set(all_candies[12:24] if len(all_candies) >= 24 else all_candies[12:] + all_candies[:12-len(all_candies[12:])])
+        # Take first 24 unique candies
+        if len(unique_source) < 24:
+            # This shouldn't happen with the default list, but for robustness:
+            print("⚠️ Not enough unique candies! Performance might degrade.")
+            
+        selected_24 = unique_source[:24]
+        player1_candies = set(selected_24[:12])
+        player2_candies = set(selected_24[12:24])
         
         player1 = Player(
             id=str(uuid.uuid4()), 

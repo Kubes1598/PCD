@@ -1,7 +1,8 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, Animated, ViewStyle } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, Animated, ViewStyle, Dimensions } from 'react-native';
 import { THEME } from '../../utils/theme';
 import { feedbackService } from '../../services/FeedbackService';
+import { scale, SCREEN_WIDTH, SCREEN_HEIGHT } from '../../utils/responsive';
 
 interface CandyItemProps {
     candy: string;
@@ -9,35 +10,62 @@ interface CandyItemProps {
     isPoison?: boolean;
     disabled?: boolean;
     style?: ViewStyle;
+    gridSize?: number; // Number of candies to determine sizing
 }
 
-const CandyItem: React.FC<CandyItemProps> = ({ candy, onPress, isPoison, disabled, style }) => {
-    const scale = React.useRef(new Animated.Value(1)).current;
+// Calculate responsive candy size based on screen and grid
+const getCandySize = (gridSize: number = 11): number => {
+    // For the gameplay screen, we need to fit everything without scrolling
+    // Calculate based on available width for a 4-column grid with gaps
+    const availableWidth = SCREEN_WIDTH - scale(32); // 16px padding on each side
+    const columns = Math.min(4, Math.ceil(Math.sqrt(gridSize)));
+    const gaps = (columns + 1) * scale(4);
+    const candyWidth = (availableWidth - gaps) / columns;
+
+    // Also check height constraints for iPhone 14 Pro Max and smaller
+    // We need 2 candy grids + 2 collection panels + turn indicator to fit
+    const maxCandyHeight = SCREEN_HEIGHT * 0.065; // ~6.5% of screen height per candy
+
+    return Math.min(candyWidth * 0.9, maxCandyHeight);
+};
+
+const CandyItem: React.FC<CandyItemProps> = ({
+    candy,
+    onPress,
+    isPoison,
+    disabled,
+    style,
+    gridSize = 11
+}) => {
+    const scaleAnim = React.useRef(new Animated.Value(1)).current;
     const opacity = React.useRef(new Animated.Value(1)).current;
+
+    const candySize = getCandySize(gridSize);
+    const fontSize = candySize * 0.5; // Emoji takes 50% of candy container
 
     React.useEffect(() => {
         if (disabled) {
             Animated.sequence([
-                Animated.timing(scale, {
-                    toValue: 1.2,
-                    duration: 150,
+                Animated.timing(scaleAnim, {
+                    toValue: 1.1,
+                    duration: 100,
                     useNativeDriver: true,
                 }),
                 Animated.parallel([
-                    Animated.timing(scale, {
-                        toValue: 0.8,
-                        duration: 200,
+                    Animated.timing(scaleAnim, {
+                        toValue: 0.9,
+                        duration: 150,
                         useNativeDriver: true,
                     }),
                     Animated.timing(opacity, {
-                        toValue: 0.5,
-                        duration: 200,
+                        toValue: 0.4,
+                        duration: 150,
                         useNativeDriver: true,
                     }),
                 ]),
             ]).start();
         } else {
-            scale.setValue(1);
+            scaleAnim.setValue(1);
             opacity.setValue(1);
         }
     }, [disabled]);
@@ -45,15 +73,15 @@ const CandyItem: React.FC<CandyItemProps> = ({ candy, onPress, isPoison, disable
     const handlePressIn = () => {
         if (disabled) return;
         feedbackService.triggerSelection();
-        Animated.spring(scale, {
-            toValue: 0.95,
+        Animated.spring(scaleAnim, {
+            toValue: 0.92,
             useNativeDriver: true,
         }).start();
     };
 
     const handlePressOut = () => {
         if (disabled) return;
-        Animated.spring(scale, {
+        Animated.spring(scaleAnim, {
             toValue: 1,
             friction: 3,
             tension: 40,
@@ -64,10 +92,11 @@ const CandyItem: React.FC<CandyItemProps> = ({ candy, onPress, isPoison, disable
     return (
         <Animated.View style={[
             styles.container,
-            isPoison ? styles.poisonContainer : null,
-            disabled ? styles.disabledContainer : null,
+            { width: candySize, height: candySize },
+            isPoison && styles.poisonContainer,
+            disabled && styles.disabledContainer,
             style,
-            { transform: [{ scale }], opacity }
+            { transform: [{ scale: scaleAnim }], opacity }
         ]}>
             <TouchableOpacity
                 onPress={onPress}
@@ -77,7 +106,7 @@ const CandyItem: React.FC<CandyItemProps> = ({ candy, onPress, isPoison, disable
                 activeOpacity={0.8}
                 style={styles.button}
             >
-                <Text style={[styles.candyText, disabled && styles.disabledText]}>
+                <Text style={[styles.candyText, { fontSize }, disabled && styles.disabledText]}>
                     {candy}
                 </Text>
             </TouchableOpacity>
@@ -87,12 +116,10 @@ const CandyItem: React.FC<CandyItemProps> = ({ candy, onPress, isPoison, disable
 
 const styles = StyleSheet.create({
     container: {
-        width: 60,
-        height: 60,
-        margin: THEME.spacing.xs,
+        margin: scale(2),
         backgroundColor: THEME.colors.white,
-        borderRadius: THEME.radius.md,
-        borderWidth: 2,
+        borderRadius: scale(8),
+        borderWidth: 1.5,
         borderColor: THEME.colors.gray200,
         ...THEME.shadows.sm,
         overflow: 'hidden',
@@ -104,18 +131,18 @@ const styles = StyleSheet.create({
     },
     poisonContainer: {
         borderColor: THEME.colors.danger,
-        backgroundColor: THEME.colors.gray100,
+        borderWidth: 2,
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
     },
     disabledContainer: {
         backgroundColor: THEME.colors.gray100,
         borderColor: THEME.colors.gray300,
-        opacity: 0.5,
     },
     candyText: {
-        fontSize: 28,
+        textAlign: 'center',
     },
     disabledText: {
-        opacity: 0.3,
+        opacity: 0.35,
     },
 });
 

@@ -36,14 +36,17 @@ CREATE TABLE IF NOT EXISTS game_moves (
 CREATE TABLE IF NOT EXISTS players (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(100) UNIQUE NOT NULL,
+    profile_id VARCHAR(10) UNIQUE NULL,
+    friends TEXT[] DEFAULT '{}',
     games_played INTEGER DEFAULT 0,
     games_won INTEGER DEFAULT 0,
     coin_balance BIGINT DEFAULT 10000,  -- Starting balance of 10,000 coins
-    diamonds_balance INTEGER DEFAULT 50,  -- Starting balance of 50 diamonds
+    diamonds_balance INTEGER DEFAULT 500,  -- Starting balance of 500 diamonds (Updated for MVP)
     total_coins_earned BIGINT DEFAULT 0,  -- Lifetime coins earned
     total_coins_spent BIGINT DEFAULT 0,   -- Lifetime coins spent
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    last_active TIMESTAMPTZ DEFAULT NOW()
+    last_active TIMESTAMPTZ DEFAULT NOW(),
+    last_daily_reward TIMESTAMPTZ NULL
 );
 
 -- Coin transactions table for tracking all coin movements

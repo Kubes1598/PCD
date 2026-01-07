@@ -1,13 +1,47 @@
-import React from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from 'react-native';
-import { User, Trophy, Star, ChevronLeft } from 'lucide-react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { User, Trophy, Star, ChevronLeft, Copy, Target, TrendingUp } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import ScreenContainer from '../components/layout/ScreenContainer';
 import { THEME } from '../utils/theme';
 import { useAuth } from '../hooks/useAuth';
+import { scale, moderateScale, spacing, radii, platformValue } from '../utils/responsive';
+import { apiService } from '../services/api';
 
 const ProfileScreen = ({ navigation }: any) => {
     const { user } = useAuth();
+    const [stats, setStats] = useState<any>(null);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        loadStats();
+    }, []);
+
+    const loadStats = async () => {
+        if (!user) return;
+        setLoading(true);
+        try {
+            const res = await apiService.getPlayerStats(user.username);
+            if (res.success) {
+                setStats(res.data);
+            }
+        } catch (error) {
+            console.error('Error loading stats:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const copyToClipboard = () => {
+        if (stats?.profile_id) {
+            // Mock clipboard functionality for now
+            Alert.alert('Copied', `Profile ID ${stats.profile_id} copied to clipboard!`);
+        }
+    };
+
+    const winRate = stats && stats.games_played > 0
+        ? ((stats.games_won / stats.games_played) * 100).toFixed(1)
+        : '0.0';
 
     return (
         <ScreenContainer withGradient={false} style={{ backgroundColor: '#0F172A' }}>
@@ -18,34 +52,59 @@ const ProfileScreen = ({ navigation }: any) => {
 
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <ChevronLeft color="#FFF" size={28} />
+                    <ChevronLeft color="#FFF" size={moderateScale(28)} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Profile</Text>
-                <View style={{ width: 40 }} />
+                <Text style={styles.headerTitle}>My Profile</Text>
+                <View style={{ width: scale(40) }} />
             </View>
 
-            <ScrollView contentContainerStyle={styles.content}>
-                <View style={styles.profileInfo}>
-                    <View style={styles.avatarContainer}>
-                        <User color="#CBD5E1" size={64} />
-                    </View>
-                    <Text style={styles.username}>{user?.username || 'Hunter'}</Text>
-                    <Text style={styles.rank}>Platimum Rank</Text>
-                </View>
+            {loading ? (
+                <ActivityIndicator size="large" color="#6366F1" style={{ marginTop: 100 }} />
+            ) : (
+                <ScrollView contentContainerStyle={styles.content}>
+                    <View style={styles.profileInfo}>
+                        <View style={styles.avatarContainer}>
+                            <User color="#CBD5E1" size={moderateScale(64)} />
+                        </View>
+                        <Text style={styles.username}>{user?.username || 'Hunter'}</Text>
 
-                <View style={styles.statsGrid}>
-                    <View style={styles.statCard}>
-                        <Trophy color="#F59E0B" size={24} />
-                        <Text style={styles.statValue}>1,234</Text>
-                        <Text style={styles.statLabel}>Wins</Text>
+                        <TouchableOpacity style={styles.badgeContainer} onPress={copyToClipboard}>
+                            <Text style={styles.profileIdText}>{stats?.profile_id || '#PCD-XXXX'}</Text>
+                            <Copy color="#94A3B8" size={moderateScale(14)} />
+                        </TouchableOpacity>
                     </View>
-                    <View style={styles.statCard}>
-                        <Star color="#3B82F6" size={24} />
-                        <Text style={styles.statValue}>4.8</Text>
-                        <Text style={styles.statLabel}>Rating</Text>
+
+                    <View style={styles.statsGrid}>
+                        <View style={styles.statCard}>
+                            <Trophy color="#F59E0B" size={moderateScale(24)} />
+                            <Text style={styles.statValue}>{stats?.games_won || 0}</Text>
+                            <Text style={styles.statLabel}>Wins</Text>
+                        </View>
+                        <View style={styles.statCard}>
+                            <Target color="#3B82F6" size={moderateScale(24)} />
+                            <Text style={styles.statValue}>{stats?.games_played || 0}</Text>
+                            <Text style={styles.statLabel}>Games</Text>
+                        </View>
+                        <View style={styles.statCard}>
+                            <TrendingUp color="#10B981" size={moderateScale(24)} />
+                            <Text style={styles.statValue}>{winRate}%</Text>
+                            <Text style={styles.statLabel}>Win Rate</Text>
+                        </View>
+                        <View style={styles.statCard}>
+                            <Star color="#8B5CF6" size={moderateScale(24)} />
+                            <Text style={styles.statValue}>Pro</Text>
+                            <Text style={styles.statLabel}>Rank</Text>
+                        </View>
                     </View>
-                </View>
-            </ScrollView>
+
+                    <View style={styles.recentActivity}>
+                        <Text style={styles.sectionTitle}>Recent Achievements</Text>
+                        <View style={styles.emptyActivity}>
+                            <Text style={styles.emptyText}>Win online duels to earn unique badges!</Text>
+                        </View>
+                    </View>
+                </ScrollView>
+            )}
         </ScreenContainer>
     );
 };
@@ -55,66 +114,105 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingTop: 60,
-        paddingBottom: 20,
+        paddingHorizontal: spacing.md,
+        paddingTop: platformValue(spacing.xxl + spacing.sm, spacing.xxl + spacing.md),
+        paddingBottom: spacing.lg,
     },
     backButton: {
-        padding: 8,
+        padding: spacing.xs,
     },
     headerTitle: {
         color: '#FFF',
-        fontSize: 20,
+        fontSize: moderateScale(20),
         fontWeight: 'bold',
     },
     content: {
-        padding: 20,
+        padding: spacing.lg,
     },
     profileInfo: {
         alignItems: 'center',
-        marginBottom: 30,
+        marginBottom: spacing.xl,
     },
     avatarContainer: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
+        width: scale(110),
+        height: scale(110),
+        borderRadius: scale(55),
         backgroundColor: '#1E293B',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 16,
-        borderWidth: 2,
+        marginBottom: spacing.md,
+        borderWidth: 3,
         borderColor: '#3B82F6',
+        ...THEME.shadows.md,
     },
     username: {
         color: '#FFF',
-        fontSize: 24,
+        fontSize: moderateScale(24),
         fontWeight: 'bold',
     },
-    rank: {
+    badgeContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#1E293B',
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.xs,
+        borderRadius: radii.full,
+        marginTop: spacing.sm,
+        gap: spacing.xs,
+    },
+    profileIdText: {
         color: '#94A3B8',
-        fontSize: 16,
-        marginTop: 4,
+        fontSize: moderateScale(14),
+        fontWeight: 'bold',
     },
     statsGrid: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         justifyContent: 'space-between',
+        gap: spacing.md,
+        marginBottom: spacing.xl,
     },
     statCard: {
         backgroundColor: '#1E293B',
-        width: '48%',
-        padding: 20,
-        borderRadius: 16,
+        width: '47%',
+        padding: spacing.lg,
+        borderRadius: radii.lg,
         alignItems: 'center',
+        justifyContent: 'center',
+        ...THEME.shadows.sm,
     },
     statValue: {
         color: '#FFF',
-        fontSize: 20,
+        fontSize: moderateScale(22),
         fontWeight: 'bold',
-        marginTop: 8,
+        marginTop: spacing.xs,
     },
     statLabel: {
         color: '#94A3B8',
-        fontSize: 14,
+        fontSize: moderateScale(14),
+    },
+    recentActivity: {
+        marginTop: spacing.sm,
+    },
+    sectionTitle: {
+        color: '#FFF',
+        fontSize: moderateScale(18),
+        fontWeight: 'bold',
+        marginBottom: spacing.md,
+    },
+    emptyActivity: {
+        backgroundColor: '#1E293B',
+        padding: spacing.xl,
+        borderRadius: radii.lg,
+        alignItems: 'center',
+        borderStyle: 'dashed',
+        borderWidth: 1,
+        borderColor: '#334155',
+    },
+    emptyText: {
+        color: '#64748B',
+        fontSize: moderateScale(14),
+        textAlign: 'center',
     },
 });
 

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView } from 'react-native';
 import { useGame } from '../hooks/useGame';
 import ScreenContainer from '../components/layout/ScreenContainer';
 import CandyGrid from '../components/game/CandyGrid';
@@ -7,6 +7,7 @@ import CollectionPanel from '../components/game/CollectionPanel';
 import TurnIndicator from '../components/game/TurnIndicator';
 import GameResultModal from '../components/game/GameResultModal';
 import { THEME } from '../utils/theme';
+import { moderateScale, scale, SCREEN_HEIGHT, verticalScale } from '../utils/responsive';
 import { StackNavigationProp } from '@react-navigation/stack';
 
 type GameScreenProps = {
@@ -24,9 +25,12 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation }) => {
         return () => clearInterval(interval);
     }, []);
 
+    // Poison selection phase
     if (game.isSettingPoisonFor && !game.gameEnded) {
         const isOpponent = game.isSettingPoisonFor === 'opponent';
-        const title = isOpponent ? "PLAYER 2: SELECT POISON" : (game.gameMode === 'offline' ? "PLAYER 1: SELECT POISON" : "SELECT YOUR POISON");
+        const title = isOpponent
+            ? "PLAYER 2: SELECT POISON"
+            : (game.gameMode === 'offline' ? "PLAYER 1: SELECT POISON" : "SELECT YOUR POISON");
         const subtitle = isOpponent
             ? "Player 1, look away! Player 2, pick your target."
             : "The candy your opponent must avoid!";
@@ -34,8 +38,10 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation }) => {
 
         return (
             <ScreenContainer>
-                <View style={styles.center}>
-                    <Text style={[styles.title, isOpponent && { color: THEME.colors.secondary }]}>{title}</Text>
+                <View style={styles.poisonPhase}>
+                    <Text style={[styles.title, isOpponent && { color: THEME.colors.secondary }]}>
+                        {title}
+                    </Text>
                     <Text style={styles.subtitle}>{subtitle}</Text>
 
                     <CandyGrid
@@ -48,20 +54,24 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation }) => {
         );
     }
 
+    // Main gameplay - NO SCROLL, everything must fit
     return (
         <ScreenContainer>
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+            <View style={styles.gameContainer}>
+                {/* Turn Indicator - Compact inline */}
                 <TurnIndicator
                     isPlayerTurn={game.isPlayerTurn}
                     timeLeft={game.turnTimeRemaining}
                 />
 
+                {/* Opponent's Collection - Top */}
                 <CollectionPanel
                     playerName="Opponent"
                     collection={game.opponentCollection}
                     isOpponent
                 />
 
+                {/* Opponent's Candy Pool - Player picks from here */}
                 <CandyGrid
                     title="Pick from Opponent's Pool"
                     candies={game.opponentCandies}
@@ -70,20 +80,28 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation }) => {
                     isOpponentGrid
                 />
 
-                <View style={styles.divider} />
+                {/* Divider */}
+                <View style={styles.divider}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>VS</Text>
+                    <View style={styles.dividerLine} />
+                </View>
 
+                {/* Player's Candy Pool - Opponent picks from here */}
                 <CandyGrid
-                    title="Your Candy Pool (Opponent picks from here)"
+                    title="Your Pool (Opponent picks here)"
                     candies={game.playerCandies}
                     collectedCandies={game.opponentCollection}
                     poisonCandy={game.selectedPoison}
                 />
 
+                {/* Player's Collection - Bottom */}
                 <CollectionPanel
                     playerName="You"
                     collection={game.playerCollection}
                 />
 
+                {/* Game Result Modal */}
                 <GameResultModal
                     visible={game.gameEnded}
                     winner={game.gameWinner}
@@ -91,7 +109,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation }) => {
                     reward={game.lastReward}
                     onHome={() => {
                         game.resetGame();
-                        navigation.navigate('Home');
+                        navigation.navigate('DrawerScreens', { screen: 'Home' });
                     }}
                     onRematch={() => {
                         const currentMode = game.gameMode;
@@ -101,38 +119,53 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation }) => {
                         game.initGame(currentMode, currentDiff, currentCity as any);
                     }}
                 />
-            </ScrollView>
+            </View>
         </ScreenContainer>
     );
 };
 
 const styles = StyleSheet.create({
-    scrollContent: {
-        padding: THEME.spacing.md,
+    gameContainer: {
+        flex: 1,
+        paddingHorizontal: scale(12),
+        paddingTop: scale(8),
+        paddingBottom: scale(8),
+        justifyContent: 'space-between',
     },
-    center: {
+    poisonPhase: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: THEME.spacing.xl,
+        paddingHorizontal: scale(20),
     },
     title: {
-        fontSize: 24,
+        fontSize: moderateScale(20),
         fontWeight: '900',
         color: THEME.colors.primary,
-        marginBottom: THEME.spacing.sm,
+        marginBottom: scale(4),
+        textAlign: 'center',
     },
     subtitle: {
-        fontSize: 16,
+        fontSize: moderateScale(13),
         color: THEME.colors.gray600,
-        marginBottom: THEME.spacing.xl,
+        marginBottom: scale(16),
         textAlign: 'center',
     },
     divider: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginVertical: scale(4),
+    },
+    dividerLine: {
+        flex: 1,
         height: 1,
-        backgroundColor: THEME.colors.gray200,
-        marginVertical: THEME.spacing.lg,
-        opacity: 0.5,
+        backgroundColor: 'rgba(99, 102, 241, 0.3)',
+    },
+    dividerText: {
+        fontSize: moderateScale(10),
+        fontWeight: '800',
+        color: THEME.colors.primary,
+        paddingHorizontal: scale(8),
     },
 });
 

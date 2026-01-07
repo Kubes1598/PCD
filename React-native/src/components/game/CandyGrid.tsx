@@ -1,7 +1,8 @@
 import React from 'react';
-import { StyleSheet, View, Text, ScrollView } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
 import CandyItem from './CandyItem';
 import { THEME } from '../../utils/theme';
+import { scale, moderateScale, SCREEN_WIDTH } from '../../utils/responsive';
 
 interface CandyGridProps {
     candies: string[];
@@ -22,7 +23,9 @@ const CandyGrid: React.FC<CandyGridProps> = ({
 }) => {
     return (
         <View style={styles.container}>
-            <Text style={styles.title}>{title}</Text>
+            <Text style={[styles.title, isOpponentGrid && styles.titleOpponent]}>
+                {title}
+            </Text>
             <View style={styles.grid}>
                 {candies.map((candy, index) => {
                     const isCollected = collectedCandies.includes(candy);
@@ -35,7 +38,7 @@ const CandyGrid: React.FC<CandyGridProps> = ({
                             onPress={onCandyPress ? () => onCandyPress(candy) : undefined}
                             isPoison={isPoison}
                             disabled={isCollected}
-                            style={styles.candyItem}
+                            gridSize={candies.length}
                         />
                     );
                 })}
@@ -46,29 +49,30 @@ const CandyGrid: React.FC<CandyGridProps> = ({
 
 const styles = StyleSheet.create({
     container: {
-        marginVertical: THEME.spacing.md,
+        marginVertical: scale(4),
         width: '100%',
     },
     title: {
-        fontSize: 16,
-        fontWeight: 'bold',
+        fontSize: moderateScale(11),
+        fontWeight: '700',
+        color: THEME.colors.gray600,
+        marginBottom: scale(4),
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    titleOpponent: {
         color: THEME.colors.primary,
-        marginBottom: THEME.spacing.sm,
-        paddingHorizontal: THEME.spacing.xs,
     },
     grid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.4)',
-        padding: THEME.spacing.sm,
-        borderRadius: THEME.radius.lg,
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.6)',
+        padding: scale(6),
+        borderRadius: scale(12),
         borderWidth: 1,
-        borderColor: THEME.colors.carton,
-    },
-    candyItem: {
-        width: '21%', // Roughly 4 per row
-        aspectRatio: 1,
+        borderColor: 'rgba(0,0,0,0.05)',
     },
 });
 

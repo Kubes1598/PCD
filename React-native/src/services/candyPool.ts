@@ -35,23 +35,38 @@ const shuffle = <T>(array: T[]): T[] => {
 
 export const generateCandyPool = (city: keyof typeof CITY_RULES = 'Dubai') => {
     const rules = CITY_RULES[city] || CITY_RULES.Dubai;
-    let masterPool: string[] = [];
+    const masterPoolSet = new Set<string>();
 
+    // 1. Fill based on city rules
     Object.entries(rules).forEach(([category, count]) => {
         const pool = CANDY_POOLS[category as CandyCategory];
-        const selected = shuffle(pool).slice(0, count);
-        masterPool = [...masterPool, ...selected];
+        const shuffled = shuffle(pool);
+        let added = 0;
+        for (const candy of shuffled) {
+            if (added >= count) break;
+            if (!masterPoolSet.has(candy)) {
+                masterPoolSet.add(candy);
+                added++;
+            }
+        }
     });
 
-    // Ensure minimum 24 candies
-    if (masterPool.length < 24) {
-        const needed = 24 - masterPool.length;
-        const extra = shuffle(CANDY_POOLS.common).slice(0, needed);
-        masterPool = [...masterPool, ...extra];
+    // 2. Ensure exactly 24 unique candies
+    const allAvailable = shuffle([
+        ...CANDY_POOLS.common,
+        ...CANDY_POOLS.uncommon,
+        ...CANDY_POOLS.rare,
+        ...CANDY_POOLS.special
+    ]);
+
+    for (const candy of allAvailable) {
+        if (masterPoolSet.size >= 24) break;
+        masterPoolSet.add(candy);
     }
 
-    const shuffledMaster = shuffle(masterPool);
-    // Split 12 for each player
+    const shuffledMaster = shuffle(Array.from(masterPoolSet));
+
+    // Split 12 for each player - guaranteed unique across both
     return {
         player: shuffledMaster.slice(0, 12),
         opponent: shuffledMaster.slice(12, 24)

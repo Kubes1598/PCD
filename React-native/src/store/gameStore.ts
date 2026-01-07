@@ -44,13 +44,14 @@ interface GameState {
     totalWaiting: number;
     lastReward: number;
     isSettingPoisonFor: 'player' | 'opponent' | null;
+    opponentId: string | null;
 
     // Actions
     initGame: (mode: GameMode, difficulty?: Difficulty, city?: 'Dubai' | 'Cairo' | 'Oslo') => Promise<void>;
     startSearching: (arena?: 'Dubai' | 'Cairo' | 'Oslo') => void;
     stopSearching: () => void;
     setPoison: (candy: string) => Promise<void>;
-    pickCandy: (candy: string) => Promise<void>;
+    pickCandy: (candy: string, isRemote?: boolean) => Promise<void>;
     resetGame: () => void;
     tickTimer: () => void;
 }
@@ -150,6 +151,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     totalWaiting: 0,
     lastReward: 0,
     isSettingPoisonFor: null,
+    opponentId: null,
 
     initGame: async (mode, difficulty = 'easy', city = 'Dubai') => {
         const fees = { easy: 0, medium: 100, hard: 250, online: 500 };
@@ -211,9 +213,21 @@ export const useGameStore = create<GameState>((set, get) => ({
                     opponentCandies: data.game_state.player2.owned_candies,
                     gameMode: 'online',
                     turnTimeRemaining: arena === 'Oslo' ? 10 : (arena === 'Cairo' ? 20 : 30),
-                    isSettingPoisonFor: 'player'
+                    isSettingPoisonFor: 'player',
+                    opponentId: data.opponent_id || null
                 });
-                webSocketService.disconnect();
+                // DO NOT disconnect here, we need it for move signaling
+            } else if (data.type === 'match_poison') {
+                set({ opponentPoison: data.candy });
+                if (get().selectedPoison) {
+                    set({ gameStarted: true, isSettingPoisonFor: null });
+                }
+            } else if (data.type === 'match_move') {
+                get().pickCandy(data.move!, true); // true indicates it's a remote move
+            } else if (data.type === 'opponent_disconnected') {
+                feedbackService.triggerError();
+                set({ gameEnded: true, gameWinner: 'player', gameStarted: false });
+                alert('Opponent disconnected! You win by default.');
             }
         });
 
@@ -227,7 +241,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     setPoison: async (candy) => {
-        const { gameMode, isSettingPoisonFor, opponentCandies, gameId } = get();
+        const { gameMode, isSettingPoisonFor, opponentCandies, gameId, opponentId } = get();
 
         if (isSettingPoisonFor === 'player') {
             set({ selectedPoison: candy });
@@ -238,8 +252,16 @@ export const useGameStore = create<GameState>((set, get) => ({
             } else {
                 // Single player or Online
                 set({ isSettingPoisonFor: null, gameStarted: true });
-                if (gameMode === 'online' && gameId) {
-                    await apiService.setPoison(gameId, 'player1', candy);
+                if (gameMode === 'online' && opponentId) {
+                    webSocketService.sendMessage({
+                        type: 'match_poison',
+                        target_id: opponentId,
+                        candy: candy
+                    });
+                    // If we already have opponent poison (received via WS), start game
+                    if (get().opponentPoison) {
+                        set({ gameStarted: true, isSettingPoisonFor: null });
+                    }
                 }
             }
         } else if (isSettingPoisonFor === 'opponent') {
@@ -251,9 +273,11 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
     },
 
-    pickCandy: async (candy) => {
+    pickCandy: async (candy, isRemote = false) => {
         const state = get();
         if (state.gameEnded) return;
+
+        const { opponentId } = state;
 
         let newPlayerCollection = [...state.playerCollection];
         let newOpponentCollection = [...state.opponentCollection];
@@ -306,6 +330,15 @@ export const useGameStore = create<GameState>((set, get) => ({
             isPlayerTurn: nextPlayerTurn,
             turnTimeRemaining: nextTimer
         });
+
+        // Send move to opponent if online and it's our turn
+        if (state.gameMode === 'online' && state.opponentId && !isRemote) {
+            webSocketService.sendMessage({
+                type: 'match_move',
+                target_id: state.opponentId,
+                move: candy
+            });
+        }
 
         // AI Logic
         if (!nextPlayerTurn && state.gameMode === 'ai') {

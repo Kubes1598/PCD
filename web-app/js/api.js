@@ -14,19 +14,19 @@ class APIClient {
         this.retryAttempts = config.retryAttempts;
         this.retryDelay = config.retryDelay;
         this.isOnline = navigator.onLine;
-        
+
         // Listen for online/offline events
         window.addEventListener('online', () => {
             this.isOnline = true;
             showNotification('Connection restored!', 'success');
         });
-        
+
         window.addEventListener('offline', () => {
             this.isOnline = false;
             showNotification('Connection lost. Working offline...', 'warning');
         });
     }
-    
+
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
         const config = {
@@ -37,36 +37,36 @@ class APIClient {
             },
             ...options
         };
-        
+
         // Check if online for non-GET requests
         if (!this.isOnline && options.method !== 'GET') {
             throw new Error('No internet connection. Please check your connection and try again.');
         }
-        
+
         let lastError;
-        
+
         for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-                
+
                 const response = await fetch(url, {
                     ...config,
                     signal: controller.signal
                 });
-                
+
                 clearTimeout(timeoutId);
-                
+
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-                
+
                 const data = await response.json();
                 return data;
-                
+
             } catch (error) {
                 lastError = error;
-                
+
                 if (attempt < this.retryAttempts) {
                     console.warn(`API request failed (attempt ${attempt}/${this.retryAttempts}):`, error.message);
                     await this.delay(this.retryDelay * attempt);
@@ -75,23 +75,23 @@ class APIClient {
                 }
             }
         }
-        
+
         throw lastError;
     }
-    
+
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
-    
+
     // ===== GAME API METHODS =====
-    
+
     async createGame(playerData) {
         try {
             const response = await this.request('/games', {
                 method: 'POST',
                 body: JSON.stringify(playerData)
             });
-            
+
             showNotification('Game created successfully!', 'success');
             return response;
         } catch (error) {
@@ -99,7 +99,7 @@ class APIClient {
             throw error;
         }
     }
-    
+
     async getGame(gameId) {
         try {
             return await this.request(`/games/${gameId}`);
@@ -108,7 +108,7 @@ class APIClient {
             throw error;
         }
     }
-    
+
     async setPoison(gameId, player, poisonChoice) {
         try {
             const response = await this.request(`/games/${gameId}/poison`, {
@@ -118,7 +118,7 @@ class APIClient {
                     poison_choice: poisonChoice
                 })
             });
-            
+
             showNotification('Poison choice confirmed!', 'success');
             return response;
         } catch (error) {
@@ -126,7 +126,7 @@ class APIClient {
             throw error;
         }
     }
-    
+
     async pickCandy(gameId, player, candyChoice) {
         try {
             const response = await this.request(`/games/${gameId}/pick`, {
@@ -136,13 +136,13 @@ class APIClient {
                     candy_choice: candyChoice
                 })
             });
-            
+
             if (response.picked_poison) {
                 soundManager.play('error');
             } else {
                 soundManager.play('success');
             }
-            
+
             return response;
         } catch (error) {
             showNotification('Failed to pick candy. Please try again.', 'error');
@@ -150,7 +150,7 @@ class APIClient {
             throw error;
         }
     }
-    
+
     async getHealth() {
         try {
             return await this.request('/health');
@@ -159,7 +159,7 @@ class APIClient {
             return { status: 'offline' };
         }
     }
-    
+
     async getGameHistory(limit = 10) {
         try {
             return await this.request(`/games?limit=${limit}`);
@@ -176,7 +176,7 @@ class OfflineStorage {
         this.storageKey = 'pcd_offline_data';
         this.queue = this.loadQueue();
     }
-    
+
     loadQueue() {
         try {
             const stored = localStorage.getItem(this.storageKey);
@@ -186,7 +186,7 @@ class OfflineStorage {
             return [];
         }
     }
-    
+
     saveQueue() {
         try {
             localStorage.setItem(this.storageKey, JSON.stringify(this.queue));
@@ -194,7 +194,7 @@ class OfflineStorage {
             console.error('Failed to save offline queue:', error);
         }
     }
-    
+
     addToQueue(action, data) {
         this.queue.push({
             id: Date.now(),
@@ -204,14 +204,14 @@ class OfflineStorage {
         });
         this.saveQueue();
     }
-    
+
     async processQueue() {
         if (!navigator.onLine || this.queue.length === 0) {
             return;
         }
-        
+
         const processed = [];
-        
+
         for (const item of this.queue) {
             try {
                 await this.processQueueItem(item);
@@ -221,19 +221,19 @@ class OfflineStorage {
                 break; // Stop processing on first failure
             }
         }
-        
+
         // Remove processed items
         this.queue = this.queue.filter(item => !processed.includes(item.id));
         this.saveQueue();
-        
+
         if (processed.length > 0) {
             showNotification(`Synced ${processed.length} offline actions`, 'success');
         }
     }
-    
+
     async processQueueItem(item) {
         const api = new APIClient();
-        
+
         switch (item.action) {
             case 'createGame':
                 return await api.createGame(item.data);
@@ -245,7 +245,7 @@ class OfflineStorage {
                 console.warn('Unknown queue action:', item.action);
         }
     }
-    
+
     clearQueue() {
         this.queue = [];
         this.saveQueue();
@@ -258,28 +258,34 @@ class MockAPI {
         this.games = new Map();
         this.gameCounter = 1;
     }
-    
+
     generateGameId() {
         return `offline-game-${this.gameCounter++}`;
     }
-    
-    generateCandies(count = 15) {
+
+    generateCandies(count = 12) {
         // Use the same candy types as main game (user-specified set)
         const candyTypes = [
-            '🍏', '🍋', '🍇', '🍒', '🍎', '🍋‍🟩', '🍓', '🍑', '🍐', '🍌', 
-            '🫐', '🥭', '🍊', '🍉', '🍈', '🍍', '🥥', '🥑', '🥒', '🥕', 
-            '🥝', '🫛', '🌶️', '🫒', '🍅', '🥦', '🫑', '🧄', '🍆', '🥬', 
-            '🌽', '🧅', '🥔', '🫜', '🍠', '🥖', '🍞', '🥚', '🧇', '🧀', 
-            '🥞', '🧈', '🍖', '🍗', '🌭', '🥩', '🌮', '🌯', '🥙', '🥗', 
-            '🧆', '🍕', '🫔', '🦴', '🍝', '🍜', '🍥', '🍰', '🍬', '🍭', 
+            '🍏', '🍋', '🍇', '🍒', '🍎', '🍓', '🍑', '🍐', '🍌',
+            '🫐', '🥭', '🍊', '🍉', '🍈', '🍍', '🥥', '🥑', '🥒', '🥕',
+            '🥝', '🌶️', '🫒', '🍅', '🥦', '🫑', '🧄', '🍆', '🥬',
+            '🌽', '🧅', '🥔', '🍠', '🥖', '🍞', '🥚', '🧇', '🧀',
+            '🥞', '🧈', '🍖', '🍗', '🌭', '🥩', '🌮', '🌯', '🥙', '🥗',
+            '🧆', '🍕', '🫔', '🦴', '🍝', '🍜', '🍥', '🍰', '🍬', '🍭',
             '🍪', '🍩', '🌰', '🍫', '🍵'
         ];
-        
-        // Ensure no duplicates by shuffling and slicing
+
+        const masterPoolSet = new Set();
         const shuffled = [...candyTypes].sort(() => Math.random() - 0.5);
-        return shuffled.slice(0, Math.min(count, candyTypes.length));
+
+        for (const candy of shuffled) {
+            if (masterPoolSet.size >= count) break;
+            masterPoolSet.add(candy);
+        }
+
+        return Array.from(masterPoolSet);
     }
-    
+
     async createGame(playerData) {
         const gameId = this.generateGameId();
         const game = {
@@ -291,58 +297,58 @@ class MockAPI {
             status: 'setup',
             created_at: new Date().toISOString()
         };
-        
+
         this.games.set(gameId, game);
-        
+
         // Simulate network delay
         await new Promise(resolve => setTimeout(resolve, 500));
-        
+
         return game;
     }
-    
+
     async getGame(gameId) {
         await new Promise(resolve => setTimeout(resolve, 200));
-        
+
         const game = this.games.get(gameId);
         if (!game) {
             throw new Error('Game not found');
         }
-        
+
         return game;
     }
-    
+
     async setPoison(gameId, player, poisonChoice) {
         await new Promise(resolve => setTimeout(resolve, 300));
-        
+
         const game = this.games.get(gameId);
         if (!game) {
             throw new Error('Game not found');
         }
-        
+
         game[`${player}_poison`] = poisonChoice;
         game.status = 'playing';
-        
+
         return { success: true };
     }
-    
+
     async pickCandy(gameId, player, candyChoice) {
         await new Promise(resolve => setTimeout(resolve, 400));
-        
+
         const game = this.games.get(gameId);
         if (!game) {
             throw new Error('Game not found');
         }
-        
+
         // Simple logic - 10% chance of picking poison
         const pickedPoison = Math.random() < 0.1;
-        
+
         return {
             picked_poison: pickedPoison,
             candy: candyChoice,
             game_over: pickedPoison
         };
     }
-    
+
     async getHealth() {
         return { status: 'offline', mode: 'mock' };
     }
@@ -441,7 +447,7 @@ let connectionCheckInterval;
 function startConnectionMonitoring() {
     connectionCheckInterval = setInterval(async () => {
         const isHealthy = await checkAPIHealth();
-        
+
         if (isHealthy && navigator.onLine) {
             // Process any queued offline actions
             await offlineStorage.processQueue();
@@ -459,7 +465,7 @@ function stopConnectionMonitoring() {
 // ===== ERROR HANDLING =====
 function handleAPIError(error, context = '') {
     console.error(`API Error ${context}:`, error);
-    
+
     if (error.message.includes('fetch')) {
         showNotification('Network error. Please check your connection.', 'error');
     } else if (error.message.includes('timeout')) {
@@ -476,7 +482,7 @@ function handleAPIError(error, context = '') {
 // ===== INITIALIZATION =====
 document.addEventListener('DOMContentLoaded', () => {
     startConnectionMonitoring();
-    
+
     // Process any pending offline actions
     if (navigator.onLine) {
         setTimeout(() => {

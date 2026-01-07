@@ -202,11 +202,7 @@ class CityMatchmakingQueue:
                     self.player_timers[player["id"]].cancel()
                     del self.player_timers[player["id"]]
             
-            # Remove from active connections and player cities
-            if player1["id"] in self.active_connections:
-                del self.active_connections[player1["id"]]
-            if player2["id"] in self.active_connections:
-                del self.active_connections[player2["id"]]
+            # Keep them in active connections for signaling, but remove from city queues
             if player1["id"] in self.player_cities:
                 del self.player_cities[player1["id"]]
             if player2["id"] in self.player_cities:
@@ -243,12 +239,14 @@ class CityMatchmakingQueue:
                 await player1["websocket"].send_text(json.dumps({
                     **match_data,
                     "your_role": "player1",
-                    "opponent": {"name": player2["name"]}
+                    "opponent": {"name": player2["name"], "id": player2["id"]},
+                    "opponent_id": player2["id"]
                 }))
                 await player2["websocket"].send_text(json.dumps({
                     **match_data,
                     "your_role": "player2", 
-                    "opponent": {"name": player1["name"]}
+                    "opponent": {"name": player1["name"], "id": player1["id"]},
+                    "opponent_id": player1["id"]
                 }))
             except Exception as e:
                 print(f"Error notifying players of match: {e}")
@@ -343,6 +341,17 @@ class CoinTransactionRequest(BaseModel):
 
 class PlayerBalanceRequest(BaseModel):
     player_name: str
+
+class AddFriendRequest(BaseModel):
+    player_name: str
+    friend_profile_id: str
+
+class ProfileRequest(BaseModel):
+    profile_id: str
+
+class ClaimQuestRequest(BaseModel):
+    player_name: str
+    quest_id: str
 
 class ArenaStatsUpdate(BaseModel):
     arena_type: str
@@ -732,6 +741,15 @@ async def matchmaking_websocket(websocket: WebSocket, player_id: str):
                 
             elif message.get("type") == "ping":
                 await websocket.send_text(json.dumps({"type": "pong"}))
+            
+            # Signaling: Forward moves or poison selection to opponent
+            elif "target_id" in message:
+                target_id = message.get("target_id")
+                if target_id in matchmaking_queue.active_connections:
+                    target_ws = matchmaking_queue.active_connections[target_id]
+                    # Inject sender info
+                    message["from_id"] = player_id
+                    await target_ws.send_text(json.dumps(message))
                 
     except WebSocketDisconnect:
         print(f"🎮 WebSocket disconnected for player {player_id}")
@@ -964,6 +982,95 @@ async def get_player_transactions(player_name: str, limit: int = 50):
             "success": False,
             "message": f"Failed to get transactions: {str(e)}"
         }
+
+# ===== FRIENDS & PROFILE ENDPOINTS =====
+
+@app.get("/players/profile/{profile_id}")
+async def get_player_by_profile_id(profile_id: str):
+    """Find a player by their short Profile ID."""
+    try:
+        player = await db_service.get_player_by_profile_id(profile_id)
+        if player:
+            return {
+                "success": True,
+                "data": {
+                    "username": player["name"],
+                    "profile_id": player.get("profile_id"),
+                    "games_played": player.get("games_played", 0),
+                    "games_won": player.get("games_won", 0),
+                    "coin_balance": player.get("coin_balance", 0)
+                }
+            }
+        raise HTTPException(status_code=404, detail="Player not found")
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@app.get("/players/{player_name}/friends")
+async def get_player_friends(player_name: str):
+    """Get list of friends for a player."""
+    try:
+        player = await db_service.get_player(player_name)
+        if not player:
+            raise HTTPException(status_code=404, detail="Player not found")
+        
+        friends_list = []
+        for friend_name in player.get("friends", []):
+            friend_data = await db_service.get_player(friend_name)
+            if friend_data:
+                friends_list.append({
+                    "username": friend_data["name"],
+                    "profile_id": friend_data.get("profile_id"),
+                    "games_won": friend_data.get("games_won", 0),
+                    "status": "online" # Mock status
+                })
+        
+        return {"success": True, "data": friends_list}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@app.post("/players/friends/add")
+async def add_friend(request: AddFriendRequest):
+    """Add a friend by their Profile ID."""
+    try:
+        friend = await db_service.get_player_by_profile_id(request.friend_profile_id)
+        if not friend:
+            return {"success": False, "message": "Player with this ID not found"}
+        
+        if friend["name"] == request.player_name:
+            return {"success": False, "message": "You cannot add yourself as a friend"}
+            
+        success = await db_service.add_friend(request.player_name, friend["name"])
+        if success:
+            # Also add reciprocally for simplicity in MVP
+            await db_service.add_friend(friend["name"], request.player_name)
+            return {"success": True, "message": f"Added {friend['name']} as a friend"}
+        else:
+            return {"success": False, "message": "Already in your friends list or error"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@app.get("/players/{player_name}/stats")
+async def get_player_full_stats(player_name: str):
+    """Get full statistics for a player."""
+    try:
+        player = await db_service.get_player(player_name)
+        if player:
+            return {
+                "success": True,
+                "data": {
+                    "username": player["name"],
+                    "profile_id": player.get("profile_id"),
+                    "games_played": player.get("games_played", 0),
+                    "games_won": player.get("games_won", 0),
+                    "coin_balance": player.get("coin_balance", 0),
+                    "diamonds_balance": player.get("diamonds_balance", 0),
+                    "total_coins_earned": player.get("total_coins_earned", 0),
+                    "last_active": player.get("last_active")
+                }
+            }
+        raise HTTPException(status_code=404, detail="Player not found")
+    except Exception as e:
+        return {"success": False, "message": str(e)}
 
 @app.get("/arena/economics")
 async def get_arena_economics():
