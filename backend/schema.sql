@@ -1,11 +1,11 @@
--- Poisoned Candy Duel Database Schema for Supabase
--- Run this in your Supabase SQL Editor
-
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Ensure we are using the public schema
+SET search_path TO public;
+
 -- Games table to store all game sessions
-CREATE TABLE IF NOT EXISTS games (
+CREATE TABLE IF NOT EXISTS public.games (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     player1_name VARCHAR(100) NOT NULL,
     player2_name VARCHAR(100) NOT NULL,
@@ -22,9 +22,9 @@ CREATE TABLE IF NOT EXISTS games (
 );
 
 -- Game moves table to store individual moves (optional for analytics)
-CREATE TABLE IF NOT EXISTS game_moves (
+CREATE TABLE IF NOT EXISTS public.game_moves (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    game_id UUID REFERENCES games(id) ON DELETE CASCADE,
+    game_id UUID REFERENCES public.games(id) ON DELETE CASCADE,
     player_name VARCHAR(100) NOT NULL,
     move_type VARCHAR(20) NOT NULL CHECK (move_type IN ('poison_choice', 'candy_pick')),
     candy VARCHAR(20) NOT NULL,
@@ -33,9 +33,11 @@ CREATE TABLE IF NOT EXISTS game_moves (
 );
 
 -- Players table for user management (optional)
-CREATE TABLE IF NOT EXISTS players (
+CREATE TABLE IF NOT EXISTS public.players (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NULL,
+    password_hash TEXT NULL,
     profile_id VARCHAR(10) UNIQUE NULL,
     friends TEXT[] DEFAULT '{}',
     games_played INTEGER DEFAULT 0,
@@ -50,10 +52,10 @@ CREATE TABLE IF NOT EXISTS players (
 );
 
 -- Coin transactions table for tracking all coin movements
-CREATE TABLE IF NOT EXISTS coin_transactions (
+CREATE TABLE IF NOT EXISTS public.coin_transactions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     player_name VARCHAR(100) NOT NULL,
-    game_id UUID REFERENCES games(id) ON DELETE SET NULL,
+    game_id UUID REFERENCES public.games(id) ON DELETE SET NULL,
     transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN (
         'game_entry',      -- Entry fee for arena games
         'prize_payout',    -- Prize money from winning arena games
@@ -69,7 +71,7 @@ CREATE TABLE IF NOT EXISTS coin_transactions (
 );
 
 -- Arena statistics table for tracking arena-specific data
-CREATE TABLE IF NOT EXISTS arena_stats (
+CREATE TABLE IF NOT EXISTS public.arena_stats (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     arena_type VARCHAR(20) NOT NULL CHECK (arena_type IN ('dubai', 'cairo', 'oslo')),
     total_games INTEGER DEFAULT 0,
@@ -106,70 +108,70 @@ $$ language 'plpgsql';
 
 -- Trigger to automatically update updated_at
 CREATE TRIGGER update_games_updated_at 
-    BEFORE UPDATE ON games 
+    BEFORE UPDATE ON public.games 
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
 -- Row Level Security (RLS) policies
-ALTER TABLE games ENABLE ROW LEVEL SECURITY;
-ALTER TABLE game_moves ENABLE ROW LEVEL SECURITY;
-ALTER TABLE players ENABLE ROW LEVEL SECURITY;
-ALTER TABLE coin_transactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE arena_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.games ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.game_moves ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.players ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.coin_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.arena_stats ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Anyone can read games (for spectating)
-CREATE POLICY "Anyone can view games" ON games
+CREATE POLICY "Anyone can view games" ON public.games
     FOR SELECT USING (true);
 
 -- Policy: Anyone can create games
-CREATE POLICY "Anyone can create games" ON games
+CREATE POLICY "Anyone can create games" ON public.games
     FOR INSERT WITH CHECK (true);
 
 -- Policy: Players can update their own games
-CREATE POLICY "Players can update their games" ON games
+CREATE POLICY "Players can update their games" ON public.games
     FOR UPDATE USING (
         player1_name = current_setting('request.jwt.claims', true)::json->>'name' OR
         player2_name = current_setting('request.jwt.claims', true)::json->>'name'
     );
 
 -- Policy: Anyone can view game moves
-CREATE POLICY "Anyone can view game moves" ON game_moves
+CREATE POLICY "Anyone can view game moves" ON public.game_moves
     FOR SELECT USING (true);
 
 -- Policy: Anyone can insert game moves
-CREATE POLICY "Anyone can insert game moves" ON game_moves
+CREATE POLICY "Anyone can insert game moves" ON public.game_moves
     FOR INSERT WITH CHECK (true);
 
 -- Policy: Anyone can view players
-CREATE POLICY "Anyone can view players" ON players
+CREATE POLICY "Anyone can view players" ON public.players
     FOR SELECT USING (true);
 
 -- Policy: Anyone can create player profiles
-CREATE POLICY "Anyone can create players" ON players
+CREATE POLICY "Anyone can create players" ON public.players
     FOR INSERT WITH CHECK (true);
 
 -- Policy: Players can update their own profile
-CREATE POLICY "Players can update own profile" ON players
+CREATE POLICY "Players can update own profile" ON public.players
     FOR UPDATE USING (
         name = current_setting('request.jwt.claims', true)::json->>'name'
     );
 
 -- Policy: Players can view their own coin transactions
-CREATE POLICY "Players can view own transactions" ON coin_transactions
+CREATE POLICY "Players can view own transactions" ON public.coin_transactions
     FOR SELECT USING (
         player_name = current_setting('request.jwt.claims', true)::json->>'name'
     );
 
 -- Policy: Anyone can insert coin transactions (for game system)
-CREATE POLICY "Anyone can create transactions" ON coin_transactions
+CREATE POLICY "Anyone can create transactions" ON public.coin_transactions
     FOR INSERT WITH CHECK (true);
 
 -- Policy: Anyone can view arena stats
-CREATE POLICY "Anyone can view arena stats" ON arena_stats
+CREATE POLICY "Anyone can view arena stats" ON public.arena_stats
     FOR SELECT USING (true);
 
 -- Policy: Anyone can update arena stats (for game system)
-CREATE POLICY "Anyone can update arena stats" ON arena_stats
+CREATE POLICY "Anyone can update arena stats" ON public.arena_stats
     FOR ALL USING (true);
 
 -- Sample data for testing (optional)
@@ -177,33 +179,33 @@ CREATE POLICY "Anyone can update arena stats" ON arena_stats
 -- ('550e8400-e29b-41d4-a716-446655440000', 'Alice', 'Bob', '{"turn": 1, "phase": "poison_selection"}', 'waiting_for_poison');
 
 -- View for game statistics
-CREATE OR REPLACE VIEW game_stats AS
+CREATE OR REPLACE VIEW public.game_stats AS
 SELECT 
     COUNT(*) as total_games,
     COUNT(*) FILTER (WHERE status != 'finished') as active_games,
     COUNT(*) FILTER (WHERE status = 'finished') as completed_games,
     COUNT(*) FILTER (WHERE status = 'abandoned') as abandoned_games,
     AVG(EXTRACT(EPOCH FROM (updated_at - created_at))/60) as avg_game_duration_minutes
-FROM games;
+FROM public.games;
 
 -- View for player statistics
-CREATE OR REPLACE VIEW player_stats AS
+CREATE OR REPLACE VIEW public.player_stats AS
 SELECT 
     p.name,
     p.games_played,
     p.games_won,
-    ROUND((p.games_won::float / NULLIF(p.games_played, 0)) * 100, 2) as win_percentage,
+    ROUND((p.games_won::numeric / NULLIF(p.games_played, 0)) * 100, 2) as win_percentage,
     p.coin_balance,
     p.diamonds_balance,
     p.total_coins_earned,
     p.total_coins_spent,
     (p.total_coins_earned - p.total_coins_spent) as net_coin_change,
     p.last_active
-FROM players p
+FROM public.players p
 ORDER BY p.games_won DESC, p.games_played DESC;
 
 -- View for coin transaction summary by player
-CREATE OR REPLACE VIEW player_coin_summary AS
+CREATE OR REPLACE VIEW public.player_coin_summary AS
 SELECT 
     player_name,
     COUNT(*) as total_transactions,
@@ -212,33 +214,34 @@ SELECT
     SUM(amount) as net_change,
     MAX(balance_after) as current_balance,
     MAX(created_at) as last_transaction
-FROM coin_transactions
+FROM public.coin_transactions
 GROUP BY player_name
 ORDER BY current_balance DESC;
 
 -- View for arena economics summary
-CREATE OR REPLACE VIEW arena_economics AS
+CREATE OR REPLACE VIEW public.arena_economics AS
 SELECT 
     arena_type,
     SUM(total_games) as total_games,
     SUM(total_entry_fees) as total_entry_fees,
     SUM(total_prizes_paid) as total_prizes_paid,
     SUM(service_fees_collected) as total_service_fees,
-    ROUND((SUM(service_fees_collected)::float / NULLIF(SUM(total_entry_fees), 0)) * 100, 2) as service_fee_percentage,
+    ROUND((SUM(service_fees_collected)::numeric / NULLIF(SUM(total_entry_fees), 0)) * 100, 2) as service_fee_percentage,
     SUM(total_entry_fees) - SUM(total_prizes_paid) - SUM(service_fees_collected) as net_house_edge
-FROM arena_stats
+FROM public.arena_stats
 GROUP BY arena_type
 ORDER BY total_games DESC;
 
 -- View for daily coin flow
-CREATE OR REPLACE VIEW daily_coin_flow AS
+CREATE OR REPLACE VIEW public.daily_coin_flow AS
 SELECT 
     DATE(created_at) as transaction_date,
     arena_type,
     transaction_type,
     COUNT(*) as transaction_count,
     SUM(amount) as total_amount
-FROM coin_transactions
+FROM public.coin_transactions
 WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
 GROUP BY DATE(created_at), arena_type, transaction_type
-ORDER BY transaction_date DESC, arena_type, transaction_type; 
+ORDER BY transaction_date DESC, arena_type, transaction_type;
+ 

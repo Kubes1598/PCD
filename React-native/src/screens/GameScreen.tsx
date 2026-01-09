@@ -39,15 +39,16 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation }) => {
         return (
             <ScreenContainer>
                 <View style={styles.poisonPhase}>
-                    <Text style={[styles.title, isOpponent && { color: THEME.colors.secondary }]}>
+                    <Text style={[styles.title, isOpponent && { color: THEME.colors.danger }]}>
                         {title}
                     </Text>
                     <Text style={styles.subtitle}>{subtitle}</Text>
 
                     <CandyGrid
-                        title={isOpponent ? "Player 2's Pool" : "Player 1's Pool"}
+                        title={isOpponent ? "PLAYER 2 TRAY" : "PLAYER 1 TRAY"}
                         candies={candies}
                         onCandyPress={(candy) => game.setPoison(candy)}
+                        trayType={isOpponent ? "opponent" : "player"}
                     />
                 </View>
             </ScreenContainer>
@@ -66,18 +67,21 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation }) => {
 
                 {/* Opponent's Collection - Top */}
                 <CollectionPanel
-                    playerName="Opponent"
+                    playerName={game.gameMode === 'offline' ? "Player 2" : "Opponent"}
                     collection={game.opponentCollection}
                     isOpponent
                 />
 
                 {/* Opponent's Candy Pool - Player picks from here */}
                 <CandyGrid
-                    title="Pick from Opponent's Pool"
+                    title={game.gameMode === 'offline'
+                        ? (game.isPlayerTurn ? "🎯 PLAYER 1: PICK FROM PLAYER 2 TRAY" : "PLAYER 2'S TRAY")
+                        : "🎯 PICK FROM OPPONENT'S TRAY"
+                    }
                     candies={game.opponentCandies}
-                    onCandyPress={game.isPlayerTurn ? game.pickCandy : undefined}
+                    onCandyPress={game.isPlayerTurn ? (c => game.pickCandy(c)) : undefined}
                     collectedCandies={game.playerCollection}
-                    isOpponentGrid
+                    trayType="opponent"
                 />
 
                 {/* Divider */}
@@ -87,17 +91,22 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation }) => {
                     <View style={styles.dividerLine} />
                 </View>
 
-                {/* Player's Candy Pool - Opponent picks from here */}
+                {/* Player's Candy Pool - Opponent picks from here (Active for Player 2 in Offline) */}
                 <CandyGrid
-                    title="Your Pool (Opponent picks here)"
+                    title={game.gameMode === 'offline'
+                        ? (!game.isPlayerTurn ? "🎯 PLAYER 2: PICK FROM PLAYER 1 TRAY" : "PLAYER 1'S TRAY")
+                        : "YOUR TRAY (Opponent picks here)"
+                    }
                     candies={game.playerCandies}
+                    onCandyPress={(game.gameMode === 'offline' && !game.isPlayerTurn) ? (c => game.pickCandy(c)) : undefined}
                     collectedCandies={game.opponentCollection}
-                    poisonCandy={game.selectedPoison}
+                    poisonCandy={game.gameMode === 'offline' ? undefined : game.selectedPoison} // Hide poison during Local Duel turn
+                    trayType="player"
                 />
 
                 {/* Player's Collection - Bottom */}
                 <CollectionPanel
-                    playerName="You"
+                    playerName={game.gameMode === 'offline' ? "Player 1" : "You"}
                     collection={game.playerCollection}
                 />
 
@@ -119,6 +128,16 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation }) => {
                         game.initGame(currentMode, currentDiff, currentCity as any);
                     }}
                 />
+
+                {/* Reconnecting Overlay */}
+                {game.isReconnecting && (
+                    <View style={styles.reconnectingOverlay}>
+                        <View style={styles.reconnectingBox}>
+                            <Text style={styles.reconnectingText}>🔄 Connection lost...</Text>
+                            <Text style={styles.reconnectingSubtext}>Attempting to rebind your session. Do not close the app.</Text>
+                        </View>
+                    </View>
+                )}
             </View>
         </ScreenContainer>
     );
@@ -166,6 +185,31 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: THEME.colors.primary,
         paddingHorizontal: scale(8),
+    },
+    reconnectingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+    },
+    reconnectingBox: {
+        backgroundColor: THEME.colors.white,
+        padding: scale(20),
+        borderRadius: scale(16),
+        alignItems: 'center',
+        width: '80%',
+    },
+    reconnectingText: {
+        fontSize: moderateScale(18),
+        fontWeight: '900',
+        color: THEME.colors.primary,
+        marginBottom: scale(8),
+    },
+    reconnectingSubtext: {
+        fontSize: moderateScale(14),
+        color: THEME.colors.gray600,
+        textAlign: 'center',
     },
 });
 

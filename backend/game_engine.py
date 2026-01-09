@@ -5,16 +5,19 @@ Corrected Game Mechanics (Version A):
 - Each player has 12 different colored candies
 - Players pick poison from their OWN candy pool
 - Players can only pick from OPPONENT'S candy pool  
-- Win by collecting 11 different colors from opponent's pool
-- If both players collect all 11 (avoiding poison) = DRAW
+- Win by collecting {WIN_THRESHOLD} different colors from opponent's pool
+- If both players collect all {WIN_THRESHOLD} (avoiding poison) = DRAW
 - Player who picks opponent's poison LOSES (dies)
 """
 
 import time
 import uuid
+import json
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Set, Any
+from utils.redis_client import redis_client
+from game_config import WIN_THRESHOLD
 
 
 class GameState(Enum):
@@ -183,6 +186,31 @@ class PoisonedCandyDuel:
         game.last_updated = time.time()
         return True
     
+    async def set_poison_choice_persistent(
+        self, 
+        game_id: str, 
+        player_id: str, 
+        poison_candy: str,
+        db_service: Any
+    ) -> bool:
+        """Set poison choice and persist to Redis (Hot) and DB (Sync)."""
+        success = self.set_poison_choice(game_id, player_id, poison_candy)
+        if success:
+            game_state = self.get_game_state(game_id)
+            # 1. Update Hot Store (Redis)
+            try:
+                r = await redis_client.connect()
+                await r.setex(f"pcd:hot_game:{game_id}", 3600, json.dumps(game_state))
+            except: pass
+            
+            # 2. Update DB (Required for waiting_for_poison phase)
+            if db_service:
+                await db_service.update_game(game_id, {
+                    "game_state": game_state,
+                    "status": "in_progress" if game_state.get("state") == "playing" else "waiting_for_poison"
+                })
+        return success
+    
     def make_move(
         self, 
         game_id: str, 
@@ -276,18 +304,18 @@ class PoisonedCandyDuel:
             all_collected = set(game.player1.collected_candies + game.player2.collected_candies)
             total_pickable = len(game.player1.owned_candies) + len(game.player2.owned_candies) - len(all_collected)
             
-            print(f"🎲 Game state: P1={p1_count}/11, P2={p2_count}/11, remaining={total_pickable}")
+            print(f"🎲 Game state: P1={p1_count}/{WIN_THRESHOLD}, P2={p2_count}/{WIN_THRESHOLD}, remaining={total_pickable}")
             
             # CORRECTED WIN LOGIC
-            # Check if both players have reached 11 candies
-            if p1_count == 11 and p2_count == 11:
-                # Both players have 11 candies - immediate DRAW
+            # Check if both players have reached WIN_THRESHOLD candies
+            if p1_count == WIN_THRESHOLD and p2_count == WIN_THRESHOLD:
+                # Both players have WIN_THRESHOLD candies - immediate DRAW
                 game.state = GameState.FINISHED
                 game.result = GameResult.DRAW
-                print(f"🤝 Draw! Both players collected 11 candies!")
-            elif p1_count == 11 or p2_count == 11:
-                # One player has reached 11 candies
-                # Check if the other player can mathematically still reach 11
+                print(f"🤝 Draw! Both players collected {WIN_THRESHOLD} candies!")
+            elif p1_count == WIN_THRESHOLD or p2_count == WIN_THRESHOLD:
+                # One player has reached WIN_THRESHOLD candies
+                # Check if the other player can mathematically still reach WIN_THRESHOLD
                 
                 current_player_count = len(current_player.collected_candies)
                 opponent_count = len(opponent_player.collected_candies)
@@ -310,13 +338,13 @@ class PoisonedCandyDuel:
                 
                 opponent_max_possible = opponent_count + opponent_future_turns
                 
-                if opponent_max_possible >= 11:
-                    # Opponent can still potentially reach 11 - continue game
-                    print(f"🔄 {current_player.name} has {current_player_count}, {opponent_player.name} can still reach 11 (currently {opponent_count}, max possible {opponent_max_possible})")
+                if opponent_max_possible >= WIN_THRESHOLD:
+                    # Opponent can still potentially reach WIN_THRESHOLD - continue game
+                    print(f"🔄 {current_player.name} has {current_player_count}, {opponent_player.name} can still reach {WIN_THRESHOLD} (currently {opponent_count}, max possible {opponent_max_possible})")
                     game.current_turn += 1
                 else:
-                    # Opponent cannot possibly reach 11 - current player wins
-                    print(f"🏆 {current_player.name} wins! Opponent cannot reach 11 (currently {opponent_count}, max possible {opponent_max_possible})")
+                    # Opponent cannot possibly reach WIN_THRESHOLD - current player wins
+                    print(f"🏆 {current_player.name} wins! Opponent cannot reach {WIN_THRESHOLD} (currently {opponent_count}, max possible {opponent_max_possible})")
                     game.state = GameState.FINISHED
                     game.result = (
                         GameResult.PLAYER1_WIN if current_player == game.player1 
@@ -351,6 +379,39 @@ class PoisonedCandyDuel:
                      else None,
             "is_draw": game.result == GameResult.DRAW
         }
+
+    async def make_move_persistent(
+        self, 
+        game_id: str, 
+        player_id: str, 
+        candy: str,
+        db_service: Any
+    ) -> Dict[str, Any]:
+        """Make a move and persist to Redis (Hot). Only sync to DB periodically."""
+        result = self.make_move(game_id, player_id, candy)
+        if result.get("success"):
+            game_state = result["game_state"]
+            status = "finished" if game_state.get("state") == "finished" else "in_progress"
+            
+            # 1. Update Hot Store (Redis) - Essential for speed
+            try:
+                r = await redis_client.connect()
+                await r.setex(f"pcd:hot_game:{game_id}", 3600, json.dumps(game_state))
+            except: pass
+
+            # 2. Periodic or Final Sync to DB (Optimized)
+            if db_service:
+                move_count = len(game_state["player1"]["collection"]) + len(game_state["player2"]["collection"])
+                is_finished = status == "finished"
+                
+                # Only write to Supabase every 4 moves OR when game is finished
+                if is_finished or move_count % 4 == 0:
+                    await db_service.update_game(game_id, {
+                        "game_state": game_state,
+                        "status": status
+                    })
+                    print(f"💾 Checkpointed game {game_id} to database (Move {move_count})")
+        return result
     
     def _check_game_end(
         self, 
@@ -377,10 +438,10 @@ class PoisonedCandyDuel:
             # Current player LOSES (dies) because they picked opponent's poison
             return GameResult.PLAYER2_WIN if current_player == game.player1 else GameResult.PLAYER1_WIN
         
-        # DRAW CONDITION: If both players have collected 11 candies (only poisons remain)
+        # DRAW CONDITION: If both players have collected WIN_THRESHOLD candies (only poisons remain)
         # Each player starts with 12, if they've collected 11 from opponent, only poison remains
-        if (len(current_player.collected_candies) == 11 and 
-            len(opponent_player.collected_candies) == 11):
+        if (len(current_player.collected_candies) == WIN_THRESHOLD and 
+            len(opponent_player.collected_candies) == WIN_THRESHOLD):
             return GameResult.DRAW
         
         # Game continues if no end condition met
@@ -435,15 +496,10 @@ class PoisonedCandyDuel:
             "setup_complete": game.state == GameState.PLAYING
         }
     
+        return state
+
     def get_game_state(self, game_id: str) -> Optional[Dict[str, Any]]:
-        """Get game state by ID.
-        
-        Args:
-            game_id: The game ID
-            
-        Returns:
-            Game state dictionary or None if game not found
-        """
+        """Get game state by ID."""
         if game_id not in self.games:
             return None
         
@@ -458,17 +514,35 @@ class PoisonedCandyDuel:
                 "player2_poison": game.player2.poison_choice
             }
         
-        # Add candy confirmation data if available
-        if hasattr(game, 'candy_confirmed_p1'):
-            state["player1"]["candy_confirmed"] = game.candy_confirmed_p1
-        if hasattr(game, 'candy_confirmed_p2'):
-            state["player2"]["candy_confirmed"] = game.candy_confirmed_p2
-        
-        # Add custom game status if available
-        if hasattr(game, 'custom_status'):
-            state["status"] = game.custom_status
-        
         return state
+
+    async def ensure_game_loaded(self, game_id: str, db_service: Any) -> bool:
+        """Ensure a game is in memory, checking Redis (Hot) then DB."""
+        if game_id in self.games:
+            return True
+        
+        # 1. Try Redis (Fast)
+        try:
+            r = await redis_client.connect()
+            cached = await r.get(f"pcd:hot_game:{game_id}")
+            if cached:
+                success = self.load_game_from_data({"id": game_id, "game_state": json.loads(cached)})
+                if success:
+                    print(f"🔥 Restored game {game_id} from Redis (Hot)")
+                    return True
+        except: pass
+
+        # 2. Try Database (Fallback/Cold)
+        print(f"🔍 Game {game_id} not in hot store, checking database...")
+        db_game = await db_service.get_game(game_id)
+        if db_game:
+            success = self.load_game_from_data(db_game)
+            if success:
+                print(f"✅ Successfully restored game {game_id} from database")
+                return True
+        
+        print(f"❌ Failed to restore game {game_id}")
+        return False
     
     def update_game_state(self, game_id: str, new_state: Dict[str, Any]) -> bool:
         """Update game state with new data.
@@ -601,6 +675,8 @@ class PoisonedCandyDuel:
             )
             
             self.games[game_id] = game
+            return True
+
             return True
             
         except Exception as e:

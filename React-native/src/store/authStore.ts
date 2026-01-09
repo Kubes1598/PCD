@@ -19,7 +19,7 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
     persist(
         (set, get) => ({
-            user: null,
+            user: { id: 'initial', username: 'Guest' },
             token: null,
             isGuest: true,
             isLoading: false,
@@ -53,8 +53,9 @@ export const useAuthStore = create<AuthState>()(
                     try {
                         const result = await apiService.verifyToken(token);
                         if (result.success) {
-                            set({ user: result.data.user, isLoading: false });
+                            set({ user: result.data.user, isGuest: false, isLoading: false });
                         } else {
+                            // If token is invalid, fall back to guest but keep a generic guest object
                             get().logout();
                             set({ isLoading: false });
                         }

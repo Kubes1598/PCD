@@ -1,9 +1,12 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
+// Note: We'll import the store dynamically or after it's defined to avoid circular dependency
+// But for now, let's assume standard import if potential for circularity is low
+import { useAuthStore } from '../store/authStore';
 
 // Use your machine's local IP to connect from simulators and physical devices
-// Machine IP: 192.168.8.244
-const DEV_MACHINE_IP = '192.168.8.244';
+// Machine IP: 192.168.8.248
+const DEV_MACHINE_IP = '192.168.8.248';
 export const BASE_URL = `http://${DEV_MACHINE_IP}:8000`;
 
 const apiClient = axios.create({
@@ -14,11 +17,50 @@ const apiClient = axios.create({
     },
 });
 
+// Add request interceptor
+apiClient.interceptors.request.use(
+    (config) => {
+        const token = useAuthStore.getState().token;
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
+
+import { getFriendlyError } from '../utils/errorMapping';
+
+// Add response interceptor
+apiClient.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        const { useErrorStore } = require('../store/errorStore');
+        const show = useErrorStore.getState().showError;
+
+        const friendlyError = getFriendlyError(error);
+
+        // Show the message, and optional description if severity is error
+        const fullMessage = friendlyError.description
+            ? `${friendlyError.message}: ${friendlyError.description}`
+            : friendlyError.message;
+
+        const severity = error.response?.status >= 500 || !error.response ? 'error' : 'warning';
+
+        show(fullMessage, severity);
+
+        return Promise.reject(error);
+    }
+);
+
 export interface User {
     id: string;
     username: string;
     email?: string;
-    balance?: number;
+    coin_balance?: number;
+    diamonds_balance?: number;
     total_wins?: number;
     total_games?: number;
 }
@@ -107,6 +149,22 @@ export const apiService = {
             player_name: playerName,
             quest_id: questId,
         });
+        return response.data;
+    },
+    updatePlayerStats: async (data: { player_name: string, won: boolean }) => {
+        const response = await apiClient.post('/players/stats', data);
+        return response.data;
+    },
+    getBalance: async (playerName: string) => {
+        const response = await apiClient.post('/players/balance', { player_name: playerName });
+        return response.data;
+    },
+    getGameConfig: async () => {
+        const response = await apiClient.get('/api/config');
+        return response.data;
+    },
+    getAIMove: async (data: { player_candies: string[], opponent_collection: string[], player_poison: string, difficulty: string }) => {
+        const response = await apiClient.post('/ai/move', data);
         return response.data;
     },
 

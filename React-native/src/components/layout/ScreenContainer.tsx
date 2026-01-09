@@ -3,7 +3,8 @@ import { StyleSheet, View, StatusBar, ViewStyle, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { THEME } from '../../utils/theme';
-import { spacing, platformValue } from '../../utils/responsive';
+import { spacing } from '../../utils/responsive';
+import ErrorBoundary from '../common/ErrorBoundary';
 
 interface ScreenContainerProps {
     children: ReactNode;
@@ -54,7 +55,9 @@ const ScreenContainer: React.FC<ScreenContainerProps> = ({
                 />
             )}
             <View style={[styles.container, safeAreaStyle, contentPadding, style]}>
-                {children}
+                <ErrorBoundary>
+                    {children}
+                </ErrorBoundary>
             </View>
         </View>
     );

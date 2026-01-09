@@ -14,6 +14,7 @@ interface CurrencyState {
     coins: number;
     diamonds: number;
     dailyStreak: number;
+    dailyRewardStage: number;
     lastClaimTimestamp: number;
     transactions: Transaction[];
 
@@ -22,7 +23,7 @@ interface CurrencyState {
     spendCoins: (amount: number, description: string) => boolean;
     addDiamonds: (amount: number, description: string) => void;
     spendDiamonds: (amount: number, description: string) => boolean;
-    claimDailyReward: () => { coins: number; diamonds: number; streak: number } | null;
+    claimDailyReward: () => { coins: number; diamonds: number; nextStage: number, cycleCompleted: boolean } | null;
     canClaimDailyReward: () => boolean;
     setBalances: (coins: number, diamonds: number) => void;
 }
@@ -30,9 +31,10 @@ interface CurrencyState {
 export const useCurrencyStore = create<CurrencyState>()(
     persist(
         (set, get) => ({
-            coins: 10000,
-            diamonds: 500,
+            coins: 1000,
+            diamonds: 5,
             dailyStreak: 0,
+            dailyRewardStage: 1,
             lastClaimTimestamp: 0,
             transactions: [],
 
@@ -101,38 +103,48 @@ export const useCurrencyStore = create<CurrencyState>()(
             },
 
             canClaimDailyReward: () => {
+                const { dailyRewardStage, lastClaimTimestamp } = get();
+                // If we are in the middle of a stage (2-5), we can always claim.
+                if (dailyRewardStage > 1) return true;
+
+                // Stage 1: Check 24h cooldown
                 const now = Date.now();
-                const lastClaim = get().lastClaimTimestamp;
-                const hoursSinceLastClaim = (now - lastClaim) / (1000 * 60 * 60);
+                const hoursSinceLastClaim = (now - lastClaimTimestamp) / (1000 * 60 * 60);
                 return hoursSinceLastClaim >= 24;
             },
 
             claimDailyReward: () => {
                 if (!get().canClaimDailyReward()) return null;
 
-                const { dailyStreak } = get();
+                const { dailyRewardStage, lastClaimTimestamp } = get();
                 const now = Date.now();
-                const lastClaim = get().lastClaimTimestamp;
 
-                // If last claim was more than 48 hours ago, reset streak
-                let newStreak = dailyStreak + 1;
-                if ((now - lastClaim) / (1000 * 60 * 60) > 48) {
-                    newStreak = 1;
-                }
-
-                const coinsReward = 100 + (newStreak * 20);
-                const diamondsReward = 5 + Math.floor(newStreak / 2);
+                // stage rewards: 100, 200, 500, 1000 coins, 5 diamonds
+                const rewards = [100, 200, 500, 1000, 5];
+                const amount = rewards[dailyRewardStage - 1];
+                const isDiamond = dailyRewardStage === 5;
 
                 const { addCoins, addDiamonds } = get();
-                addCoins(coinsReward, `Daily Reward (Day ${newStreak})`);
-                addDiamonds(diamondsReward, `Daily Reward (Day ${newStreak})`);
+                if (isDiamond) {
+                    addDiamonds(amount, `Daily Reward Stage ${dailyRewardStage}`);
+                } else {
+                    addCoins(amount, `Daily Reward Stage ${dailyRewardStage}`);
+                }
+
+                const cycleCompleted = dailyRewardStage === 5;
+                const nextStage = cycleCompleted ? 1 : dailyRewardStage + 1;
 
                 set({
-                    dailyStreak: newStreak,
-                    lastClaimTimestamp: now,
+                    dailyRewardStage: nextStage,
+                    lastClaimTimestamp: cycleCompleted ? now : lastClaimTimestamp,
                 });
 
-                return { coins: coinsReward, diamonds: diamondsReward, streak: newStreak };
+                return {
+                    coins: isDiamond ? 0 : amount,
+                    diamonds: isDiamond ? amount : 0,
+                    nextStage,
+                    cycleCompleted
+                };
             },
 
             setBalances: (coins, diamonds) => {

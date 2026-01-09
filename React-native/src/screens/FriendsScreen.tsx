@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { apiService } from '../services/api';
 
 const FriendsScreen = ({ navigation }: any) => {
-    const { user } = useAuth();
+    const { user, isGuest } = useAuth();
     const [friends, setFriends] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [showAddModal, setShowAddModal] = useState(false);
@@ -21,7 +21,7 @@ const FriendsScreen = ({ navigation }: any) => {
     }, []);
 
     const loadFriends = async () => {
-        if (!user) return;
+        if (!user || isGuest) return;
         setLoading(true);
         try {
             const res = await apiService.getFriends(user.username);
@@ -36,7 +36,7 @@ const FriendsScreen = ({ navigation }: any) => {
     };
 
     const handleAddFriend = async () => {
-        if (!profileIdInput.trim() || !user) return;
+        if (!profileIdInput.trim() || !user || isGuest) return;
 
         let id = profileIdInput.trim();
         // Allow user to omit the prefix if they only type the hex part
@@ -96,8 +96,19 @@ const FriendsScreen = ({ navigation }: any) => {
                 <ActivityIndicator size="large" color="#6366F1" style={{ marginTop: 50 }} />
             ) : (
                 <ScrollView contentContainerStyle={styles.content}>
-                    <Text style={styles.sectionTitle}>MY FRIENDS ({friends.length})</Text>
-                    {friends.length === 0 ? (
+                    {isGuest ? (
+                        <View style={styles.loginRequired}>
+                            <Users color="#64748B" size={moderateScale(64)} />
+                            <Text style={styles.loginRequiredTitle}>Login to play with friends</Text>
+                            <Text style={styles.loginRequiredDesc}>Create an account to add friends, see their status, and challenge them to duels.</Text>
+                            <TouchableOpacity
+                                style={styles.loginCta}
+                                onPress={() => navigation.navigate('Auth')}
+                            >
+                                <Text style={styles.loginCtaText}>LOGIN / SIGNUP</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : friends.length === 0 ? (
                         <View style={styles.emptyContainer}>
                             <Users color="#334155" size={moderateScale(64)} />
                             <Text style={styles.emptyText}>You haven't added any friends yet.</Text>
@@ -348,6 +359,39 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontWeight: 'bold',
         fontSize: moderateScale(16),
+    },
+    loginRequired: {
+        alignItems: 'center',
+        padding: spacing.xxl,
+        marginTop: spacing.xl,
+        backgroundColor: 'rgba(30, 41, 59, 0.5)',
+        borderRadius: radii.xl,
+        borderWidth: 1,
+        borderColor: '#334155',
+    },
+    loginRequiredTitle: {
+        color: '#F1F5F9',
+        fontSize: moderateScale(18),
+        fontWeight: 'bold',
+        marginTop: spacing.md,
+    },
+    loginRequiredDesc: {
+        color: '#94A3B8',
+        fontSize: moderateScale(14),
+        textAlign: 'center',
+        marginTop: spacing.sm,
+        marginBottom: spacing.xl,
+    },
+    loginCta: {
+        backgroundColor: '#6366F1',
+        paddingHorizontal: spacing.xl,
+        paddingVertical: spacing.md,
+        borderRadius: radii.lg,
+    },
+    loginCtaText: {
+        color: '#FFF',
+        fontWeight: 'bold',
+        fontSize: moderateScale(14),
     },
 });
 

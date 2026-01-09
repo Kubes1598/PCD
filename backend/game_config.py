@@ -1,0 +1,62 @@
+"""
+Game Configuration - Single Source of Truth
+
+This file centralizes all game constants for the backend.
+The frontend should fetch these values from /api/config.
+"""
+
+# Win Condition
+WIN_THRESHOLD = 11  # Collect 11 candies to win
+CANDY_COUNT = 12    # Each player has 12 candies (4x3 grid)
+
+# City/Arena Configuration
+CITY_CONFIG = {
+    "dubai": {
+        "entry_fee": 500,
+        "prize_amount": 900,
+        "turn_timer": 30,
+        "difficulty": "easy",
+    },
+    "cairo": {
+        "entry_fee": 1000,
+        "prize_amount": 1800,
+        "turn_timer": 20,
+        "difficulty": "medium",
+    },
+    "oslo": {
+        "entry_fee": 5000,
+        "prize_amount": 9000,
+        "turn_timer": 10,
+        "difficulty": "hard",
+    },
+}
+
+# AI Mode Configuration
+AI_CONFIG = {
+    "easy": {"entry_fee": 0, "prize_amount": 0},
+    "medium": {"entry_fee": 100, "prize_amount": 180},
+    "hard": {"entry_fee": 250, "prize_amount": 450},
+}
+
+# Initial Player Balances
+INITIAL_BALANCE = {
+    "coins": 1000,
+    "diamonds": 5,
+}
+
+# Daily Reward Stages
+DAILY_REWARDS = [
+    {"coins": 100, "diamonds": 0},
+    {"coins": 200, "diamonds": 0},
+    {"coins": 500, "diamonds": 0},
+    {"coins": 1000, "diamonds": 0},
+    {"coins": 0, "diamonds": 5},
+]
+
+# Ranking Thresholds
+RANK_THRESHOLDS = {
+    "Pro": 10,
+    "WorldClass": 40,
+    "Legendary": 100,
+    "Champion": 200,
+}

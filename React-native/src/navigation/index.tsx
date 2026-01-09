@@ -7,9 +7,12 @@ const RootStack = createStackNavigator();
 
 const Navigation: React.FC = () => {
     return (
-        <RootStack.Navigator screenOptions={{ headerShown: false }}>
-            <RootStack.Screen name="Auth" component={AuthNavigator} />
+        <RootStack.Navigator
+            screenOptions={{ headerShown: false }}
+            initialRouteName="App"
+        >
             <RootStack.Screen name="App" component={AppNavigator} />
+            <RootStack.Screen name="Auth" component={AuthNavigator} />
         </RootStack.Navigator>
     );
 };

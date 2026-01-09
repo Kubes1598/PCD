@@ -1,25 +1,64 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Platform } from 'react-native';
-import { Menu, Sword, Globe, Users, X, Gift, User, Coins as CoinIcon, Gem, Monitor, Trophy, Target, UserPlus } from 'lucide-react-native';
+import { Menu, Sword, Globe, Users, X, Gift, User, Coins as CoinIcon, Gem, Monitor, Trophy, Target, UserPlus, Wifi, WifiOff } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import ScreenContainer from '../components/layout/ScreenContainer';
 import { useAuth } from '../hooks/useAuth';
 import { useGame } from '../hooks/useGame';
 import { useCurrencyStore } from '../store/currencyStore';
+import { useErrorStore } from '../store/errorStore';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
 import { scale, moderateScale, spacing, radii, SCREEN_WIDTH, isSmallDevice, platformValue } from '../utils/responsive';
+import { apiService } from '../services/api';
 
 type HomeScreenProps = {
     navigation: DrawerNavigationProp<any, any>;
 };
 
+const ServerStatusBadge = () => {
+    const { errors } = useErrorStore();
+    const hasError = errors.some(e => e.severity === 'error');
+    const hasWarning = errors.some(e => e.severity === 'warning');
+
+    const statusColor = hasError ? '#EF4444' : hasWarning ? '#F59E0B' : '#10B981';
+    const StatusIcon = hasError ? WifiOff : Wifi;
+
+    return (
+        <View style={[styles.statusBadge, { borderColor: statusColor + '40' }]}>
+            <StatusIcon color={statusColor} size={scale(14)} />
+            <Text style={[styles.statusText, { color: statusColor }]}>
+                {hasError ? 'Offline' : hasWarning ? 'Unstable' : 'Online'}
+            </Text>
+        </View>
+    );
+};
+
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-    const { user } = useAuth();
+    const { user, isGuest } = useAuth();
     const { initGame, isSearching, startSearching, stopSearching, queuePosition, totalWaiting, gameId } = useGame();
     const { coins, diamonds, claimDailyReward, canClaimDailyReward } = useCurrencyStore();
-    const [reward, setReward] = React.useState<{ coins: number, diamonds: number, streak: number } | null>(null);
+    const [reward, setReward] = React.useState<{ coins: number, diamonds: number, nextStage: number, cycleCompleted: boolean } | null>(null);
     const [showArenaSelection, setShowArenaSelection] = React.useState(false);
     const [showDifficultySelection, setShowDifficultySelection] = React.useState(false);
+    const [stats, setStats] = React.useState<any>(null);
+
+    useEffect(() => {
+        if (user && !isGuest) {
+            loadStats();
+        }
+    }, [user, isGuest]);
+
+    const loadStats = async () => {
+        if (!user || isGuest) return;
+        try {
+            const res = await apiService.getPlayerStats(user.username);
+            if (res.success) {
+                setStats(res.data);
+            }
+        } catch (error) {
+            console.error('Error loading stats on home:', error);
+        }
+    };
 
     useEffect(() => {
         if (gameId && !isSearching) {
@@ -73,6 +112,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                     >
                         <Menu color="#F1F5F9" size={moderateScale(24)} />
                     </TouchableOpacity>
+
+                    {/* Server Status Badge */}
+                    <ServerStatusBadge />
+
                     <TouchableOpacity
                         style={styles.profileSection}
                         onPress={() => navigation.navigate('Profile')}
@@ -80,20 +123,28 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                         <View style={styles.avatarContainer}>
                             <User color="#CBD5E1" size={moderateScale(20)} />
                         </View>
-                        <Text style={styles.usernameText}>{user?.username || 'Hunter'}</Text>
+                        <Text style={styles.usernameText}>{user?.username || 'Lee'}</Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* Currency Balance Row - 18px */}
+                {/* Currency Balance Row - 15px */}
                 <View style={styles.balanceRow}>
                     <View style={styles.balanceBadge}>
-                        <CoinIcon color="#F59E0B" size={scale(18)} />
-                        <Text style={styles.balanceValue}>{coins.toLocaleString()}</Text>
+                        <CoinIcon color="#F59E0B" size={scale(15)} />
+                        <Text style={styles.balanceValue}>{coins}</Text>
                     </View>
                     <View style={styles.balanceBadge}>
-                        <Gem color="#06B6D4" size={scale(18)} />
-                        <Text style={styles.balanceValue}>{diamonds.toLocaleString()}</Text>
+                        <Gem color="#06B6D4" size={scale(15)} />
+                        <Text style={styles.balanceValue}>{diamonds}</Text>
                     </View>
+                    {stats?.rank && (
+                        <View style={[styles.balanceBadge, { backgroundColor: 'rgba(139, 92, 246, 0.2)', borderColor: 'rgba(139, 92, 246, 0.3)' }]}>
+                            <Trophy color="#8B5CF6" size={scale(15)} />
+                            <Text style={[styles.balanceValue, { color: '#C084FC' }]}>
+                                {stats.rank === 'Champion' ? `${stats.stars}★` : `${stats.rank} ${stats.tier || ''}`}
+                            </Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* Main Battle Modes Section */}
@@ -199,8 +250,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                         />
                         <Gift color="#FFF" size={moderateScale(24)} />
                         <View style={{ marginLeft: spacing.md, flex: 1 }}>
-                            <Text style={styles.giftTitle}>Daily Reward Ready!</Text>
-                            <Text style={styles.giftSub}>Claim your free coins & diamonds</Text>
+                            <Text style={styles.giftTitle}>Claim Reward!</Text>
+                            <Text style={styles.giftSub}>Tap to claim next stage</Text>
                         </View>
                         <View style={styles.claimBadge}>
                             <Text style={styles.claimBadgeText}>CLAIM</Text>
@@ -281,7 +332,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </Modal>
 
             {/* Reward Modal */}
-            {reward && reward.coins > 0 && (
+            {reward && (
                 <Modal visible={true} transparent={true} animationType="fade">
                     <View style={styles.overlay}>
                         <View style={styles.modal}>
@@ -294,23 +345,33 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                             <Text style={styles.modalText}>You received:</Text>
 
                             <View style={styles.rewardRow}>
-                                <View style={styles.rewardItem}>
-                                    <CoinIcon color="#F59E0B" size={moderateScale(24)} />
-                                    <Text style={styles.rewardAmount}>+{reward.coins}</Text>
-                                </View>
-                                <View style={styles.rewardItem}>
-                                    <Gem color="#06B6D4" size={moderateScale(24)} />
-                                    <Text style={styles.rewardAmount}>+{reward.diamonds}</Text>
-                                </View>
+                                {reward.coins > 0 && (
+                                    <View style={styles.rewardItem}>
+                                        <CoinIcon color="#F59E0B" size={moderateScale(24)} />
+                                        <Text style={styles.rewardAmount}>+{reward.coins}</Text>
+                                    </View>
+                                )}
+                                {reward.diamonds > 0 && (
+                                    <View style={styles.rewardItem}>
+                                        <Gem color="#06B6D4" size={moderateScale(24)} />
+                                        <Text style={styles.rewardAmount}>+{reward.diamonds}</Text>
+                                    </View>
+                                )}
                             </View>
 
-                            <Text style={styles.streakText}>Current Streak: {reward.streak} Days</Text>
+                            <Text style={styles.modalText}>
+                                {reward.cycleCompleted
+                                    ? "Final stage claimed! Reset in 24h."
+                                    : `Stage ${reward.nextStage - 1} claimed! Tap again for more.`}
+                            </Text>
 
                             <TouchableOpacity
-                                style={[styles.cancelButton, { backgroundColor: '#6366F1', borderColor: '#818CF8' }]}
+                                style={[styles.cancelButton, { backgroundColor: '#F59E0B', borderColor: '#B45309', marginTop: spacing.lg }]}
                                 onPress={() => setReward(null)}
                             >
-                                <Text style={[styles.cancelText, { color: '#FFF' }]}>AWESOME!</Text>
+                                <Text style={[styles.cancelText, { color: '#FFF' }]}>
+                                    {reward.cycleCompleted ? "DISMISS" : "AWESOME!"}
+                                </Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -397,6 +458,22 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: '#6366F1',
         marginBottom: spacing.xs,
+    },
+    statusBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        paddingHorizontal: spacing.sm,
+        paddingVertical: spacing.xs,
+        borderRadius: radii.full,
+        borderWidth: 1,
+        gap: 6,
+    },
+    statusText: {
+        fontSize: moderateScale(11),
+        fontWeight: 'bold',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     usernameText: {
         color: '#F1F5F9',

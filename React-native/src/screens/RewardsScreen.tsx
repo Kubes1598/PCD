@@ -10,7 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useCurrencyStore } from '../store/currencyStore';
 
 const RewardsScreen = ({ navigation }: any) => {
-    const { user } = useAuth();
+    const { user, isGuest } = useAuth();
     const { setBalances } = useCurrencyStore();
     const [activeTab, setActiveTab] = useState<'quests' | 'ranking'>('quests');
     const [leaderboard, setLeaderboard] = useState<any[]>([]);
@@ -27,7 +27,7 @@ const RewardsScreen = ({ navigation }: any) => {
     }, [activeTab]);
 
     const loadQuests = async () => {
-        if (!user) return;
+        if (!user || isGuest) return;
         setLoading(true);
         try {
             const res = await apiService.getQuests(user.username);
@@ -45,8 +45,8 @@ const RewardsScreen = ({ navigation }: any) => {
         setLoading(true);
         try {
             const res = await apiService.getLeaderboard('wins');
-            if (res) {
-                const data = Array.isArray(res) ? res : (res.data || []);
+            if (res && res.success) {
+                const data = res.data?.leaderboard || [];
                 setLeaderboard(data);
             }
         } catch (error) {
@@ -57,7 +57,7 @@ const RewardsScreen = ({ navigation }: any) => {
     };
 
     const handleClaim = async (questId: string) => {
-        if (!user) return;
+        if (!user || isGuest) return;
         setClaimingId(questId);
         try {
             const res = await apiService.claimQuest(user.username, questId);
@@ -98,11 +98,32 @@ const RewardsScreen = ({ navigation }: any) => {
                 </TouchableOpacity>
             </View>
 
-            <Text style={styles.sectionTitle}>Active Quests</Text>
-            {loading && quests.length === 0 ? (
+            {isGuest && (
+                <View style={styles.loginRequired}>
+                    <Target color="#64748B" size={moderateScale(48)} />
+                    <Text style={styles.loginRequiredTitle}>Login to track quests</Text>
+                    <Text style={styles.loginRequiredDesc}>Create an account to save your progress and claim rewards.</Text>
+                    <TouchableOpacity
+                        style={styles.loginCta}
+                        onPress={() => navigation.navigate('Auth')}
+                    >
+                        <Text style={styles.loginCtaText}>LOGIN / SIGNUP</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            {!isGuest && quests.length === 0 && !loading && (
+                <View style={styles.emptyQuests}>
+                    <CheckCircle2 color="#64748B" size={moderateScale(48)} />
+                    <Text style={styles.emptyQuestsTitle}>No active quests</Text>
+                    <Text style={styles.emptyQuestsDesc}>Check back later for new challenges!</Text>
+                </View>
+            )}
+
+            {!isGuest && loading && quests.length === 0 ? (
                 <ActivityIndicator size="large" color="#6366F1" style={{ marginTop: 20 }} />
             ) : (
-                quests.map(quest => (
+                !isGuest && quests.map(quest => (
                     <View key={quest.id} style={[styles.questCard, quest.is_claimed && styles.claimedQuest]}>
                         <View style={styles.questHeader}>
                             <View style={{ flex: 1 }}>
@@ -434,6 +455,56 @@ const styles = StyleSheet.create({
         color: '#F59E0B',
         fontSize: moderateScale(14),
         fontWeight: 'bold',
+    },
+    loginRequired: {
+        alignItems: 'center',
+        padding: spacing.xxl,
+        marginTop: spacing.xl,
+        backgroundColor: 'rgba(30, 41, 59, 0.5)',
+        borderRadius: radii.xl,
+        borderWidth: 1,
+        borderColor: '#334155',
+    },
+    loginRequiredTitle: {
+        color: '#F1F5F9',
+        fontSize: moderateScale(18),
+        fontWeight: 'bold',
+        marginTop: spacing.md,
+    },
+    loginRequiredDesc: {
+        color: '#94A3B8',
+        fontSize: moderateScale(14),
+        textAlign: 'center',
+        marginTop: spacing.sm,
+        marginBottom: spacing.xl,
+    },
+    loginCta: {
+        backgroundColor: '#6366F1',
+        paddingHorizontal: spacing.xl,
+        paddingVertical: spacing.md,
+        borderRadius: radii.lg,
+    },
+    loginCtaText: {
+        color: '#FFF',
+        fontWeight: 'bold',
+        fontSize: moderateScale(14),
+    },
+    emptyQuests: {
+        alignItems: 'center',
+        padding: spacing.xxl,
+        marginTop: spacing.xl,
+    },
+    emptyQuestsTitle: {
+        color: '#F1F5F9',
+        fontSize: moderateScale(18),
+        fontWeight: 'bold',
+        marginTop: spacing.md,
+    },
+    emptyQuestsDesc: {
+        color: '#94A3B8',
+        fontSize: moderateScale(14),
+        textAlign: 'center',
+        marginTop: spacing.sm,
     },
 });
 

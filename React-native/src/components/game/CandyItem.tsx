@@ -13,20 +13,20 @@ interface CandyItemProps {
     gridSize?: number; // Number of candies to determine sizing
 }
 
-// Calculate responsive candy size based on screen and grid
-const getCandySize = (gridSize: number = 11): number => {
-    // For the gameplay screen, we need to fit everything without scrolling
-    // Calculate based on available width for a 4-column grid with gaps
-    const availableWidth = SCREEN_WIDTH - scale(32); // 16px padding on each side
-    const columns = Math.min(4, Math.ceil(Math.sqrt(gridSize)));
-    const gaps = (columns + 1) * scale(4);
-    const candyWidth = (availableWidth - gaps) / columns;
+// Calculate responsive candy size based on a fixed 4x3 grid (12 candies)
+const getCandySize = (): number => {
+    const screenPadding = scale(12) * 2;
+    const gridPadding = scale(4) * 2;
+    const horizontalSustain = scale(2) * 2 * 4; // Margin * 2 sides * 4 columns
 
-    // Also check height constraints for iPhone 14 Pro Max and smaller
-    // We need 2 candy grids + 2 collection panels + turn indicator to fit
-    const maxCandyHeight = SCREEN_HEIGHT * 0.065; // ~6.5% of screen height per candy
+    const availableWidth = SCREEN_WIDTH - screenPadding - gridPadding - horizontalSustain;
+    const columns = 4;
+    const candyWidth = Math.floor(availableWidth / columns);
 
-    return Math.min(candyWidth * 0.9, maxCandyHeight);
+    // Limit height to ensure everything fits on small screens
+    const maxCandyHeight = Math.floor(SCREEN_HEIGHT * 0.08);
+
+    return Math.min(candyWidth, maxCandyHeight);
 };
 
 const CandyItem: React.FC<CandyItemProps> = ({
@@ -34,13 +34,12 @@ const CandyItem: React.FC<CandyItemProps> = ({
     onPress,
     isPoison,
     disabled,
-    style,
-    gridSize = 11
+    style
 }) => {
     const scaleAnim = React.useRef(new Animated.Value(1)).current;
     const opacity = React.useRef(new Animated.Value(1)).current;
 
-    const candySize = getCandySize(gridSize);
+    const candySize = getCandySize();
     const fontSize = candySize * 0.5; // Emoji takes 50% of candy container
 
     React.useEffect(() => {

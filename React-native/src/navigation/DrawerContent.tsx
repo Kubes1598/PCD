@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native
 import { DrawerContentScrollView, DrawerContentComponentProps } from '@react-navigation/drawer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { User, Users, Trophy, Settings, LogOut, Home, Coins as CoinIcon, Gem, Bell } from 'lucide-react-native';
+import { User, Users, Trophy, Settings, LogOut, Home, Coins as CoinIcon, Gem, Bell, LogIn } from 'lucide-react-native';
 import { useAuth } from '../hooks/useAuth';
 import { useCurrencyStore } from '../store/currencyStore';
 
@@ -32,17 +32,9 @@ const DrawerItem: React.FC<DrawerItemProps> = ({ label, icon, isActive, onPress 
 const DrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
     const { navigation, state } = props;
     const { user, logout } = useAuth();
-    const { coins, diamonds } = useCurrencyStore();
+    const { coins, diamonds, setBalances } = useCurrencyStore();
     const insets = useSafeAreaInsets();
     const currentRoute = state.routes[state.index]?.name;
-
-    const handleLogout = () => {
-        logout();
-        navigation.reset({
-            index: 0,
-            routes: [{ name: 'Auth' as never }],
-        });
-    };
 
     const navigateTo = (screen: string) => {
         navigation.navigate(screen as never);
@@ -75,13 +67,13 @@ const DrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
                         <View style={[styles.currencyIcon, { backgroundColor: '#F59E0B' }]}>
                             <CoinIcon color="#FFF" size={12} />
                         </View>
-                        <Text style={styles.balanceValue}>{coins.toLocaleString()}</Text>
+                        <Text style={styles.balanceValue}>{coins}</Text>
                     </View>
                     <View style={styles.balanceBadge}>
                         <View style={[styles.currencyIcon, { backgroundColor: '#06B6D4' }]}>
                             <Gem color="#FFF" size={12} />
                         </View>
-                        <Text style={styles.balanceValue}>{diamonds.toLocaleString()}</Text>
+                        <Text style={styles.balanceValue}>{diamonds}</Text>
                     </View>
                 </View>
 
@@ -128,11 +120,24 @@ const DrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
                 </View>
             </DrawerContentScrollView>
 
-            {/* Logout Button at bottom */}
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                <LogOut color="#FDA4AF" size={20} />
-                <Text style={styles.logoutText}>Logout</Text>
-            </TouchableOpacity>
+            {/* Bottom Auth Button */}
+            {!user ? (
+                <TouchableOpacity
+                    style={[styles.logoutButton, { borderTopColor: 'rgba(99, 102, 241, 0.2)' }]}
+                    onPress={() => navigation.navigate('Auth')}
+                >
+                    <LogIn color="#818CF8" size={20} />
+                    <Text style={[styles.logoutText, { color: '#818CF8' }]}>Login / Sign Up</Text>
+                </TouchableOpacity>
+            ) : (
+                <TouchableOpacity style={styles.logoutButton} onPress={() => {
+                    logout();
+                    setBalances(1000, 5);
+                }}>
+                    <LogOut color="#FDA4AF" size={20} />
+                    <Text style={styles.logoutText}>Logout</Text>
+                </TouchableOpacity>
+            )}
         </View>
     );
 };

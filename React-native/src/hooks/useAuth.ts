@@ -1,14 +1,21 @@
 import { useAuthStore } from '../store/authStore';
+import { useCurrencyStore } from '../store/currencyStore';
 import { apiService } from '../services/api';
 
 export const useAuth = () => {
     const { user, token, isGuest, isLoading, error, setUser, setGuest, logout } = useAuthStore();
+    const { setBalances } = useCurrencyStore();
 
     const login = async (email: string, password: string) => {
         try {
             const result = await apiService.login({ email, password });
             if (result.success) {
-                setUser(result.data.user, result.data.token);
+                const userData = result.data.user;
+                setUser(userData, result.data.token);
+                // Sync currency
+                if (userData.coin_balance !== undefined) {
+                    setBalances(userData.coin_balance, userData.diamonds_balance || 0);
+                }
                 return { success: true };
             }
             return { success: false, message: result.message };
@@ -21,7 +28,12 @@ export const useAuth = () => {
         try {
             const result = await apiService.register({ email, password, username });
             if (result.success) {
-                setUser(result.data.user, result.data.token);
+                const userData = result.data.user;
+                setUser(userData, result.data.token);
+                // Sync currency
+                if (userData.coin_balance !== undefined) {
+                    setBalances(userData.coin_balance, userData.diamonds_balance || 0);
+                }
                 return { success: true };
             }
             return { success: false, message: result.message };
