@@ -1,14 +1,7 @@
 // This service handles haptic feedback and sound effects with graceful fallbacks.
-// To fully enable these, run: npx expo install expo-haptics expo-av
+import ReactNativeHapticFeedback from "react-native-haptic-feedback";
 
-let Haptics: any = null;
 let Audio: any = null;
-
-try {
-    Haptics = require('expo-haptics');
-} catch (e) {
-    console.log('📳 Haptics not available');
-}
 
 try {
     Audio = require('expo-av').Audio;
@@ -16,29 +9,31 @@ try {
     console.log('🔊 Audio not available');
 }
 
+const hapticOptions = {
+    enableVibrateFallback: true,
+    ignoreAndroidSystemSettings: false,
+};
+
 export const feedbackService = {
-    async triggerSelection() {
-        if (Haptics) {
-            await Haptics.selectionAsync().catch(() => { });
-        }
+    triggerSelection() {
+        ReactNativeHapticFeedback.trigger("selection", hapticOptions);
     },
 
-    async triggerSuccess() {
-        if (Haptics) {
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
-        }
+    triggerSuccess() {
+        ReactNativeHapticFeedback.trigger("notificationSuccess", hapticOptions);
     },
 
-    async triggerError() {
-        if (Haptics) {
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => { });
-        }
+    triggerError() {
+        ReactNativeHapticFeedback.trigger("notificationError", hapticOptions);
     },
 
-    async triggerImpact() {
-        if (Haptics) {
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
-        }
+    triggerImpact() {
+        ReactNativeHapticFeedback.trigger("impactMedium", hapticOptions);
+    },
+
+    triggerTick() {
+        ReactNativeHapticFeedback.trigger("impactLight", hapticOptions);
+        this.playSound('tick');
     },
 
     // Sound placeholders

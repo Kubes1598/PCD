@@ -14,19 +14,20 @@ interface CandyItemProps {
 }
 
 // Calculate responsive candy size based on a fixed 4x3 grid (12 candies)
+// Calculate responsive candy size based on a fixed 4x3 grid (12 candies)
 const getCandySize = (): number => {
-    const screenPadding = scale(12) * 2;
-    const gridPadding = scale(4) * 2;
-    const horizontalSustain = scale(2) * 2 * 4; // Margin * 2 sides * 4 columns
-
-    const availableWidth = SCREEN_WIDTH - screenPadding - gridPadding - horizontalSustain;
+    const screenPadding = scale(16) * 2;
+    const gridPadding = scale(8) * 2;
     const columns = 4;
+    const totalSpacing = scale(4) * (columns - 1); // Spacing between items
+
+    const availableWidth = SCREEN_WIDTH - screenPadding - gridPadding - totalSpacing;
     const candyWidth = Math.floor(availableWidth / columns);
 
-    // Limit height to ensure everything fits on small screens
-    const maxCandyHeight = Math.floor(SCREEN_HEIGHT * 0.08);
+    // Dynamic height based on screen ratio to ensure 4 rows fit
+    const targetHeight = Math.floor(SCREEN_HEIGHT * 0.075);
 
-    return Math.min(candyWidth, maxCandyHeight);
+    return Math.min(candyWidth, targetHeight);
 };
 
 const CandyItem: React.FC<CandyItemProps> = ({
@@ -115,7 +116,7 @@ const CandyItem: React.FC<CandyItemProps> = ({
 
 const styles = StyleSheet.create({
     container: {
-        margin: scale(2),
+        margin: 0,
         backgroundColor: THEME.colors.white,
         borderRadius: scale(8),
         borderWidth: 1.5,

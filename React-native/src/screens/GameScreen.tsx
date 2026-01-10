@@ -114,6 +114,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation }) => {
                 <GameResultModal
                     visible={game.gameEnded}
                     winner={game.gameWinner}
+                    winReason={game.winReason}
                     score={game.playerCollection.length}
                     reward={game.lastReward}
                     onHome={() => {

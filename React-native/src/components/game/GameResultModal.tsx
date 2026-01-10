@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Animated, Modal } from 'react-native';
 import { Trophy, Frown, Home, RefreshCw } from 'lucide-react-native';
 import { THEME } from '../../utils/theme';
+import { feedbackService } from '../../services/FeedbackService';
 import { scale, moderateScale, SCREEN_WIDTH } from '../../utils/responsive';
 
 interface GameResultModalProps {
@@ -11,9 +12,10 @@ interface GameResultModalProps {
     onRematch: () => void;
     score: number;
     reward?: number;
+    winReason?: 'poison' | 'collection' | 'timeout' | 'disconnect' | null;
 }
 
-const GameResultModal: React.FC<GameResultModalProps> = ({ visible, winner, onHome, onRematch, score, reward }) => {
+const GameResultModal: React.FC<GameResultModalProps> = ({ visible, winner, onHome, onRematch, score, reward, winReason }) => {
     const scaleAnim = useRef(new Animated.Value(0)).current;
     const opacity = useRef(new Animated.Value(0)).current;
 
@@ -54,14 +56,27 @@ const GameResultModal: React.FC<GameResultModalProps> = ({ visible, winner, onHo
     };
 
     const getStatusTitle = () => {
-        if (isWin) return 'VICTORY!';
         if (isDraw) return 'DRAW';
+        if (isWin) {
+            if (winReason === 'poison') return 'POISONED!';
+            return 'VICTORY!';
+        }
+        if (winReason === 'poison') return 'ELIMINATED!';
         return 'DEFEAT';
     };
 
     const getStatusSubtitle = () => {
-        if (isWin) return `Amazing! You collected ${score} candies!`;
+        if (isWin) {
+            if (winReason === 'poison') return "Got 'em! They picked your poison candy!";
+            if (winReason === 'timeout') return "Opponent timed out! Victory is yours.";
+            if (winReason === 'disconnect') return "Opponent disconnected. You win!";
+            return `Amazing! You collected ${score} candies!`;
+        }
         if (isDraw) return "It's a draw! Both players reached 11!";
+
+        // Defeat cases
+        if (winReason === 'poison') return "Oh no! You picked the poison candy!";
+        if (winReason === 'timeout') return "Time's up! You ran out of time.";
         return `Better luck next time! You got ${score} candies.`;
     };
 
@@ -87,12 +102,18 @@ const GameResultModal: React.FC<GameResultModalProps> = ({ visible, winner, onHo
                     ) : null}
 
                     <View style={styles.buttonRow}>
-                        <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={onHome}>
+                        <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={() => {
+                            feedbackService.triggerSelection();
+                            onHome();
+                        }}>
                             <Home color={THEME.colors.primary} size={scale(18)} />
                             <Text style={styles.secondaryButtonText}>Home</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.button} onPress={onRematch}>
+                        <TouchableOpacity style={styles.button} onPress={() => {
+                            feedbackService.triggerSelection();
+                            onRematch();
+                        }}>
                             <RefreshCw color={THEME.colors.white} size={scale(18)} />
                             <Text style={styles.buttonText}>Rematch</Text>
                         </TouchableOpacity>

@@ -23,6 +23,12 @@ const CandyGrid: React.FC<CandyGridProps> = ({
 }) => {
     const isOpponent = trayType === 'opponent';
 
+    // Chunk candies into rows of 4
+    const rows = [];
+    for (let i = 0; i < candies.length; i += 4) {
+        rows.push(candies.slice(i, i + 4));
+    }
+
     return (
         <View style={styles.container}>
             <Text style={[styles.title, isOpponent && styles.titleOpponent]}>
@@ -32,20 +38,24 @@ const CandyGrid: React.FC<CandyGridProps> = ({
                 styles.grid,
                 isOpponent ? styles.gridOpponent : styles.gridPlayer
             ]}>
-                {candies.map((candy, index) => {
-                    const isCollected = collectedCandies.includes(candy);
-                    const isPoison = candy === poisonCandy;
+                {rows.map((row, rowIndex) => (
+                    <View key={`row-${rowIndex}`} style={styles.row}>
+                        {row.map((candy, index) => {
+                            const isCollected = collectedCandies.includes(candy);
+                            const isPoison = candy === poisonCandy;
 
-                    return (
-                        <CandyItem
-                            key={`${candy}-${index}`}
-                            candy={candy}
-                            onPress={onCandyPress ? () => onCandyPress(candy) : undefined}
-                            isPoison={isPoison}
-                            disabled={isCollected}
-                        />
-                    );
-                })}
+                            return (
+                                <CandyItem
+                                    key={`${candy}-${index}`}
+                                    candy={candy}
+                                    onPress={onCandyPress ? () => onCandyPress(candy) : undefined}
+                                    isPoison={isPoison}
+                                    disabled={isCollected}
+                                />
+                            );
+                        })}
+                    </View>
+                ))}
             </View>
         </View>
     );
@@ -69,11 +79,7 @@ const styles = StyleSheet.create({
         color: THEME.colors.danger,
     },
     grid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: scale(4),
+        padding: scale(3),
         borderRadius: scale(12),
         borderWidth: 2,
         shadowColor: "#000",
@@ -81,7 +87,12 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 2,
-        minHeight: scale(100),
+    },
+    row: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        width: '100%',
+        marginBottom: scale(2),
     },
     gridPlayer: {
         backgroundColor: 'rgba(59, 130, 246, 0.05)', // Subtle blue

@@ -200,18 +200,14 @@ const RewardsScreen = ({ navigation }: any) => {
     );
 
     return (
-        <ScreenContainer withGradient={false} style={{ backgroundColor: '#0F172A' }}>
+        <ScreenContainer withGradient={false} style={{ backgroundColor: '#0F172A' }} withBackButton>
             <LinearGradient
                 colors={['#1E293B', '#0F172A'] as any}
                 style={StyleSheet.absoluteFill}
             />
 
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <ChevronLeft color="#FFF" size={moderateScale(28)} />
-                </TouchableOpacity>
                 <Text style={styles.headerTitle}>Rewards & Ranking</Text>
-                <View style={{ width: scale(40) }} />
             </View>
 
             <View style={styles.tabContainer}>
@@ -254,6 +250,7 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontSize: moderateScale(20),
         fontWeight: 'bold',
+        marginLeft: scale(44), // Offset for back button
     },
     tabContainer: {
         flexDirection: 'row',

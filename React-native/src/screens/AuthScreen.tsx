@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Mail, Lock, User, LogIn, UserPlus } from 'lucide-react-native';
 import ScreenContainer from '../components/layout/ScreenContainer';
 import { useAuth } from '../hooks/useAuth';
+import { feedbackService } from '../services/FeedbackService';
 import { scale, moderateScale, spacing, radii, SCREEN_WIDTH, isSmallDevice } from '../utils/responsive';
 
 type AuthScreenProps = {
@@ -18,6 +19,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ navigation }) => {
     const [username, setUsername] = React.useState('');
 
     const handleSubmit = async () => {
+        feedbackService.triggerSelection();
         let result;
         if (isLogin) {
             result = await login(email, password);
@@ -26,14 +28,16 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ navigation }) => {
         }
 
         if (result.success) {
+            feedbackService.triggerSuccess();
             navigation.navigate('App');
         } else {
+            feedbackService.triggerError();
             alert(result.message);
         }
     };
 
     return (
-        <ScreenContainer withGradient={false} statusBarStyle="light">
+        <ScreenContainer withGradient={false} statusBarStyle="light" withBackButton>
             <LinearGradient
                 colors={['#1E293B', '#0F172A', '#020617'] as any}
                 style={StyleSheet.absoluteFill}
@@ -60,14 +64,20 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ navigation }) => {
                         <View style={styles.tabs}>
                             <TouchableOpacity
                                 style={[styles.tab, isLogin && styles.tabActive]}
-                                onPress={() => setIsLogin(true)}
+                                onPress={() => {
+                                    feedbackService.triggerSelection();
+                                    setIsLogin(true);
+                                }}
                             >
                                 <LogIn color={isLogin ? '#6366F1' : '#64748B'} size={moderateScale(18)} />
                                 <Text style={[styles.tabText, isLogin && styles.tabTextActive]}>Login</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.tab, !isLogin && styles.tabActive]}
-                                onPress={() => setIsLogin(false)}
+                                onPress={() => {
+                                    feedbackService.triggerSelection();
+                                    setIsLogin(false);
+                                }}
                             >
                                 <UserPlus color={!isLogin ? '#6366F1' : '#64748B'} size={moderateScale(18)} />
                                 <Text style={[styles.tabText, !isLogin && styles.tabTextActive]}>Sign Up</Text>
@@ -152,6 +162,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ navigation }) => {
                         <TouchableOpacity
                             style={styles.guestButton}
                             onPress={() => {
+                                feedbackService.triggerSelection();
                                 continueAsGuest();
                                 navigation.navigate('App');
                             }}

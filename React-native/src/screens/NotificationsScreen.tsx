@@ -70,16 +70,13 @@ const NotificationsScreen = ({ navigation }: any) => {
     };
 
     return (
-        <ScreenContainer withGradient={false} style={{ backgroundColor: '#0F172A' }}>
+        <ScreenContainer withGradient={false} style={{ backgroundColor: '#0F172A' }} withBackButton>
             <LinearGradient
                 colors={['#1E293B', '#0F172A'] as any}
                 style={StyleSheet.absoluteFill}
             />
 
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <ChevronLeft color="#FFF" size={moderateScale(28)} />
-                </TouchableOpacity>
                 <Text style={styles.headerTitle}>Notifications</Text>
                 <TouchableOpacity onPress={markAllAsRead}>
                     <CheckCircle2 color="#94A3B8" size={moderateScale(22)} />
@@ -152,6 +149,7 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontSize: moderateScale(20),
         fontWeight: 'bold',
+        marginLeft: scale(44), // Offset for back button
     },
     content: {
         padding: spacing.lg,

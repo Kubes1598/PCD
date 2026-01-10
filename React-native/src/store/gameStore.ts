@@ -27,6 +27,7 @@ interface GameState {
     gameStarted: boolean;
     gameEnded: boolean;
     gameWinner: 'player' | 'opponent' | 'draw' | null;
+    winReason: 'poison' | 'collection' | 'timeout' | 'disconnect' | null;
 
     playerCandies: string[];
     opponentCandies: string[];
@@ -45,9 +46,11 @@ interface GameState {
     queuePosition: number;
     totalWaiting: number;
     lastReward: number;
-    isSettingPoisonFor: 'player' | 'opponent' | null;
     opponentId: string | null;
     isReconnecting: boolean;
+    matchFound: boolean;
+    isSettingPoisonFor: 'player' | 'opponent' | null;
+    searchTimeout?: NodeJS.Timeout | null;
 
     // Dynamic Config (fetched from backend)
     config: {
@@ -136,6 +139,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     gameStarted: false,
     gameEnded: false,
     gameWinner: null,
+    winReason: null,
     playerCandies: [],
     opponentCandies: [],
     playerCollection: [],
@@ -153,6 +157,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     isSettingPoisonFor: null,
     opponentId: null,
     isReconnecting: false,
+    matchFound: false,
     config: {
         winThreshold: WIN_THRESHOLD,
         candyCount: CANDY_COUNT,
@@ -208,6 +213,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             playerCollection: [],
             opponentCollection: [],
             isPlayerTurn: true, // Always start with P1 turn
+            matchFound: false,
         });
 
         // For AI mode, we'll randomize opponent poison later or now
@@ -229,8 +235,10 @@ export const useGameStore = create<GameState>((set, get) => ({
                 set({ queuePosition: data.position || 0, totalWaiting: data.total_waiting || 0 });
             } else if (data.type === 'match_found') {
                 // Clear simulation timer if real match found
-                const { searchTimeout } = get() as any;
+                const { searchTimeout } = get();
                 if (searchTimeout) clearTimeout(searchTimeout);
+
+                set({ matchFound: true });
 
                 set({
                     isSearching: false,
@@ -262,7 +270,7 @@ export const useGameStore = create<GameState>((set, get) => ({
                 get().pickCandy(data.move!, true); // true indicates it's a remote move
             } else if (data.type === 'opponent_disconnected') {
                 feedbackService.triggerError();
-                set({ gameEnded: true, gameWinner: 'player', gameStarted: false });
+                set({ gameEnded: true, gameWinner: 'player', gameStarted: false, winReason: 'disconnect' });
                 alert('Opponent disconnected! You win by default.');
             } else if (data.type === 'timer_sync') {
                 if (data.seconds !== undefined) {
@@ -280,6 +288,7 @@ export const useGameStore = create<GameState>((set, get) => ({
                 set({
                     gameEnded: true,
                     gameWinner: isWinner ? 'player' : 'opponent',
+                    winReason: data.reason as any || 'collection',
                     gameStarted: false,
                     turnTimeRemaining: 0
                 });
@@ -335,11 +344,11 @@ export const useGameStore = create<GameState>((set, get) => ({
         }, 60000);
 
         // We'll need to store this timeout to clear it
-        (set as any)({ searchTimeout: timeout });
+        set({ searchTimeout: timeout });
     },
 
     stopSearching: () => {
-        const { searchTimeout } = get() as any;
+        const { searchTimeout } = get();
         if (searchTimeout) clearTimeout(searchTimeout);
 
         webSocketService.sendMessage({ type: 'leave_queue' });
@@ -391,13 +400,16 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         if (state.isPlayerTurn) {
             if (candy === state.opponentPoison) {
-                set({ gameEnded: true, gameWinner: 'opponent' });
+                feedbackService.triggerError();
+                set({ gameEnded: true, gameWinner: 'opponent', winReason: 'poison' });
                 return;
             }
+            feedbackService.triggerSelection();
             if (!newPlayerCollection.includes(candy)) newPlayerCollection.push(candy);
         } else {
             if (candy === state.selectedPoison) {
-                set({ gameEnded: true, gameWinner: 'player' });
+                feedbackService.triggerSuccess();
+                set({ gameEnded: true, gameWinner: 'player', winReason: 'poison' });
                 return;
             }
             if (!newOpponentCollection.includes(candy)) newOpponentCollection.push(candy);
@@ -434,8 +446,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             set({
                 gameEnded: true,
                 gameWinner: winner || null,
-                playerCollection: newPlayerCollection,
-                opponentCollection: newOpponentCollection
+                opponentCollection: newOpponentCollection,
+                winReason: winner === 'draw' ? null : 'collection'
             });
             return;
         }
@@ -496,6 +508,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             gameStarted: false,
             gameEnded: false,
             gameWinner: null,
+            winReason: null,
             playerCandies: [],
             opponentCandies: [],
             playerCollection: [],
@@ -503,7 +516,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             selectedPoison: null,
             opponentPoison: null,
             isSettingPoisonFor: null,
-            gameProgress: { ...DEFAULT_PROGRESS }
+            gameProgress: { ...DEFAULT_PROGRESS },
+            matchFound: false,
         });
     },
 

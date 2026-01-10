@@ -6,7 +6,9 @@ import ScreenContainer from '../components/layout/ScreenContainer';
 import { useAuth } from '../hooks/useAuth';
 import { useGame } from '../hooks/useGame';
 import { useCurrencyStore } from '../store/currencyStore';
+import { THEME } from '../utils/theme';
 import { useErrorStore } from '../store/errorStore';
+import { feedbackService } from '../services/FeedbackService';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
 import { scale, moderateScale, spacing, radii, SCREEN_WIDTH, isSmallDevice, platformValue } from '../utils/responsive';
 import { apiService } from '../services/api';
@@ -35,7 +37,7 @@ const ServerStatusBadge = () => {
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     const { user, isGuest } = useAuth();
-    const { initGame, isSearching, startSearching, stopSearching, queuePosition, totalWaiting, gameId } = useGame();
+    const { initGame, isSearching, startSearching, stopSearching, queuePosition, totalWaiting, gameId, matchFound } = useGame();
     const { coins, diamonds, claimDailyReward, canClaimDailyReward } = useCurrencyStore();
     const [reward, setReward] = React.useState<{ coins: number, diamonds: number, nextStage: number, cycleCompleted: boolean } | null>(null);
     const [showArenaSelection, setShowArenaSelection] = React.useState(false);
@@ -108,7 +110,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 <View style={styles.topHeader}>
                     <TouchableOpacity
                         style={styles.menuButton}
-                        onPress={() => navigation.openDrawer()}
+                        onPress={() => {
+                            feedbackService.triggerSelection();
+                            navigation.openDrawer();
+                        }}
                     >
                         <Menu color="#F1F5F9" size={moderateScale(24)} />
                     </TouchableOpacity>
@@ -118,7 +123,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
                     <TouchableOpacity
                         style={styles.profileSection}
-                        onPress={() => navigation.navigate('Profile')}
+                        onPress={() => {
+                            feedbackService.triggerSelection();
+                            navigation.navigate('Profile');
+                        }}
                     >
                         <View style={styles.avatarContainer}>
                             <User color="#CBD5E1" size={moderateScale(20)} />
@@ -156,7 +164,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 {/* Online Arena Card - Premium Highlight */}
                 <TouchableOpacity
                     style={styles.premiumBattleCard}
-                    onPress={() => handleStartGame('online')}
+                    onPress={() => {
+                        feedbackService.triggerSelection();
+                        handleStartGame('online');
+                    }}
                     activeOpacity={0.9}
                 >
                     <LinearGradient
@@ -183,7 +194,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 <View style={styles.secondaryModesRow}>
                     <TouchableOpacity
                         style={styles.secondaryModeCard}
-                        onPress={() => handleStartGame('offline')}
+                        onPress={() => {
+                            feedbackService.triggerSelection();
+                            handleStartGame('offline');
+                        }}
                     >
                         <Users color="#94A3B8" size={moderateScale(24)} />
                         <Text style={styles.secondaryModeTitle}>Local Duel</Text>
@@ -192,7 +206,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
                     <TouchableOpacity
                         style={styles.secondaryModeCard}
-                        onPress={() => setShowDifficultySelection(true)}
+                        onPress={() => {
+                            feedbackService.triggerSelection();
+                            setShowDifficultySelection(true);
+                        }}
                     >
                         <Monitor color="#94A3B8" size={moderateScale(24)} />
                         <Text style={styles.secondaryModeTitle}>VS Computer</Text>
@@ -204,7 +221,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 <View style={styles.quickAccessRow}>
                     <TouchableOpacity
                         style={styles.quickAccessCard}
-                        onPress={() => navigation.navigate('Rewards')}
+                        onPress={() => {
+                            feedbackService.triggerSelection();
+                            navigation.navigate('Rewards');
+                        }}
                     >
                         <View style={[styles.quickAccessIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
                             <Trophy color="#F59E0B" size={moderateScale(20)} />
@@ -214,7 +234,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
                     <TouchableOpacity
                         style={styles.quickAccessCard}
-                        onPress={() => navigation.navigate('Rewards')}
+                        onPress={() => {
+                            feedbackService.triggerSelection();
+                            navigation.navigate('Rewards');
+                        }}
                     >
                         <View style={[styles.quickAccessIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
                             <Target color="#6366F1" size={moderateScale(20)} />
@@ -224,7 +247,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
                     <TouchableOpacity
                         style={styles.quickAccessCard}
-                        onPress={() => navigation.navigate('Friends')}
+                        onPress={() => {
+                            feedbackService.triggerSelection();
+                            navigation.navigate('Friends');
+                        }}
                     >
                         <View style={[styles.quickAccessIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
                             <UserPlus color="#10B981" size={moderateScale(20)} />
@@ -261,23 +287,34 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             </ScrollView>
 
             {/* Matchmaking Overlay */}
-            <Modal visible={!!isSearching} transparent={true} animationType="fade">
+            <Modal visible={!!isSearching || matchFound} transparent={true} animationType="fade">
                 <View style={styles.overlay}>
                     <View style={styles.modal}>
                         <LinearGradient
                             colors={['#1E293B', '#0F172A'] as any}
                             style={StyleSheet.absoluteFill}
                         />
-                        <Globe color="#6366F1" size={moderateScale(64)} />
-                        <Text style={styles.modalTitle}>MATCHMAKING</Text>
-                        <Text style={styles.modalText}>
-                            Position: {queuePosition} • Online: {totalWaiting}
+                        <Globe color={matchFound ? THEME.colors.success : "#6366F1"} size={moderateScale(64)} />
+                        <Text style={styles.modalTitle}>
+                            {matchFound ? "MATCH FOUND!" : "MATCHMAKING"}
                         </Text>
-                        <ActivityIndicator size="large" color="#6366F1" style={{ marginVertical: spacing.xl }} />
-                        <TouchableOpacity style={styles.cancelButton} onPress={() => stopSearching()}>
-                            <X color="#FFF" size={moderateScale(20)} />
-                            <Text style={styles.cancelText}>CANCEL SEARCH</Text>
-                        </TouchableOpacity>
+                        <Text style={styles.modalText}>
+                            {matchFound
+                                ? "Initializing arena... prepare to duel!"
+                                : `Position: ${queuePosition} • Online: ${totalWaiting}`}
+                        </Text>
+                        <ActivityIndicator
+                            size="large"
+                            color={matchFound ? THEME.colors.success : "#6366F1"}
+                            style={{ marginVertical: spacing.xl }}
+                        />
+
+                        {!matchFound && (
+                            <TouchableOpacity style={styles.cancelButton} onPress={() => stopSearching()}>
+                                <X color="#FFF" size={moderateScale(20)} />
+                                <Text style={styles.cancelText}>CANCEL SEARCH</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 </View>
             </Modal>
