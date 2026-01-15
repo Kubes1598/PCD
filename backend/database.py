@@ -185,25 +185,9 @@ class SupabaseService(BaseDatabaseService):
         return len(res.data) > 0
 
     async def get_player(self, player_name: str) -> Optional[Dict[str, Any]]:
-        # Check Cache first
-        try:
-            r = await redis_client.connect()
-            cached = await r.get(f"pcd:player_cache:{player_name}")
-            if cached:
-                return json.loads(cached)
-        except: pass
-
-        res = self.supabase.table("players").select("*").eq("name", player_name).execute()
-        player = res.data[0] if res.data else None
-        
-        # Cache for 60 seconds
-        if player:
-            try:
-                r = await redis_client.connect()
-                await r.setex(f"pcd:player_cache:{player_name}", 60, json.dumps(player))
-            except: pass
-            
-        return player
+        # Use admin client for authentication checks to ensure bypass of RLS
+        res = self.supabase_admin.table("players").select("*").eq("name", player_name).execute()
+        return res.data[0] if res.data else None
 
     async def update_player_balance(
         self, 
@@ -383,37 +367,41 @@ class SupabaseService(BaseDatabaseService):
         # Check Cache
         try:
             r = await redis_client.connect()
-            cached = await r.get(f"pcd:user_email_cache:{email}")
+            cached = await r.get(f"pcd:user:email:{email}")
             if cached: return json.loads(cached)
         except: pass
 
-        res = self.supabase.table("players").select("*").eq("email", email).execute()
-        user = res.data[0] if res.data else None
-        
-        if user:
+        # Fallback to Supabase Admin for auth checks
+        res = self.supabase_admin.table("players").select("*").eq("email", email).execute()
+        if res.data:
+            user = res.data[0]
+            # Cache for 10 mins
             try:
                 r = await redis_client.connect()
-                await r.setex(f"pcd:user_email_cache:{email}", 300, json.dumps(user))
+                await r.setex(f"pcd:user:email:{email}", 600, json.dumps(user))
             except: pass
-        return user
+            return user
+        return None
 
     async def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         # Check Cache
         try:
             r = await redis_client.connect()
-            cached = await r.get(f"pcd:user_id_cache:{user_id}")
+            cached = await r.get(f"pcd:user:id:{user_id}")
             if cached: return json.loads(cached)
         except: pass
 
-        res = self.supabase.table("players").select("*").eq("id", user_id).execute()
-        user = res.data[0] if res.data else None
-        
-        if user:
+        # Fallback to Supabase Admin for auth checks
+        res = self.supabase_admin.table("players").select("*").eq("id", user_id).execute()
+        if res.data:
+            user = res.data[0]
+            # Cache for 10 mins
             try:
                 r = await redis_client.connect()
-                await r.setex(f"pcd:user_id_cache:{user_id}", 300, json.dumps(user))
+                await r.setex(f"pcd:user:id:{user_id}", 600, json.dumps(user))
             except: pass
-        return user
+            return user
+        return None
 
 # Initialize global DB service
 if SUPABASE_AVAILABLE:

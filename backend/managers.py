@@ -169,7 +169,7 @@ class CityMatchmakingQueue:
                 await self.db_service.create_transaction({"player_name": p1["name"], "amount": -fee, "type": "entry_fee", "city": city})
                 await self.db_service.create_transaction({"player_name": p2["name"], "amount": -fee, "type": "entry_fee", "city": city})
 
-                game_id = self.game_engine.create_game(p1["name"], p2["name"])
+                game_id = self.game_engine.create_game(p1["name"], p2["name"], p1["id"], p2["id"])
                 game_state = self.game_engine.get_game_state(game_id)
                 
                 await self.db_service.create_game({

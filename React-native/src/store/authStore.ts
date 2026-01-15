@@ -43,7 +43,8 @@ export const useAuthStore = create<AuthState>()(
             },
 
             setUser: (user, token, refreshToken = null) => {
-                set({ user, token, refreshToken, isGuest: false, error: null });
+                const mappedUser = user ? { ...user, username: user.username || (user as any).name } : null;
+                set({ user: mappedUser, token, refreshToken, isGuest: false, error: null });
             },
 
             setToken: (token: string) => {
@@ -62,7 +63,9 @@ export const useAuthStore = create<AuthState>()(
                     try {
                         const result = await apiService.verifyToken(token);
                         if (result.success) {
-                            set({ user: result.data.user, isGuest: false, isLoading: false });
+                            const userData = result.data.user;
+                            const mappedUser = { ...userData, username: userData.username || userData.name };
+                            set({ user: mappedUser as User, isGuest: false, isLoading: false });
                         } else {
                             // If token is invalid, fall back to guest but keep a generic guest object
                             get().logout();

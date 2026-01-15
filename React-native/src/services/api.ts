@@ -122,13 +122,12 @@ apiClient.interceptors.response.use(
 export interface User {
     id: string;
     username: string;
-    name?: string;
+    name?: string; // Backend compatibility
     email?: string;
     coin_balance?: number;
     diamonds_balance?: number;
-    games_played?: number;
-    games_won?: number;
-    profile_id?: string;
+    total_matches?: number;
+    wins?: number;
     rank?: string;
     tier?: string;
 }

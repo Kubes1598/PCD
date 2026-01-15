@@ -233,11 +233,15 @@ export const useGameStore = create<GameState>((set, get) => ({
             return;
         }
 
-        const user = useAuthStore.getState().user;
-        const playerId = user?.id || `guest_${Math.floor(Date.now() / 1000)}`;
+        const auth = useAuthStore.getState();
+        const playerId = auth.user?.id || `guest_${auth.isGuest ? 'guest' : 'unknown'}`;
         set({ isSearching: true, difficulty: cityInfo.difficulty });
 
         webSocketService.connect(playerId, (data: MatchmakingMessage) => {
+            const authState = useAuthStore.getState();
+            const userId = authState.user?.id || `guest_${authState.isGuest ? 'guest' : 'unknown'}`;
+            const { gameStarted: isStarted, gameEnded: isEnded } = get();
+
             if (data.type === 'queue_status') {
                 set({ queuePosition: data.position || 0, totalWaiting: data.total_waiting || 0 });
             } else if (data.type === 'match_found') {
@@ -246,28 +250,29 @@ export const useGameStore = create<GameState>((set, get) => ({
 
                 set({ matchFound: true, isSearching: false });
 
-                set({
-                    gameId: data.game_id || null,
-                    isPlayerTurn: data.your_role === 'player1',
-                    playerCandies: data.game_state.player1.owned_candies,
-                    opponentCandies: data.game_state.player2.owned_candies,
-                    gameMode: 'online',
-                    turnTimeRemaining: cityInfo.turnTimer,
-                    isSettingPoisonFor: 'player',
-                    opponentId: data.opponent?.id || null
-                });
+                const gameState = data.game_state;
+                if (gameState) {
+                    const isP1 = data.your_role === 'player1';
+                    const me = isP1 ? gameState.player1 : gameState.player2;
+                    const them = isP1 ? gameState.player2 : gameState.player1;
 
-                if (user) {
-                    apiService.getBalance(user.username).then((res: any) => {
-                        if (res.success) {
-                            useCurrencyStore.getState().setBalances(res.data.coin_balance, res.data.diamonds_balance);
-                        }
-                    }).catch(() => { });
+                    set({
+                        gameId: data.game_id || null,
+                        isPlayerTurn: data.your_role === 'player1',
+                        playerCandies: me.owned_candies,
+                        opponentCandies: them.owned_candies,
+                        playerCollection: me.collected_candies || [],
+                        opponentCollection: them.collected_candies || [],
+                        gameMode: 'online',
+                        selectedCity: arena,
+                        turnTimeRemaining: cityInfo.turnTimer,
+                        isSettingPoisonFor: 'player',
+                        opponentId: data.opponent?.id || null
+                    });
                 }
             } else if (data.type === 'reconnected') {
                 console.log('🔄 Reconnected to active game:', data.game_id);
                 set({ isReconnecting: false, gameStarted: true });
-                // Note: Full state sync would happen via another message or engine request
             } else if (data.type === 'matchmaking_error') {
                 set({ isSearching: false });
                 Alert.alert("Matchmaking Error", data.message || "An unknown error occurred.");
@@ -276,37 +281,43 @@ export const useGameStore = create<GameState>((set, get) => ({
                 if (get().selectedPoison) {
                     set({ gameStarted: true, isSettingPoisonFor: null });
                 }
-            } else if (data.type === 'match_move') {
-                get().pickCandy(data.move!, true);
-            } else if (data.type === 'opponent_disconnected') {
-                feedbackService.triggerError();
-                set({ gameEnded: true, gameWinner: 'player', gameStarted: false, winReason: 'disconnect' });
-                alert('Opponent disconnected! You win by default.');
-            } else if (data.type === 'timer_sync') {
-                const { gameStarted, isPlayerTurn } = get();
-                const userId = useAuthStore.getState().user?.id;
-
-                // If game hasn't started (setup phase), only sync if it's OUR timer
-                if (!gameStarted) {
-                    if (data.player_id === userId && data.seconds !== undefined) {
-                        set({ turnTimeRemaining: data.seconds });
-                    }
-                } else {
-                    // In playing phase, sync globally (active player's timer)
-                    if (data.seconds !== undefined) {
-                        set({ turnTimeRemaining: data.seconds });
-                    }
-                }
-            } else if (data.type === 'timer_expired') {
-                const { gameEnded } = get();
-                if (!gameEnded && data.game_state) {
-                    const gameState = data.game_state;
-                    const userId = useAuthStore.getState().user?.id;
+            } else if (data.type === 'game_state_update') {
+                const gameState = data.game_state;
+                if (gameState) {
+                    const isP1 = gameState.player1.id === userId;
+                    const me = isP1 ? gameState.player1 : gameState.player2;
+                    const them = isP1 ? gameState.player2 : gameState.player1;
 
                     set({
                         isPlayerTurn: gameState.current_player === userId,
-                        playerCollection: gameState.player1.collected_candies,
-                        opponentCollection: gameState.player2.collected_candies,
+                        playerCandies: me.owned_candies,
+                        opponentCandies: them.owned_candies,
+                        playerCollection: me.collected_candies || [],
+                        opponentCollection: them.collected_candies || [],
+                        gameStarted: gameState.state === 'playing',
+                        gameEnded: gameState.state === 'finished'
+                    });
+
+                    if (gameState.state === 'finished' && gameState.result) {
+                        const isWinner = gameState.winner === userId;
+                        set({
+                            gameWinner: isWinner ? 'player' : (gameState.result === 'draw' ? 'draw' : 'opponent'),
+                            winReason: 'collection',
+                            gameStarted: false
+                        });
+                    }
+                }
+            } else if (data.type === 'timer_expired') {
+                if (!isEnded && data.game_state) {
+                    const gameState = data.game_state;
+                    const isP1 = gameState.player1.id === userId;
+                    const me = isP1 ? gameState.player1 : gameState.player2;
+                    const them = isP1 ? gameState.player2 : gameState.player1;
+
+                    set({
+                        isPlayerTurn: gameState.current_player === userId,
+                        playerCollection: me.collected_candies || [],
+                        opponentCollection: them.collected_candies || [],
                         gameStarted: gameState.state === 'playing',
                         turnTimeRemaining: 0
                     });
@@ -316,57 +327,67 @@ export const useGameStore = create<GameState>((set, get) => ({
                     }
                 }
             } else if (data.type === 'game_over') {
-                const isWinner = data.winner_id === user?.id;
+                const isWinner = data.winner_id === userId;
+
+                if (data.game_state) {
+                    const gameState = data.game_state;
+                    const isP1 = gameState.player1.id === userId;
+                    const me = isP1 ? gameState.player1 : gameState.player2;
+                    const them = isP1 ? gameState.player2 : gameState.player1;
+
+                    set({
+                        playerCollection: me.collected_candies || [],
+                        opponentCollection: them.collected_candies || [],
+                    });
+                }
 
                 set({
                     gameEnded: true,
-                    gameWinner: isWinner ? 'player' : 'opponent',
+                    gameWinner: isWinner ? 'player' : (data.is_draw ? 'draw' : 'opponent'),
                     winReason: data.reason as any || 'collection',
                     gameStarted: false,
                     turnTimeRemaining: 0
                 });
 
                 if (data.reason === 'timeout') {
-                    const message = isWinner
-                        ? `You win! Opponent timed out. Prize: ${data.prize} coins.`
-                        : "Game Over. You timed out.";
-                    alert(message);
+                    if (isWinner) feedbackService.triggerSuccess();
+                    else feedbackService.triggerError();
                 }
-
-                if (user) {
-                    apiService.getBalance(user.username).then((res: any) => {
-                        if (res.success) {
-                            useCurrencyStore.getState().setBalances(res.data.coin_balance, res.data.diamonds_balance);
-                        }
-                    }).catch(() => { });
+            } else if (data.type === 'opponent_disconnected') {
+                feedbackService.triggerError();
+                set({ gameEnded: true, gameWinner: 'player', gameStarted: false, winReason: 'disconnect' });
+            } else if (data.type === 'timer_sync') {
+                if (data.seconds !== undefined) {
+                    set({ turnTimeRemaining: data.seconds });
                 }
             } else if (data.type === 'game_cancelled') {
                 set({
                     gameEnded: true,
-                    gameWinner: null, // No winner
+                    gameWinner: null,
                     winReason: 'cancelled',
                     gameStarted: false,
                     turnTimeRemaining: 0
                 });
+            }
 
-                // Refresh balance since refund happened
-                const auth = useAuthStore.getState();
-                if (auth.user) {
-                    apiService.getBalance(auth.user.username).then((res: any) => {
-                        if (res.success) {
-                            useCurrencyStore.getState().setBalances(res.data.coin_balance, res.data.diamonds_balance);
-                        }
-                    }).catch(() => { });
-                }
+            // Always attempt balance refresh on significant events
+            if (authState.user) {
+                apiService.getBalance(authState.user.username).then((res: any) => {
+                    if (res.success) {
+                        useCurrencyStore.getState().setBalances(res.data.coin_balance, res.data.diamonds_balance);
+                    }
+                }).catch(() => { });
             }
         }, (status) => {
-            const { gameStarted, gameEnded } = get();
-            if (status === 'connecting' && gameStarted && !gameEnded) {
+            const { gameStarted: isStarted, gameEnded: isEnded } = get();
+            if (status === 'connecting' && isStarted && !isEnded) {
                 set({ isReconnecting: true });
             } else if (status === 'connected') {
                 set({ isReconnecting: false });
-                const player_name = useAuthStore.getState().user?.username || 'Guest';
-                webSocketService.sendMessage({ type: 'join_queue', player_name, city: arena });
+                const authState = useAuthStore.getState();
+                const player_name = authState.user?.username || 'Guest';
+                const pId = authState.user?.id || `guest_unknown`;
+                webSocketService.sendMessage({ type: 'join_queue', player_name, player_id: pId, city: arena });
             }
         });
 
@@ -377,10 +398,7 @@ export const useGameStore = create<GameState>((set, get) => ({
                     "No match found",
                     "We couldn't find a real opponent. Would you like to play against the AI to keep the fun going?",
                     [
-                        {
-                            text: "Keep Waiting",
-                            style: "cancel"
-                        },
+                        { text: "Keep Waiting", style: "cancel" },
                         {
                             text: "Play AI",
                             onPress: () => {
@@ -408,7 +426,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     setPoison: async (candy) => {
-        const { gameMode, isSettingPoisonFor, opponentCandies, gameId, opponentId } = get();
+        const { gameMode, isSettingPoisonFor, gameId, opponentId } = get();
 
         if (isSettingPoisonFor === 'player') {
             set({ selectedPoison: candy });
@@ -420,11 +438,7 @@ export const useGameStore = create<GameState>((set, get) => ({
                 // Single player or Online
                 set({ isSettingPoisonFor: null, gameStarted: true });
                 if (gameMode === 'online' && opponentId) {
-                    webSocketService.sendMessage({
-                        type: 'match_poison',
-                        target_id: opponentId,
-                        candy: candy
-                    });
+                    webSocketService.sendMessage({ type: 'match_poison', target_id: opponentId, candy: candy });
                     // If we already have opponent poison (received via WS), start game
                     if (get().opponentPoison) {
                         set({ gameStarted: true, isSettingPoisonFor: null });
@@ -432,19 +446,13 @@ export const useGameStore = create<GameState>((set, get) => ({
                 }
             }
         } else if (isSettingPoisonFor === 'opponent') {
-            set({
-                opponentPoison: candy,
-                isSettingPoisonFor: null,
-                gameStarted: true
-            });
+            set({ opponentPoison: candy, isSettingPoisonFor: null, gameStarted: true });
         }
     },
 
     pickCandy: async (candy, isRemote = false) => {
         const state = get();
         if (state.gameEnded) return;
-
-        const { opponentId } = state;
 
         let newPlayerCollection = [...state.playerCollection];
         let newOpponentCollection = [...state.opponentCollection];
@@ -478,9 +486,9 @@ export const useGameStore = create<GameState>((set, get) => ({
                 set({ lastReward: prize });
 
                 // Report Win
-                const auth = useAuthStore.getState();
-                if (auth.user && !auth.isGuest) {
-                    apiService.updatePlayerStats({ player_name: auth.user.username, won: true });
+                const authState = useAuthStore.getState();
+                if (authState.user && !authState.isGuest) {
+                    apiService.updatePlayerStats({ player_name: authState.user.username, won: true });
                 }
             } else if (winner === 'draw') {
                 set({ lastReward: 0 });
@@ -489,9 +497,9 @@ export const useGameStore = create<GameState>((set, get) => ({
                 set({ lastReward: 0 });
                 feedbackService.triggerError();
                 // Report Loss
-                const auth = useAuthStore.getState();
-                if (auth.user && !auth.isGuest) {
-                    apiService.updatePlayerStats({ player_name: auth.user.username, won: false });
+                const authState = useAuthStore.getState();
+                if (authState.user && !authState.isGuest) {
+                    apiService.updatePlayerStats({ player_name: authState.user.username, won: false });
                 }
             }
             set({
@@ -506,7 +514,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         // Switch turns
         const nextPlayerTurn = winResult.switchToOpponent ? false : (winResult.switchToPlayer ? true : !state.isPlayerTurn);
         const timerLimits = { Dubai: 30, Cairo: 20, Oslo: 10 };
-        const nextTimer = state.gameMode === 'online' && state.selectedCity ? timerLimits[state.selectedCity] : 30;
+        const nextTimer = state.gameMode === 'online' && state.selectedCity ? timerLimits[state.selectedCity as keyof typeof timerLimits] : 30;
 
         set({
             playerCollection: newPlayerCollection,
@@ -517,11 +525,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         // Send move to opponent if online and it's our turn
         if (state.gameMode === 'online' && state.opponentId && !isRemote) {
-            webSocketService.sendMessage({
-                type: 'match_move',
-                target_id: state.opponentId,
-                move: candy
-            });
+            webSocketService.sendMessage({ type: 'match_move', target_id: state.opponentId, move: candy });
         }
 
         // AI Logic
@@ -555,48 +559,26 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     resetGame: () => {
         set({
-            gameId: null,
-            gameStarted: false,
-            gameEnded: false,
-            gameWinner: null,
-            winReason: null,
-            playerCandies: [],
-            opponentCandies: [],
-            playerCollection: [],
-            opponentCollection: [],
-            selectedPoison: null,
-            opponentPoison: null,
-            isSettingPoisonFor: null,
-            gameProgress: { ...DEFAULT_PROGRESS },
-            matchFound: false,
+            gameId: null, gameStarted: false, gameEnded: false, gameWinner: null, winReason: null,
+            playerCandies: [], opponentCandies: [], playerCollection: [], opponentCollection: [],
+            selectedPoison: null, opponentPoison: null, isSettingPoisonFor: null,
+            gameProgress: { ...DEFAULT_PROGRESS }, matchFound: false,
         });
     },
 
     tickTimer: () => {
-        const { turnTimeRemaining, gameEnded, isPlayerTurn, gameMode, selectedCity } = get();
+        const { turnTimeRemaining, gameEnded, isPlayerTurn, gameMode } = get();
         if (gameEnded || !get().gameStarted) return;
 
         if (turnTimeRemaining > 0) {
             set({ turnTimeRemaining: turnTimeRemaining - 1 });
         } else {
-            console.log("⏰ Timer expired! Instant Forfeit.");
-
             if (gameMode === 'online') {
-                // Online is server-authoritative. We wait for the 'game_over' message.
-                // But we can freeze the UI timer at 0.
                 set({ turnTimeRemaining: 0 });
                 return;
             }
-
-            // Local Match (AI or Offline) - Instant Forfeit
             const winner = isPlayerTurn ? 'opponent' : 'player';
-            set({
-                gameEnded: true,
-                gameWinner: winner,
-                winReason: 'timeout',
-                turnTimeRemaining: 0
-            });
-
+            set({ gameEnded: true, gameWinner: winner, winReason: 'timeout', turnTimeRemaining: 0 });
             feedbackService.triggerError();
         }
     },

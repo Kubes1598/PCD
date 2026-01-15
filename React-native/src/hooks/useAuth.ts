@@ -23,7 +23,9 @@ export const useAuth = () => {
             }
             return { success: false, message: result.message };
         } catch (err: any) {
-            return { success: false, message: err.message || 'Login failed' };
+            const message = err.response?.data?.message || err.message || 'Login failed';
+            console.log('❌ Login failed:', message);
+            return { success: false, message };
         }
     };
 
@@ -50,7 +52,9 @@ export const useAuth = () => {
             }
             return { success: false, message: result.message };
         } catch (err: any) {
-            return { success: false, message: err.message || 'Registration failed' };
+            const message = err.response?.data?.message || err.message || 'Registration failed';
+            console.log('❌ Registration failed:', message);
+            return { success: false, message };
         }
     };
 

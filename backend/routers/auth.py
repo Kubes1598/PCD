@@ -64,6 +64,7 @@ async def register_user(request: RegisterRequest, db_service=Depends(get_db_serv
             "id": user_id,
             "email": request.email.lower(),
             "name": request.username,
+            "username": request.username, # Compatibility with frontend
             "password_hash": hash_password(request.password),
             "coin_balance": request.initial_coins if request.initial_coins is not None else 1000,
             "diamonds_balance": request.initial_diamonds if request.initial_diamonds is not None else 5,
@@ -129,6 +130,8 @@ async def login_user(request: LoginRequest, db_service=Depends(get_db_service)):
         access_token = create_access_token(data={"sub": user["id"]})
         refresh_token = create_refresh_token(data={"sub": user["id"]})
         user_public = {k: v for k, v in user.items() if k != "password_hash"}
+        if "name" in user_public and "username" not in user_public:
+            user_public["username"] = user_public["name"]
         
         logger.info(f"✅ User logged in: {user.get('name')}")
         
@@ -252,6 +255,8 @@ async def refresh_access_token(
 async def get_me(user: dict = Depends(get_current_user)):
     """Get current authenticated user data."""
     user_public = {k: v for k, v in user.items() if k != "password_hash"}
+    if "name" in user_public and "username" not in user_public:
+        user_public["username"] = user_public["name"]
     return {
         "success": True,
         "message": "User data retrieved",

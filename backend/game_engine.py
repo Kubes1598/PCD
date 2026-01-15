@@ -70,12 +70,14 @@ class PoisonedCandyDuel:
     def __init__(self):
         self.games: Dict[str, GameSession] = {}
     
-    def create_game(self, player1_name: str, player2_name: str) -> str:
+    def create_game(self, player1_name: str, player2_name: str, p1_id: str = None, p2_id: str = None) -> str:
         """Create a new game session between two players.
         
         Args:
             player1_name: Name of the first player
             player2_name: Name of the second player
+            p1_id: Optional ID for player 1 (uses UUID if None)
+            p2_id: Optional ID for player 2 (uses UUID if None)
             
         Returns:
             The unique game ID
@@ -105,12 +107,12 @@ class PoisonedCandyDuel:
         player2_candies = set(selected_24[12:24])
         
         player1 = Player(
-            id=str(uuid.uuid4()), 
+            id=p1_id if p1_id else str(uuid.uuid4()), 
             name=player1_name,
             owned_candies=player1_candies
         )
         player2 = Player(
-            id=str(uuid.uuid4()), 
+            id=p2_id if p2_id else str(uuid.uuid4()), 
             name=player2_name,
             owned_candies=player2_candies
         )

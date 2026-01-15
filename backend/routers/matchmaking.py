@@ -188,9 +188,18 @@ async def matchmaking_websocket(
                     await manager.send_personal_message(correction_msg, player_id)
                     continue
                 
-                # Relay move to opponent (fast P2P feel)
-                relay_msg = {**message, "from_id": player_id}
-                await manager.send_personal_message(relay_msg, target_id)
+                # Broadcast full updated state to both players (Server Authoritative)
+                update_msg = {
+                    "type": "game_state_update",
+                    "game_id": game_id,
+                    "game_state": result["game_state"],
+                    "last_move": {
+                        "from_id": player_id,
+                        "move": candy
+                    }
+                }
+                for pid in [player_id, target_id]:
+                    await manager.send_personal_message(update_msg, pid)
                 
                 # Handle game over
                 if result.get("result") != "ongoing":
