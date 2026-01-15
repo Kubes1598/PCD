@@ -6,8 +6,9 @@ from managers import ConnectionManager, CityMatchmakingQueue, GameTimerManager
 game_engine = PoisonedCandyDuel()
 db_service_instance = db_service
 manager = ConnectionManager()
-matchmaking_queue = CityMatchmakingQueue(game_engine, db_service_instance)
-timer_manager = GameTimerManager(matchmaking_queue, game_engine, db_service_instance)
+matchmaking_queue = CityMatchmakingQueue(game_engine, db_service_instance, manager)
+timer_manager = GameTimerManager(matchmaking_queue, game_engine, db_service_instance, manager)
+matchmaking_queue.timer_manager = timer_manager
 
 # Dependency functions for FastAPI
 def get_game_engine():

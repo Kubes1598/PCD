@@ -8,9 +8,14 @@ class Settings:
     """Application settings and configuration."""
     
     # Supabase Configuration
+    # CRITICAL: Use ANON key for public API (respects RLS)
+    # Use SERVICE key ONLY for trusted server-side operations
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+    SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_KEY", "")  # Public API key (respects RLS)
+    SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")  # Admin key (bypasses RLS)
+    
+    # Backward compatibility alias
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
-    SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
     
     # Database Configuration
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
@@ -38,5 +43,25 @@ class Settings:
     
     # Redis Configuration
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    
+    # OAuth Configuration
+    # Google OAuth - Get from https://console.cloud.google.com/apis/credentials
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    
+    # Apple Sign-In - Get from https://developer.apple.com/account/resources/identifiers
+    APPLE_CLIENT_ID: str = os.getenv("APPLE_CLIENT_ID", "")  # Your app's bundle ID
+    APPLE_TEAM_ID: str = os.getenv("APPLE_TEAM_ID", "")
+    APPLE_KEY_ID: str = os.getenv("APPLE_KEY_ID", "")
+    APPLE_PRIVATE_KEY: str = os.getenv("APPLE_PRIVATE_KEY", "")  # Contents of .p8 file
+    
+    # OAuth Helper Properties
+    @property
+    def is_google_configured(self) -> bool:
+        return bool(self.GOOGLE_CLIENT_ID)
+    
+    @property
+    def is_apple_configured(self) -> bool:
+        return bool(self.APPLE_CLIENT_ID and self.APPLE_TEAM_ID and self.APPLE_KEY_ID)
 
 settings = Settings() 

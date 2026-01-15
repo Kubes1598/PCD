@@ -115,7 +115,7 @@ class InMemoryDatabaseService(BaseDatabaseService):
     
     async def create_user(self, user_data: Dict[str, Any]) -> str:
         uid = user_data["id"]
-        self.players[user_data["username"]] = user_data # Using username as key for simplicity in mock
+        self.players[user_data["name"]] = user_data  # Using name as key (matches auth.py)
         return uid
     
     async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
@@ -126,11 +126,23 @@ class InMemoryDatabaseService(BaseDatabaseService):
 
 class SupabaseService(BaseDatabaseService):
     def __init__(self):
-        self.supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
-        print("🟢 Using Supabase database")
+        # Public client (anon key) - respects RLS policies
+        self.supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
+        
+        # Admin client (service key) - for trusted operations that need to bypass RLS
+        # Used for: balance updates, transaction logging, admin operations
+        if settings.SUPABASE_SERVICE_KEY:
+            self.supabase_admin = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
+            print("🟢 Using Supabase database (dual-client mode)")
+        else:
+            self.supabase_admin = self.supabase
+            print("🟡 Using Supabase database (single-client mode - service key not configured)")
 
     async def create_game(self, game_data: Dict[str, Any]) -> str:
-        res = self.supabase.table("games").insert({**game_data, "game_state": json.dumps(game_data["game_state"])}).execute()
+        # Strip columns that might be missing in older schemas
+        clean_data = {k: v for k, v in game_data.items() if k != "city"}
+        # Use admin client to bypass RLS for game creation
+        res = self.supabase_admin.table("games").insert({**clean_data, "game_state": json.dumps(game_data["game_state"])}).execute()
         return res.data[0]["id"]
 
     async def get_game(self, game_id: str) -> Optional[Dict[str, Any]]:
@@ -142,11 +154,34 @@ class SupabaseService(BaseDatabaseService):
         return None
 
     async def update_game(self, game_id: str, game_data: Dict[str, Any]) -> bool:
-        res = self.supabase.table("games").update({**game_data, "game_state": json.dumps(game_data["game_state"])}).eq("id", game_id).execute()
+        # Strip columns that might be missing in older schemas
+        clean_data = {k: v for k, v in game_data.items() if k != "city"}
+        payload = {**clean_data}
+        if "game_state" in game_data:
+            payload["game_state"] = json.dumps(game_data["game_state"])
+            
+        res = self.supabase.table("games").update(payload).eq("id", game_id).execute()
         return len(res.data) > 0
 
-    async def delete_game(self, game_id: str) -> bool:
-        res = self.supabase.table("games").delete().eq("id", game_id).execute()
+    async def delete_game(self, game_id: str, soft_delete: bool = True) -> bool:
+        """
+        Delete a game, either soft delete (set deleted_at) or hard delete.
+        
+        Args:
+            game_id: The game ID to delete
+            soft_delete: If True, marks deleted_at instead of removing (default: True)
+            
+        Returns:
+            bool: True if successful
+        """
+        if soft_delete:
+            # Soft delete - just mark as deleted
+            res = self.supabase_admin.table("games").update({
+                "deleted_at": datetime.now(timezone.utc).isoformat()
+            }).eq("id", game_id).execute()
+        else:
+            # Hard delete - actually remove from database
+            res = self.supabase_admin.table("games").delete().eq("id", game_id).execute()
         return len(res.data) > 0
 
     async def get_player(self, player_name: str) -> Optional[Dict[str, Any]]:
@@ -170,28 +205,130 @@ class SupabaseService(BaseDatabaseService):
             
         return player
 
-    async def update_player_balance(self, player_name: str, coin_delta: int = 0, diamond_delta: int = 0) -> bool:
-        p = await self.get_player(player_name)
-        # Clear cache on update
+    async def update_player_balance(
+        self, 
+        player_name: str, 
+        coin_delta: int = 0, 
+        diamond_delta: int = 0,
+        transaction_type: str = "game_entry",
+        game_id: str = None,
+        arena_type: str = None,
+        description: str = None
+    ) -> bool:
+        """
+        Atomic balance update using Postgres SECURITY DEFINER function.
+        
+        This prevents race conditions by:
+        1. Locking the player row with FOR UPDATE
+        2. Validating balance constraints in a transaction
+        3. Creating transaction record atomically
+        
+        Args:
+            player_name: The player's username
+            coin_delta: Amount to add/subtract from coin balance
+            diamond_delta: Amount to add/subtract from diamond balance  
+            transaction_type: Type of transaction (game_entry, prize_payout, etc.)
+            game_id: Optional game ID for reference
+            arena_type: Optional arena type (dubai, cairo, oslo)
+            description: Optional transaction description
+            
+        Returns:
+            bool: True if update succeeded, False otherwise
+        """
         try:
-            r = await redis_client.connect()
-            await r.delete(f"pcd:player_cache:{player_name}")
-        except: pass
+            # Clear cache before update
+            try:
+                r = await redis_client.connect()
+                await r.delete(f"pcd:player_cache:{player_name}")
+            except: 
+                pass
 
-        if not p:
-            self.supabase.table("players").insert({"name": player_name, "coin_balance": 1000 + coin_delta, "diamonds_balance": 5 + diamond_delta}).execute()
-        else:
-            self.supabase.table("players").update({"coin_balance": p["coin_balance"] + coin_delta, "diamonds_balance": p["diamonds_balance"] + diamond_delta}).eq("name", player_name).execute()
-        return True
+            # First, get player ID (we need UUID for the function)
+            player = await self.get_player(player_name)
+            if not player:
+                # Create player if doesn't exist (first-time user)
+                try:
+                    self.supabase_admin.table("players").insert({
+                        "name": player_name, 
+                        "coin_balance": 10000 + coin_delta, 
+                        "diamonds_balance": 500 + diamond_delta
+                    }).execute()
+                    print(f"✅ Created new player: {player_name}")
+                    return True
+                except Exception as e:
+                    print(f"❌ Failed to create player {player_name}: {e}")
+                    return False
+            
+            player_id = player.get("id")
+            if not player_id:
+                print(f"❌ Player {player_name} has no ID")
+                return False
+            
+            # Call atomic balance update function via service client
+            result = self.supabase_admin.rpc("update_player_balance_atomic", {
+                "p_player_id": player_id,
+                "p_coin_delta": coin_delta,
+                "p_diamond_delta": diamond_delta,
+                "p_transaction_type": transaction_type,
+                "p_game_id": game_id,
+                "p_arena_type": arena_type,
+                "p_description": description
+            }).execute()
+            
+            if result.data and result.data.get("success"):
+                print(f"✅ Balance updated for {player_name}: {coin_delta:+d} coins, {diamond_delta:+d} diamonds")
+                return True
+            else:
+                error = result.data.get("error", "Unknown error") if result.data else "No response"
+                print(f"❌ Balance update failed for {player_name}: {error}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Database error updating balance for {player_name}: {e}")
+            # Fallback to legacy method if RPC not available
+            return await self._legacy_balance_update(player_name, coin_delta, diamond_delta)
+    
+    async def _legacy_balance_update(self, player_name: str, coin_delta: int, diamond_delta: int) -> bool:
+        """Fallback balance update for when atomic function is not available."""
+        try:
+            p = await self.get_player(player_name)
+            if not p:
+                return False
+                
+            new_coins = p["coin_balance"] + coin_delta
+            new_diamonds = p["diamonds_balance"] + diamond_delta
+            
+            if new_coins < 0:
+                print(f"❌ Legacy balance update denied: {player_name} would have negative balance")
+                return False
+
+            res = self.supabase_admin.table("players").update({
+                "coin_balance": new_coins, 
+                "diamonds_balance": new_diamonds
+            }).eq("name", player_name).execute()
+            
+            return len(res.data) > 0
+        except Exception as e:
+            print(f"❌ Legacy balance update failed for {player_name}: {e}")
+            return False
 
     async def update_player_stats(self, player_name: str, won: bool) -> bool:
-        p = await self.get_player(player_name)
-        if p:
-            wins = p["games_won"] + (1 if won else 0)
-            rank = calculate_rank_info(wins, p.get("stars", 0))
-            self.supabase.table("players").update({"games_played": p["games_played"] + 1, "games_won": wins, "rank": rank["rank"], "tier": rank["tier"]}).eq("name", player_name).execute()
-            return True
-        return False
+        try:
+            p = await self.get_player(player_name)
+            if p:
+                wins = p["games_won"] + (1 if won else 0)
+                rank = calculate_rank_info(wins, p.get("stars", 0))
+                self.supabase.table("players").update({
+                    "games_played": p["games_played"] + 1, 
+                    "games_won": wins, 
+                    "rank": rank["rank"], 
+                    "tier": rank["tier"]
+                }).eq("name", player_name).execute()
+                return True
+            return False
+        except Exception as e:
+            print(f"❌ Database error updating stats for {player_name}: {e}")
+            return False
 
     async def get_leaderboard(self, sort_by: str = "wins", limit: int = 10) -> List[Dict[str, Any]]:
         # Check Cache
@@ -214,7 +351,17 @@ class SupabaseService(BaseDatabaseService):
 
     # Additional methods for compatibility
     async def get_game_stats(self): return {"total_games": 0}
-    async def create_transaction(self, data): self.supabase.table("coin_transactions").insert(data).execute(); return str(uuid.uuid4())
+    async def create_transaction(self, data: Dict[str, Any]) -> str:
+        # Map 'type' to 'transaction_type' for database column
+        clean_data = {k: v for k, v in data.items() if k not in ["city"]}
+        if "type" in clean_data:
+            clean_data["transaction_type"] = clean_data.pop("type")
+        try:
+            res = self.supabase_admin.table("coin_transactions").insert(clean_data).execute()
+            return res.data[0]["id"] if res.data else str(uuid.uuid4())
+        except Exception as e:
+            print(f"⚠️ Transaction log failed: {e}")
+            return str(uuid.uuid4())
     async def get_player_by_profile_id(self, pid):
         res = self.supabase.table("players").select("*").eq("profile_id", pid).execute()
         return res.data[0] if res.data else None
@@ -229,7 +376,7 @@ class SupabaseService(BaseDatabaseService):
     async def create_user(self, user_data: Dict[str, Any]) -> str:
         # Note: In production Supabase, users are usually in auth.users, but for 
         # this game's public profile, we store meta in public.players
-        res = self.supabase.table("players").upsert(user_data).execute()
+        res = self.supabase_admin.table("players").upsert(user_data).execute()
         return res.data[0]["id"]
 
     async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:

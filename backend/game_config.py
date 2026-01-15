@@ -11,23 +11,32 @@ CANDY_COUNT = 12    # Each player has 12 candies (4x3 grid)
 
 # City/Arena Configuration
 CITY_CONFIG = {
-    "dubai": {
+    "Dubai": {
         "entry_fee": 500,
         "prize_amount": 900,
         "turn_timer": 30,
         "difficulty": "easy",
+        "entryFee": 500,
+        "prizeAmount": 900,
+        "turnTimer": 30,
     },
-    "cairo": {
+    "Cairo": {
         "entry_fee": 1000,
         "prize_amount": 1800,
         "turn_timer": 20,
         "difficulty": "medium",
+        "entryFee": 1000,
+        "prizeAmount": 1800,
+        "turnTimer": 20,
     },
-    "oslo": {
+    "Oslo": {
         "entry_fee": 5000,
         "prize_amount": 9000,
         "turn_timer": 10,
         "difficulty": "hard",
+        "entryFee": 5000,
+        "prizeAmount": 9000,
+        "turnTimer": 10,
     },
 }
 

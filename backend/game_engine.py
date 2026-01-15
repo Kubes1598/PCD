@@ -47,6 +47,8 @@ class Player:
     collected_candies: List[str] = field(default_factory=list)
     # Poison choice from their own candy pool
     poison_choice: Optional[str] = None
+    # Track timeouts for the "Three-Strike" rule
+    timeout_count: int = 0
 
 
 @dataclass
@@ -412,6 +414,91 @@ class PoisonedCandyDuel:
                     })
                     print(f"💾 Checkpointed game {game_id} to database (Move {move_count})")
         return result
+
+    def handle_timeout(self, game_id: str, player_id: str) -> Dict[str, Any]:
+        """Handle turn timeout by advancing the turn or auto-setup authoritatively."""
+        if game_id not in self.games:
+            return {"success": False, "error": "Game not found"}
+        
+        game = self.games[game_id]
+        
+        # Determine whose "turn" or "action" it is
+        if game.state == GameState.SETUP:
+            # SETUP/POISON PHASE TIMEOUT
+            target_player = game.player1 if game.player1.id == player_id else (game.player2 if game.player2.id == player_id else None)
+            if not target_player: 
+                 return {"success": False, "error": "Player not in game"}
+
+            # If player already set poison, timeout is irrelevant (or maybe waiting for opponent)
+            if target_player.poison_choice:
+                return {"success": False, "error": "Player already set poison"}
+            
+            opponent = game.player2 if target_player == game.player1 else game.player1
+            
+            if opponent.poison_choice:
+                # Opponent was ready, I wasn't -> I FORFEIT
+                print(f"💀 Setup Timeout: {target_player.name} forfeited (Opponent was ready)")
+                game.state = GameState.FINISHED
+                game.result = (
+                    GameResult.PLAYER2_WIN if target_player == game.player1 
+                    else GameResult.PLAYER1_WIN
+                )
+                game.last_updated = time.time()
+                return {
+                    "success": True, 
+                    "type": "timeout_forfeit", 
+                    "player_id": player_id,
+                    "game_state": self._get_game_state(game)
+                }
+            else:
+                # Neither player was ready -> CANCEL GAME + REFUND
+                print(f"🛑 Setup Timeout: Both players idle. Cancelling game {game_id}")
+                game.state = GameState.FINISHED
+                game.result = GameResult.ONGOING # Special marker, or handled via type
+                # We need to mark it as cancelled for the manager to know to refund
+                
+                return {
+                    "success": True, 
+                    "type": "game_cancelled", 
+                    "player_id": player_id,
+                    "game_state": self._get_game_state(game)
+                }
+
+        elif game.state == GameState.PLAYING:
+            expected_player = (game.player1 if game.current_turn % 2 == 1 else game.player2)
+            if expected_player.id != player_id:
+                return {"success": False, "error": "Not your turn to timeout"}
+
+            print(f"💀 {expected_player.name} forfeited by timeout in game {game_id}!")
+            game.state = GameState.FINISHED
+            game.result = (
+                GameResult.PLAYER2_WIN if expected_player == game.player1 
+                else GameResult.PLAYER1_WIN
+            )
+            game.last_updated = time.time()
+            
+            return {
+                "success": True,
+                "type": "timeout_forfeit",
+                "player_id": player_id,
+                "game_state": self._get_game_state(game)
+            }
+        
+        return {"success": False, "error": "Invalid state for timeout"}
+
+    async def handle_timeout_persistent(self, game_id: str, player_id: str, db_service: Any) -> Dict[str, Any]:
+        """Handle timeout and persist state."""
+        result = self.handle_timeout(game_id, player_id)
+        if result.get("success"):
+            game_state = result["game_state"]
+            try:
+                r = await redis_client.connect()
+                await r.setex(f"pcd:hot_game:{game_id}", 3600, json.dumps(game_state))
+            except: pass
+            
+            if db_service:
+                await db_service.update_game(game_id, {"game_state": game_state})
+        return result
     
     def _check_game_end(
         self, 
@@ -475,9 +562,10 @@ class PoisonedCandyDuel:
                 "owned_candies": sorted(list(game.player1.owned_candies)),  # TOP GRID (12 candies)
                 "collected_candies": game.player1.collected_candies,
                 "candy_count": len(game.player1.collected_candies),
-                "available_to_pick": sorted(list(player1_can_pick_from)),  # Can pick from Player 2's owned
+                "available_to_pick": sorted(list(player1_can_pick_from)) if game.state != GameState.SETUP else [],  # Hidden during SETUP
                 "has_set_poison": game.player1.poison_choice is not None,
-                "remaining_owned": sorted(list(game.player1.owned_candies - all_collected))  # What's left of Player 1's owned
+                "remaining_owned": sorted(list(game.player1.owned_candies - all_collected)),  # What's left of Player 1's owned
+                "timeout_count": game.player1.timeout_count
             },
             "player2": {
                 "id": game.player2.id,
@@ -485,9 +573,10 @@ class PoisonedCandyDuel:
                 "owned_candies": sorted(list(game.player2.owned_candies)),  # BOTTOM GRID (12 candies)
                 "collected_candies": game.player2.collected_candies,
                 "candy_count": len(game.player2.collected_candies),
-                "available_to_pick": sorted(list(player2_can_pick_from)),  # Can pick from Player 1's owned
+                "available_to_pick": sorted(list(player2_can_pick_from)) if game.state != GameState.SETUP else [],  # Hidden during SETUP
                 "has_set_poison": game.player2.poison_choice is not None,
-                "remaining_owned": sorted(list(game.player2.owned_candies - all_collected))  # What's left of Player 2's owned
+                "remaining_owned": sorted(list(game.player2.owned_candies - all_collected)),  # What's left of Player 2's owned
+                "timeout_count": game.player2.timeout_count
             },
             "current_player": (
                 game.player1.id if game.current_turn % 2 == 1 

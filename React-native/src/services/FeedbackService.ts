@@ -1,38 +1,39 @@
 // This service handles haptic feedback and sound effects with graceful fallbacks.
-import ReactNativeHapticFeedback from "react-native-haptic-feedback";
+import * as Haptics from 'expo-haptics';
+import { Platform } from 'react-native';
 
-let Audio: any = null;
-
+// Optional: check if Audio is available from expo-av
+let Audio: any;
 try {
     Audio = require('expo-av').Audio;
-} catch (e) {
-    console.log('🔊 Audio not available');
-}
-
-const hapticOptions = {
-    enableVibrateFallback: true,
-    ignoreAndroidSystemSettings: false,
-};
+} catch (e) { }
 
 export const feedbackService = {
     triggerSelection() {
-        ReactNativeHapticFeedback.trigger("selection", hapticOptions);
+        if (Platform.OS === 'web') return;
+        Haptics.selectionAsync();
     },
 
     triggerSuccess() {
-        ReactNativeHapticFeedback.trigger("notificationSuccess", hapticOptions);
+        if (Platform.OS === 'web') return;
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        this.playSound('win');
     },
 
     triggerError() {
-        ReactNativeHapticFeedback.trigger("notificationError", hapticOptions);
+        if (Platform.OS === 'web') return;
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        this.playSound('lose');
     },
 
     triggerImpact() {
-        ReactNativeHapticFeedback.trigger("impactMedium", hapticOptions);
+        if (Platform.OS === 'web') return;
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     },
 
     triggerTick() {
-        ReactNativeHapticFeedback.trigger("impactLight", hapticOptions);
+        if (Platform.OS === 'web') return;
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         this.playSound('tick');
     },
 

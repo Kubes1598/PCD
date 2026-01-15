@@ -37,11 +37,12 @@ const ServerStatusBadge = () => {
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     const { user, isGuest } = useAuth();
-    const { initGame, isSearching, startSearching, stopSearching, queuePosition, totalWaiting, gameId, matchFound } = useGame();
+    const { initGame, isSearching, startSearching, stopSearching, queuePosition, totalWaiting, gameId, matchFound, clearMatchFound } = useGame();
     const { coins, diamonds, claimDailyReward, canClaimDailyReward } = useCurrencyStore();
     const [reward, setReward] = React.useState<{ coins: number, diamonds: number, nextStage: number, cycleCompleted: boolean } | null>(null);
     const [showArenaSelection, setShowArenaSelection] = React.useState(false);
     const [showDifficultySelection, setShowDifficultySelection] = React.useState(false);
+    const [showGuestSignupModal, setShowGuestSignupModal] = React.useState(false);
     const [stats, setStats] = React.useState<any>(null);
 
     useEffect(() => {
@@ -62,11 +63,17 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         }
     };
 
+    // Auto-navigate to game after match is found with a brief delay
     useEffect(() => {
-        if (gameId && !isSearching) {
-            navigation.navigate('Game');
+        if (matchFound && gameId) {
+            // Show "MATCH FOUND!" for 1.5s then navigate to game
+            const timeout = setTimeout(() => {
+                clearMatchFound(); // Clear the modal state
+                navigation.navigate('Game');
+            }, 1500);
+            return () => clearTimeout(timeout);
         }
-    }, [gameId, isSearching]);
+    }, [matchFound, gameId]);
 
     const handleStartGame = async (mode: 'ai' | 'online' | 'offline', difficulty?: 'easy' | 'medium' | 'hard', arena?: 'Dubai' | 'Cairo' | 'Oslo') => {
         const fees = { easy: 0, medium: 100, hard: 250, online: 500, Dubai: 500, Cairo: 1000, Oslo: 5000 };
@@ -296,11 +303,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                         />
                         <Globe color={matchFound ? THEME.colors.success : "#6366F1"} size={moderateScale(64)} />
                         <Text style={styles.modalTitle}>
-                            {matchFound ? "MATCH FOUND!" : "MATCHMAKING"}
+                            {matchFound ? "🎮 MATCH FOUND!" : "MATCHMAKING"}
                         </Text>
                         <Text style={styles.modalText}>
                             {matchFound
-                                ? "Initializing arena... prepare to duel!"
+                                ? "Entering arena... Get ready to pick your poison!"
                                 : `Position: ${queuePosition} • Online: ${totalWaiting}`}
                         </Text>
                         <ActivityIndicator
@@ -364,6 +371,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                                 </TouchableOpacity>
                             ))}
                         </View>
+
+                        <TouchableOpacity
+                            style={{ marginTop: spacing.lg, padding: spacing.md, alignItems: 'center' }}
+                            onPress={() => setShowDifficultySelection(false)}
+                        >
+                            <Text style={{ color: '#94A3B8', fontSize: moderateScale(14), fontWeight: '600' }}>CANCEL</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
@@ -454,6 +468,51 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                                 </TouchableOpacity>
                             ))}
                         </View>
+
+                        <TouchableOpacity
+                            style={{ marginTop: spacing.lg, padding: spacing.md, alignItems: 'center' }}
+                            onPress={() => setShowArenaSelection(false)}
+                        >
+                            <Text style={{ color: '#94A3B8', fontSize: moderateScale(14), fontWeight: '600' }}>CANCEL</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Guest Signup Prompt Modal */}
+            <Modal visible={showGuestSignupModal} transparent={true} animationType="slide">
+                <View style={styles.overlay}>
+                    <View style={styles.modal}>
+                        <LinearGradient
+                            colors={['#1E293B', '#0F172A'] as any}
+                            style={StyleSheet.absoluteFill}
+                        />
+                        <View style={[styles.premiumCardIcon, { backgroundColor: 'rgba(99, 102, 241, 0.2)', marginBottom: spacing.lg }]}>
+                            <UserPlus color="#6366F1" size={moderateScale(32)} />
+                        </View>
+
+                        <Text style={styles.modalTitle}>PLAY ONLINE</Text>
+                        <Text style={[styles.modalText, { textAlign: 'center', marginBottom: spacing.xl }]}>
+                            Create an account to battle worldwide!{"\n\n"}
+                            We'll save your <Text style={{ fontWeight: 'bold', color: '#F59E0B' }}>{coins} Coins</Text> and <Text style={{ fontWeight: 'bold', color: '#06B6D4' }}>{diamonds} Diamonds</Text> to your new account.
+                        </Text>
+
+                        <TouchableOpacity
+                            style={[styles.battleCta, { backgroundColor: '#6366F1', width: '100%', paddingVertical: spacing.md, alignItems: 'center' }]}
+                            onPress={() => {
+                                setShowGuestSignupModal(false);
+                                navigation.navigate('Auth', { initialCoins: coins, initialDiamonds: diamonds });
+                            }}
+                        >
+                            <Text style={[styles.ctaText, { color: '#FFF', fontSize: moderateScale(16) }]}>CREATE ACCOUNT</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={{ marginTop: spacing.lg }}
+                            onPress={() => setShowGuestSignupModal(false)}
+                        >
+                            <Text style={{ color: '#94A3B8', fontSize: moderateScale(14) }}>Maybe Later</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>

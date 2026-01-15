@@ -12,7 +12,7 @@ interface GameResultModalProps {
     onRematch: () => void;
     score: number;
     reward?: number;
-    winReason?: 'poison' | 'collection' | 'timeout' | 'disconnect' | null;
+    winReason?: 'poison' | 'collection' | 'timeout' | 'disconnect' | 'cancelled' | null;
 }
 
 const GameResultModal: React.FC<GameResultModalProps> = ({ visible, winner, onHome, onRematch, score, reward, winReason }) => {
@@ -43,6 +43,7 @@ const GameResultModal: React.FC<GameResultModalProps> = ({ visible, winner, onHo
     }, [visible]);
 
     const getStatusColor = () => {
+        if (winReason === 'cancelled') return THEME.colors.gray600;
         if (isWin) return THEME.colors.success;
         if (isDraw) return THEME.colors.warning;
         return THEME.colors.danger;
@@ -50,33 +51,39 @@ const GameResultModal: React.FC<GameResultModalProps> = ({ visible, winner, onHo
 
     const getStatusIcon = () => {
         const iconSize = scale(48);
+        if (winReason === 'cancelled') return <RefreshCw color={THEME.colors.white} size={iconSize} />; // Reuse icon or similar
         if (isWin) return <Trophy color={THEME.colors.white} size={iconSize} />;
         if (isDraw) return <RefreshCw color={THEME.colors.white} size={iconSize} />;
         return <Frown color={THEME.colors.white} size={iconSize} />;
     };
 
     const getStatusTitle = () => {
+        if (winReason === 'cancelled') return 'CANCELLED';
         if (isDraw) return 'DRAW';
         if (isWin) {
             if (winReason === 'poison') return 'POISONED!';
+            if (winReason === 'timeout') return 'TIMEOUT!';
             return 'VICTORY!';
         }
         if (winReason === 'poison') return 'ELIMINATED!';
+        if (winReason === 'timeout') return 'TIME UP!';
         return 'DEFEAT';
     };
 
     const getStatusSubtitle = () => {
+        if (winReason === 'cancelled') return "Game was cancelled. Coins refunded.";
+
         if (isWin) {
-            if (winReason === 'poison') return "Got 'em! They picked your poison candy!";
-            if (winReason === 'timeout') return "Opponent timed out! Victory is yours.";
+            if (winReason === 'poison') return "Opponent ate your poison! You win!";
+            if (winReason === 'timeout') return "Opponent ran out of time!";
             if (winReason === 'disconnect') return "Opponent disconnected. You win!";
             return `Amazing! You collected ${score} candies!`;
         }
         if (isDraw) return "It's a draw! Both players reached 11!";
 
         // Defeat cases
-        if (winReason === 'poison') return "Oh no! You picked the poison candy!";
-        if (winReason === 'timeout') return "Time's up! You ran out of time.";
+        if (winReason === 'poison') return "You ate the poison candy!";
+        if (winReason === 'timeout') return "You ran out of time!";
         return `Better luck next time! You got ${score} candies.`;
     };
 

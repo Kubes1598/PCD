@@ -1,40 +1,151 @@
-import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, Image, Alert, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Mail, Lock, User, LogIn, UserPlus } from 'lucide-react-native';
+import { Mail, Lock, User, LogIn, UserPlus, Smartphone } from 'lucide-react-native';
 import ScreenContainer from '../components/layout/ScreenContainer';
 import { useAuth } from '../hooks/useAuth';
 import { feedbackService } from '../services/FeedbackService';
+import { apiService } from '../services/api';
 import { scale, moderateScale, spacing, radii, SCREEN_WIDTH, isSmallDevice } from '../utils/responsive';
 
 type AuthScreenProps = {
     navigation: any;
 };
 
-const AuthScreen: React.FC<AuthScreenProps> = ({ navigation }) => {
-    const { login, register, continueAsGuest, isLoading } = useAuth();
-    const [isLogin, setIsLogin] = React.useState(true);
-    const [email, setEmail] = React.useState('');
-    const [password, setPassword] = React.useState('');
-    const [username, setUsername] = React.useState('');
+const AuthScreen: React.FC<AuthScreenProps> = ({ navigation, route }: any) => {
+    const { login, register, loginWithGoogle, loginWithApple, guestLogin, isLoading } = useAuth();
+    const [isLogin, setIsLogin] = useState(true);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [username, setUsername] = useState('');
+    const [oauthStatus, setOauthStatus] = useState({ google: false, apple: false });
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleSubmit = async () => {
-        feedbackService.triggerSelection();
-        let result;
-        if (isLogin) {
-            result = await login(email, password);
-        } else {
-            result = await register(email, password, username);
+    // Check for migration params
+    const initialCoins = route?.params?.initialCoins;
+    const initialDiamonds = route?.params?.initialDiamonds;
+
+    useEffect(() => {
+        if (initialCoins !== undefined) {
+            setIsLogin(false);
         }
 
-        if (result.success) {
-            feedbackService.triggerSuccess();
-            navigation.navigate('App');
-        } else {
-            feedbackService.triggerError();
-            alert(result.message);
+        // Check which OAuth providers are available
+        checkOAuthStatus();
+    }, [initialCoins]);
+
+    const checkOAuthStatus = async () => {
+        try {
+            const result = await apiService.getOAuthStatus();
+            if (result.success && result.data) {
+                setOauthStatus({
+                    google: result.data.google,
+                    apple: result.data.apple
+                });
+            }
+        } catch (error) {
+            console.log('OAuth status check failed, using defaults');
         }
     };
+
+    const handleSubmit = async () => {
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        feedbackService.triggerSelection();
+
+        try {
+            let result;
+            if (isLogin) {
+                result = await login(email, password);
+            } else {
+                result = await register(email, password, username, initialCoins, initialDiamonds);
+            }
+
+            if (result.success) {
+                feedbackService.triggerSuccess();
+                navigation.navigate('App');
+            } else {
+                feedbackService.triggerError();
+                Alert.alert('Error', result.message || 'Authentication failed');
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleGoogleSignIn = async () => {
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        feedbackService.triggerSelection();
+
+        try {
+            // NOTE: In production, you would use Google Sign-In SDK here:
+            // import { GoogleSignin } from '@react-native-google-signin/google-signin';
+            // const { idToken } = await GoogleSignin.signIn();
+            // const result = await loginWithGoogle(idToken);
+
+            // For now, show "not configured" message
+            Alert.alert(
+                'Google Sign-In',
+                'Google Sign-In is not configured yet.\n\nTo enable it:\n1. Create a Google Cloud project\n2. Add your OAuth Client ID to the backend .env file\n3. Install @react-native-google-signin/google-signin',
+                [{ text: 'OK' }]
+            );
+        } catch (error: any) {
+            feedbackService.triggerError();
+            Alert.alert('Error', error.message || 'Google sign-in failed');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleAppleSignIn = async () => {
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        feedbackService.triggerSelection();
+
+        try {
+            // NOTE: In production, you would use Apple Authentication here:
+            // import * as AppleAuthentication from 'expo-apple-authentication';
+            // const credential = await AppleAuthentication.signInAsync({...});
+            // const result = await loginWithApple(credential.identityToken, credential.authorizationCode, credential.fullName);
+
+            // For now, show "not configured" message
+            Alert.alert(
+                'Apple Sign-In',
+                'Apple Sign-In is not configured yet.\n\nTo enable it:\n1. Enroll in Apple Developer Program\n2. Configure Sign in with Apple\n3. Add your credentials to the backend .env file',
+                [{ text: 'OK' }]
+            );
+        } catch (error: any) {
+            feedbackService.triggerError();
+            Alert.alert('Error', error.message || 'Apple sign-in failed');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleGuestLogin = async () => {
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        feedbackService.triggerSelection();
+
+        try {
+            const result = await guestLogin();
+            if (result.success) {
+                feedbackService.triggerSuccess();
+                navigation.navigate('App');
+            } else {
+                feedbackService.triggerError();
+                Alert.alert('Error', result.message || 'Guest login failed');
+            }
+        } catch (error: any) {
+            feedbackService.triggerError();
+            Alert.alert('Error', error.message || 'Guest login failed');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const isButtonDisabled = isLoading || isSubmitting;
 
     return (
         <ScreenContainer withGradient={false} statusBarStyle="light" withBackButton>
@@ -134,41 +245,73 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ navigation }) => {
 
                         {/* Submit Button */}
                         <TouchableOpacity
-                            style={styles.submitButton}
+                            style={[styles.submitButton, isButtonDisabled && styles.submitButtonDisabled]}
                             onPress={handleSubmit}
-                            disabled={isLoading}
+                            disabled={isButtonDisabled}
                             activeOpacity={0.8}
                         >
                             <LinearGradient
-                                colors={['#6366F1', '#4F46E5'] as any}
+                                colors={isButtonDisabled ? ['#475569', '#374151'] : ['#6366F1', '#4F46E5']}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 0 }}
                                 style={styles.submitGradient}
                             >
-                                <Text style={styles.submitText}>
-                                    {isLogin ? 'LOGIN' : 'CREATE ACCOUNT'}
-                                </Text>
+                                {isSubmitting ? (
+                                    <ActivityIndicator color="#FFF" />
+                                ) : (
+                                    <Text style={styles.submitText}>
+                                        {isLogin ? 'LOGIN' : 'CREATE ACCOUNT'}
+                                    </Text>
+                                )}
                             </LinearGradient>
                         </TouchableOpacity>
 
                         {/* Divider */}
                         <View style={styles.divider}>
                             <View style={styles.dividerLine} />
-                            <Text style={styles.dividerText}>or</Text>
+                            <Text style={styles.dividerText}>or continue with</Text>
                             <View style={styles.dividerLine} />
+                        </View>
+
+                        {/* OAuth Buttons */}
+                        <View style={styles.oauthContainer}>
+                            {/* Google Sign-In */}
+                            <TouchableOpacity
+                                style={[styles.oauthButton, styles.googleButton]}
+                                onPress={handleGoogleSignIn}
+                                disabled={isButtonDisabled}
+                            >
+                                <Text style={styles.googleIcon}>G</Text>
+                                <Text style={styles.oauthText}>Google</Text>
+                            </TouchableOpacity>
+
+                            {/* Apple Sign-In (iOS only) */}
+                            {Platform.OS === 'ios' && (
+                                <TouchableOpacity
+                                    style={[styles.oauthButton, styles.appleButton]}
+                                    onPress={handleAppleSignIn}
+                                    disabled={isButtonDisabled}
+                                >
+                                    <Text style={styles.appleIcon}></Text>
+                                    <Text style={styles.appleText}>Apple</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
 
                         {/* Guest Button */}
                         <TouchableOpacity
                             style={styles.guestButton}
-                            onPress={() => {
-                                feedbackService.triggerSelection();
-                                continueAsGuest();
-                                navigation.navigate('App');
-                            }}
+                            onPress={handleGuestLogin}
+                            disabled={isButtonDisabled}
                         >
+                            <Smartphone color="#6366F1" size={moderateScale(18)} />
                             <Text style={styles.guestText}>Continue as Guest</Text>
                         </TouchableOpacity>
+
+                        {/* Guest Info */}
+                        <Text style={styles.guestInfo}>
+                            Guests can play online & see rankings,{'\n'}but quests require an account.
+                        </Text>
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -263,6 +406,9 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         marginTop: spacing.sm,
     },
+    submitButtonDisabled: {
+        opacity: 0.7,
+    },
     submitGradient: {
         paddingVertical: spacing.md,
         alignItems: 'center',
@@ -286,16 +432,64 @@ const styles = StyleSheet.create({
     dividerText: {
         color: '#64748B',
         paddingHorizontal: spacing.md,
+        fontSize: moderateScale(12),
+    },
+    oauthContainer: {
+        flexDirection: 'row',
+        gap: spacing.md,
+        marginBottom: spacing.md,
+    },
+    oauthButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: spacing.sm,
+        borderRadius: radii.md,
+        gap: spacing.xs,
+    },
+    googleButton: {
+        backgroundColor: '#FFFFFF',
+    },
+    googleIcon: {
+        fontSize: moderateScale(18),
+        fontWeight: '700',
+        color: '#4285F4',
+    },
+    oauthText: {
         fontSize: moderateScale(14),
+        fontWeight: '600',
+        color: '#1F2937',
+    },
+    appleButton: {
+        backgroundColor: '#000000',
+    },
+    appleIcon: {
+        fontSize: moderateScale(18),
+        color: '#FFFFFF',
+    },
+    appleText: {
+        fontSize: moderateScale(14),
+        fontWeight: '600',
+        color: '#FFFFFF',
     },
     guestButton: {
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         paddingVertical: spacing.md,
+        gap: spacing.xs,
     },
     guestText: {
         color: '#6366F1',
         fontSize: moderateScale(16),
         fontWeight: '600',
+    },
+    guestInfo: {
+        color: '#64748B',
+        fontSize: moderateScale(11),
+        textAlign: 'center',
+        marginTop: spacing.xs,
     },
 });
 

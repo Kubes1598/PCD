@@ -20,11 +20,11 @@ async def health_check(game_engine=Depends(get_game_engine), db_service=Depends(
             "supabase_connected": True
         }
     except Exception as e:
+        # Don't expose error details in production
         return {
             "status": "degraded",
             "active_games": len(game_engine.games),
-            "supabase_connected": False,
-            "error": str(e)
+            "supabase_connected": False
         }
 
 @router.get("/api/time")
