@@ -46,20 +46,34 @@ async def matchmaking_websocket(
     """
     WebSocket endpoint for city-specific matchmaking and game communication.
     
-    Security measures:
-    - Player ID validation
-    - Message size limits
-    - Message type validation
-    - JSON parsing error handling
+    SECURITY MEASURES:
+    - JWT Authentication: Extracted from token query parameter
+    - Identity Integrity: player_id is extracted from 'sub' claim
+    - Message size limits & JSON validation
     """
-    # Validate player_id format
-    if not player_id or len(player_id) > 100 or len(player_id) < 1:
-        await websocket.close(code=4001, reason="Invalid player ID")
+    # 1. AUTHENTICATION: Get token from query parameter
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=4001, reason="Authentication required")
         return
     
+    from utils.security import decode_token
+    payload = decode_token(token)
+    if not payload or not payload.get("sub"):
+         await websocket.close(code=4002, reason="Invalid or expired token")
+         return
+    
+    # Authoritative player_id from JWT
+    authenticated_player_id = payload["sub"]
+    
+    # Optional: Verify path player_id matches token sub for consistency
+    if player_id != authenticated_player_id:
+         await websocket.close(code=4003, reason="Identity mismatch")
+         return
+
     await websocket.accept()
-    await manager.connect(websocket, player_id)
-    logger.info(f"🔌 WebSocket connected: {player_id[:8]}...")
+    await manager.connect(websocket, authenticated_player_id)
+    logger.info(f"🔌 WebSocket connected & authenticated: {authenticated_player_id[:8]}...")
     
     try:
         while True:
@@ -95,6 +109,9 @@ async def matchmaking_websocket(
             # Handle queue operations
             if msg_type == "join_queue":
                 player_name = message.get("player_name", "Anonymous")
+                device_id = message.get("device_id", "unknown")
+                ip_address = websocket.client.host if websocket.client else "0.0.0.0"
+                
                 city_raw = message.get("city", "dubai")
                 city = city_raw.capitalize()  # Match new CITY_CONFIG format (Dubai, Cairo, Oslo)
                 
@@ -107,13 +124,13 @@ async def matchmaking_websocket(
                     }))
                     continue
                 
-                logger.info(f"👤 Player {player_name} joining {city} queue")
-                await matchmaking_queue.add_player(player_id, player_name, city, websocket)
+                logger.info(f"👤 Player {player_name} joining {city} queue (IP: {ip_address}, Device: {device_id})")
+                await matchmaking_queue.add_player(player_id, player_name, city, websocket, device_id, ip_address)
                 continue
                 
             elif msg_type == "leave_queue":
                 matchmaking_queue.remove_player(player_id)
-                manager.player_states[player_id] = "IDLE"
+                await manager.set_player_state(player_id, "IDLE")
                 await websocket.send_text(json.dumps({
                     "type": "queue_left",
                     "message": "Left matchmaking queue"
@@ -271,6 +288,36 @@ async def get_matchmaking_status(matchmaking_queue=Depends(get_matchmaking_queue
         "success": True,
         "message": "Matchmaking queue is active",
         "data": matchmaking_queue.get_queue_stats()
+    }
+
+
+@router.get("/queue-stats")
+async def get_queue_stats():
+    """
+    Get real-time player counts per city queue.
+    
+    Returns the number of players currently waiting in each city's matchmaking queue.
+    This allows the frontend to display online player counts before joining.
+    """
+    r = await redis_client.connect()
+    stats = {}
+    
+    for city in ["dubai", "cairo", "oslo"]:
+        queue_key = f"pcd:queue:{city}"
+        try:
+            count = await r.llen(queue_key)
+            stats[city] = {
+                "players_waiting": count,
+                "city_config": CITY_CONFIG.get(city.capitalize(), {})
+            }
+        except Exception as e:
+            logger.warning(f"Failed to get queue length for {city}: {e}")
+            stats[city] = {"players_waiting": 0, "city_config": {}}
+    
+    return {
+        "success": True,
+        "message": "Queue stats retrieved",
+        "data": stats
     }
 
 

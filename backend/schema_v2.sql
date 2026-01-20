@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS public.games (
     player1_name VARCHAR(100) NOT NULL,
     player2_name VARCHAR(100) NOT NULL,
     game_state JSONB NOT NULL,
+    p1_poison VARCHAR(50),  -- Secret choice
+    p2_poison VARCHAR(50),  -- Secret choice
     status VARCHAR(50) DEFAULT 'waiting_for_poison' CHECK (status IN (
         'waiting_for_poison', 
         'in_progress', 
@@ -324,7 +326,94 @@ $$;
 -- GRANT EXECUTE ON FUNCTION update_player_balance_atomic TO service_role;
 
 -- ============================================================================
--- SECTION 6: ROW LEVEL SECURITY POLICIES
+-- SECTION 6: ATOMIC DUEL INITIATION (MATCHMAKING)
+-- ============================================================================
+
+-- Function to handle both player fee deductions and game creation in one transaction
+-- This eliminates the need for manual rollbacks in Python
+CREATE OR REPLACE FUNCTION initiate_duel_atomic(
+    p_p1_id UUID,
+    p_p1_name TEXT,
+    p_p2_id UUID,
+    p_p2_name TEXT,
+    p_city TEXT,
+    p_fee BIGINT,
+    p_game_id UUID,
+    p_initial_state JSONB
+) RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_p1_bal BIGINT;
+    v_p2_bal BIGINT;
+BEGIN
+    -- 1. Lock both players in alphabetical order of ID to prevent deadlocks
+    IF p_p1_id < p_p2_id THEN
+        SELECT coin_balance INTO v_p1_bal FROM players WHERE id = p_p1_id FOR UPDATE;
+        SELECT coin_balance INTO v_p2_bal FROM players WHERE id = p_p2_id FOR UPDATE;
+    ELSE
+        SELECT coin_balance INTO v_p2_bal FROM players WHERE id = p_p2_id FOR UPDATE;
+        SELECT coin_balance INTO v_p1_bal FROM players WHERE id = p_p1_id FOR UPDATE;
+    END IF;
+
+    -- 2. Verify existence and balances
+    IF v_p1_bal IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Player 1 not found');
+    END IF;
+    IF v_p2_bal IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Player 2 not found');
+    END IF;
+
+    IF v_p1_bal < p_fee THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Player 1 insufficient funds', 'player_id', p_p1_id);
+    END IF;
+    IF v_p2_bal < p_fee THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Player 2 insufficient funds', 'player_id', p_p2_id);
+    END IF;
+
+    -- 3. Deduct fees
+    UPDATE players SET 
+        coin_balance = coin_balance - p_fee, 
+        total_coins_spent = total_coins_spent + p_fee,
+        last_active = NOW()
+    WHERE id = p_p1_id;
+    
+    UPDATE players SET 
+        coin_balance = coin_balance - p_fee, 
+        total_coins_spent = total_coins_spent + p_fee,
+        last_active = NOW()
+    WHERE id = p_p2_id;
+
+    -- 4. Log transactions
+    INSERT INTO coin_transactions (player_id, player_name, amount, transaction_type, arena_type, balance_after, description, game_id)
+    VALUES (p_p1_id, p_p1_name, -p_fee, 'game_entry', p_city, v_p1_bal - p_fee, 'Arena Match: ' || p_city, p_game_id);
+    
+    INSERT INTO coin_transactions (player_id, player_name, amount, transaction_type, arena_type, balance_after, description, game_id)
+    VALUES (p_p2_id, p_p2_name, -p_fee, 'game_entry', p_city, v_p2_bal - p_fee, 'Arena Match: ' || p_city, p_game_id);
+
+    -- 5. Create Game Record
+    -- Note: Poison is NULL initially, will be set during poison_selection phase
+    INSERT INTO games (id, player1_id, player2_id, player1_name, player2_name, game_state, status)
+    VALUES (p_game_id, p_p1_id, p_p2_id, p_p1_name, p_p2_name, p_initial_state, 'waiting_for_poison');
+
+    -- 6. Update Arena Stats
+    INSERT INTO arena_stats (arena_type, total_games, total_entry_fees, created_date)
+    VALUES (p_city, 1, p_fee * 2, CURRENT_DATE)
+    ON CONFLICT (arena_type, created_date) 
+    DO UPDATE SET
+        total_games = arena_stats.total_games + 1,
+        total_entry_fees = arena_stats.total_entry_fees + (p_fee * 2);
+
+    RETURN jsonb_build_object('success', true, 'game_id', p_game_id);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION initiate_duel_atomic TO service_role;
+
+-- ============================================================================
+-- SECTION 7: ROW LEVEL SECURITY POLICIES
 -- ============================================================================
 
 -- Enable RLS on all tables

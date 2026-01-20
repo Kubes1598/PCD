@@ -14,9 +14,14 @@ from dependencies import get_game_engine, get_db_service, get_matchmaking_queue
 from utils.security import get_current_user
 from schemas import (
     CreateGameRequest, SetPoisonRequest, PickCandyRequest,
-    CandySelectionRequest, GameStartRequest, GameResponse
+    CandySelectionRequest, GameStartRequest, GameResponse,
+    JoinMatchmakingRequest
 )
 from error_codes import ErrorCode, get_error_message
+from game_config import AI_CONFIG
+import uuid
+import random
+import logging
 
 router = APIRouter(prefix="/games", tags=["Gameplay"])
 logger = logging.getLogger(__name__)
@@ -56,12 +61,89 @@ async def create_game(
         )
 
 
+@router.post("/ai", response_model=GameResponse)
+async def create_ai_game(
+    difficulty: str = "easy",
+    game_engine=Depends(get_game_engine), 
+    db_service=Depends(get_db_service),
+    user: dict = Depends(get_current_user)
+):
+    """Create a new game against the AI authoritatively."""
+    try:
+        # 1. Get AI config for fees
+        diff_lower = difficulty.lower()
+        config = AI_CONFIG.get(diff_lower, AI_CONFIG["easy"])
+        fee = config.get("entry_fee", 0)
+        
+        # 2. Identity info
+        player_name = user.get("username", user.get("name", "Player"))
+        player_id = user.get("id")
+        ai_id = "computer_ai" # Reserved ID for AI
+        ai_name = "Computer"
+        
+        # 3. Generate engine state
+        game_id = str(uuid.uuid4())
+        initial_state = game_engine.generate_initial_state(player_name, ai_name, player_id, ai_id)
+        
+        # 3b. Authoritatively pre-select AI poison
+        ai_pool = initial_state["player2"]["owned_candies"]
+        ai_poison = random.choice(list(ai_pool))
+        
+        # 4. Atomic balance check & deduction (if fee > 0)
+        if fee > 0:
+            success = await db_service.update_player_balance(
+                player_name, -fee, 
+                transaction_type="game_entry", 
+                arena_type=f"ai_{diff_lower}",
+                game_id=game_id,
+                description=f"AI Duel Entry ({difficulty})"
+            )
+            if not success:
+                return GameResponse(success=False, message="Insufficient coins to start AI game.")
+
+        # 5. Persist to Database
+        await db_service.create_game({
+            "id": game_id,
+            "player1_id": player_id,
+            "player2_id": ai_id,
+            "player1_name": player_name,
+            "player2_name": ai_name,
+            "game_state": initial_state,
+            "p2_poison": ai_poison, # Set secret column
+            "status": "waiting_for_poison"
+        })
+        
+        # 6. Load in Active Engine
+        game_engine.load_game_from_data({
+            "id": game_id,
+            "game_state": initial_state,
+            "p2_poison": ai_poison
+        })
+        
+        # Sync the engine's internal state for Player 2
+        game_engine.set_poison_choice(game_id, ai_id, ai_poison)
+
+        logger.info(f"🤖 AI Game created: {game_id[:8]} for {player_name} (AI Poison: {ai_poison})")
+        
+        return GameResponse(
+            success=True,
+            message="AI Game created",
+            data={
+                "game_id": game_id, 
+                "game_state": game_engine.get_game_state(game_id),
+                "opponent_poison": ai_poison # Required for existing local AI logic
+            }
+        )
+    except Exception as e:
+        logger.error(f"AI Game creation error: {e}", exc_info=True)
+        return GameResponse(success=False, message="Failed to initialize AI session.")
 @router.post("/{game_id}/poison", response_model=GameResponse)
 async def set_poison(
     game_id: str, 
     request: SetPoisonRequest, 
     game_engine=Depends(get_game_engine), 
-    db_service=Depends(get_db_service)
+    db_service=Depends(get_db_service),
+    user: dict = Depends(get_current_user)
 ):
     """Set poison choice for a player."""
     try:
@@ -82,17 +164,25 @@ async def set_poison(
                 message=get_error_message(ErrorCode.GAME_NOT_FOUND)
             )
         
-        # Validate player is in this game
+        # SECURITY: Verify player ID from JWT matches request and is in this game
+        user_id = user.get("id")
         p1_id = game_state.get("player1", {}).get("id")
         p2_id = game_state.get("player2", {}).get("id")
-        if request.player_id not in [p1_id, p2_id]:
+        
+        if user_id != request.player_id:
+             return GameResponse(
+                success=False,
+                message="Operation not permitted: Identity mismatch."
+            )
+
+        if user_id not in [p1_id, p2_id]:
             return GameResponse(
                 success=False,
                 message=get_error_message(ErrorCode.PLAYER_NOT_IN_GAME)
             )
         
         success = await game_engine.set_poison_choice_persistent(
-            game_id, request.player_id, request.poison_candy, db_service
+            game_id, user_id, request.poison_candy, db_service
         )
         
         if not success:
@@ -109,7 +199,6 @@ async def set_poison(
             for p in ["player1", "player2"]:
                 player = game_state[p]
                 if player["name"] in ai_names and not player.get("has_set_poison"):
-                    import random
                     ai_poison = random.choice(list(player["owned_candies"]))
                     await game_engine.set_poison_choice_persistent(
                         game_id, player["id"], ai_poison, db_service
@@ -135,7 +224,8 @@ async def pick_candy(
     game_id: str, 
     request: PickCandyRequest, 
     game_engine=Depends(get_game_engine), 
-    db_service=Depends(get_db_service)
+    db_service=Depends(get_db_service),
+    user: dict = Depends(get_current_user)
 ):
     """Pick a candy from opponent's pool."""
     try:
@@ -146,16 +236,31 @@ async def pick_candy(
                 message=get_error_message(ErrorCode.GAME_NOT_FOUND)
             )
         
-        # Resolve player ID
-        player_id = request.player
-        if request.player == 'player1':
-            player_id = game_state["player1"]["id"]
-        elif request.player == 'player2':
-            player_id = game_state["player2"]["id"]
+        # Resolve player ID and SECURITY check
+        user_id = user.get("id")
+        p1_id = game_state["player1"]["id"]
+        p2_id = game_state["player2"]["id"]
+        
+        # Map convenience roles ('player1'/'player2') to actual IDs
+        target_player_id = request.player
+        if target_player_id == 'player1': target_player_id = p1_id
+        elif target_player_id == 'player2': target_player_id = p2_id
+
+        if user_id != target_player_id:
+            return GameResponse(
+                success=False,
+                message="Operation not permitted: Identity mismatch."
+            )
+
+        if user_id not in [p1_id, p2_id]:
+            return GameResponse(
+                success=False,
+                message=get_error_message(ErrorCode.PLAYER_NOT_IN_GAME)
+            )
         
         await game_engine.ensure_game_loaded(game_id, db_service)
         result = await game_engine.make_move_persistent(
-            game_id, player_id, request.candy_choice, db_service
+            game_id, user_id, request.candy_choice, db_service
         )
         
         if not result.get("success", False):

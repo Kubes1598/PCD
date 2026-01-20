@@ -42,9 +42,9 @@ CITY_CONFIG = {
 
 # AI Mode Configuration
 AI_CONFIG = {
-    "easy": {"entry_fee": 0, "prize_amount": 0},
-    "medium": {"entry_fee": 100, "prize_amount": 180},
-    "hard": {"entry_fee": 250, "prize_amount": 450},
+    "easy": {"entry_fee": 0, "prize_amount": 0, "turn_timer": 30},
+    "medium": {"entry_fee": 100, "prize_amount": 180, "turn_timer": 20},
+    "hard": {"entry_fee": 250, "prize_amount": 450, "turn_timer": 10},
 }
 
 # Initial Player Balances

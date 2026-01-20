@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Alert } from 'react-native';
 import { apiService } from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateCandyPool } from '../services/candyPool';
 import { webSocketService, MatchmakingMessage } from '../services/WebSocketService';
 import { feedbackService } from '../services/FeedbackService';
@@ -52,6 +53,9 @@ interface GameState {
     isSettingPoisonFor: 'player' | 'opponent' | null;
     searchTimeout?: NodeJS.Timeout | null;
 
+    // Queue stats for displaying online player counts
+    queueStats: { [city: string]: { players_waiting: number; city_config: any } };
+
     // Dynamic Config (fetched from backend)
     config: {
         winThreshold: number;
@@ -71,6 +75,7 @@ interface GameState {
     tickTimer: () => void;
     setIsReconnecting: (val: boolean) => void;
     clearMatchFound: () => void;
+    fetchQueueStats: () => Promise<void>;
 }
 
 const DEFAULT_PROGRESS: GameProgress = {
@@ -131,6 +136,24 @@ const checkWinCondition = (state: GameState): {
     return { hasWinner: false, message: "Game continues..." };
 };
 
+// Persistent device ID for anti-fraud
+let cachedDeviceId: string | null = null;
+const getDeviceId = async () => {
+    if (cachedDeviceId) return cachedDeviceId;
+    try {
+        const stored = await AsyncStorage.getItem('pcd_device_id');
+        if (stored) {
+            cachedDeviceId = stored;
+        } else {
+            cachedDeviceId = 'dev_' + Math.random().toString(36).substring(2, 11);
+            await AsyncStorage.setItem('pcd_device_id', cachedDeviceId);
+        }
+    } catch {
+        cachedDeviceId = 'unknown_device';
+    }
+    return cachedDeviceId;
+};
+
 export const useGameStore = create<GameState>((set, get) => ({
     gameId: null,
     gameMode: 'ai',
@@ -159,6 +182,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     opponentId: null,
     isReconnecting: false,
     matchFound: false,
+    queueStats: {},
     config: {
         winThreshold: WIN_THRESHOLD,
         candyCount: CANDY_COUNT,
@@ -186,19 +210,50 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     initGame: async (mode, difficulty = 'easy', city = 'Dubai') => {
         const { aiConfig, cityConfig } = get().config;
-        // For online mode, the backend handles fee deduction authoritatively.
-        // For AI mode, we deduct locally since there's no backend interaction.
-        const fee = mode === 'ai' ? aiConfig[difficulty].entryFee : 0;
-        const timerLimit = mode === 'online' ? cityConfig[city].turnTimer : 30;
+        const auth = require('./authStore').useAuthStore.getState();
 
-        if (fee > 0) {
-            const success = useCurrencyStore.getState().spendCoins(fee, `${mode.toUpperCase()} Entry Fee`);
-            if (!success) return;
+        const timerLimit = mode === 'online' ? (cityConfig[city]?.turnTimer || 30) :
+            (mode === 'ai' ? (aiConfig[difficulty]?.turnTimer || 30) : 30);
+
+        let serverGameId = null;
+        let pCandies: string[] = [];
+        let oCandies: string[] = [];
+        let oPoison: string | null = null;
+
+        if (mode === 'ai') {
+            // Authoritative AI Session (Handles fees and state on server)
+            try {
+                const res = await apiService.createAIGame(difficulty);
+                if (res.success && res.data) {
+                    serverGameId = res.data.game_id;
+                    const gs = res.data.game_state;
+                    pCandies = gs.player1.owned_candies;
+                    oCandies = gs.player2.owned_candies;
+                    oPoison = res.data.opponent_poison;
+                } else {
+                    console.error("Failed to start AI game:", res.message);
+                    return;
+                }
+            } catch (error) {
+                console.error("AI Init Network Error:", error);
+                return;
+            }
+        } else {
+            // Local fallback logic
+            const { player, opponent } = generateCandyPool(city);
+            pCandies = player;
+            oCandies = opponent;
+
+            // Deduct local coins for offline mode if fees were ever added (currently 0)
+            const fee = mode === 'offline' ? 0 : 0;
+            if (fee > 0) {
+                const success = require('./authStore').useAuthStore.getState().spendCoins?.(fee, `${mode.toUpperCase()} Entry Fee`);
+                if (!success) return;
+            }
         }
 
-        const { player, opponent } = generateCandyPool(city);
-
         set({
+            gameId: serverGameId,
             gameMode: mode,
             difficulty,
             selectedCity: city,
@@ -206,20 +261,20 @@ export const useGameStore = create<GameState>((set, get) => ({
             gameEnded: false,
             turnTimeRemaining: timerLimit,
             gameProgress: { ...DEFAULT_PROGRESS },
-            playerCandies: player,
-            opponentCandies: opponent,
+            playerCandies: pCandies,
+            opponentCandies: oCandies,
             isSettingPoisonFor: 'player',
             selectedPoison: null,
-            opponentPoison: null,
+            opponentPoison: oPoison,
             playerCollection: [],
             opponentCollection: [],
-            isPlayerTurn: true, // Always start with P1 turn
+            isPlayerTurn: true,
             matchFound: false,
         });
 
-        // For AI mode, we'll randomize opponent poison later or now
-        if (mode === 'ai') {
-            set({ opponentPoison: opponent[Math.floor(Math.random() * opponent.length)] });
+        // For offline mode, randomize opponent poison
+        if (mode === 'offline') {
+            set({ opponentPoison: oCandies[Math.floor(Math.random() * oCandies.length)] });
         }
     },
 
@@ -235,9 +290,11 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         const auth = useAuthStore.getState();
         const playerId = auth.user?.id || `guest_${auth.isGuest ? 'guest' : 'unknown'}`;
+        const token = auth.token || '';
+
         set({ isSearching: true, difficulty: cityInfo.difficulty });
 
-        webSocketService.connect(playerId, (data: MatchmakingMessage) => {
+        webSocketService.connect(playerId, token, (data: MatchmakingMessage) => {
             const authState = useAuthStore.getState();
             const userId = authState.user?.id || `guest_${authState.isGuest ? 'guest' : 'unknown'}`;
             const { gameStarted: isStarted, gameEnded: isEnded } = get();
@@ -277,9 +334,16 @@ export const useGameStore = create<GameState>((set, get) => ({
                 set({ isSearching: false });
                 Alert.alert("Matchmaking Error", data.message || "An unknown error occurred.");
             } else if (data.type === 'match_poison') {
+                console.log('🧪 Received opponent poison:', data.candy);
                 set({ opponentPoison: data.candy });
-                if (get().selectedPoison) {
+
+                // Check if we've already set our own poison
+                const ourPoison = get().selectedPoison;
+                if (ourPoison) {
+                    console.log('🎮 Both poisons set - starting game! Ours:', ourPoison, 'Theirs:', data.candy);
                     set({ gameStarted: true, isSettingPoisonFor: null });
+                } else {
+                    console.log('⏳ Opponent set poison first, waiting for us to pick...');
                 }
             } else if (data.type === 'game_state_update') {
                 const gameState = data.game_state;
@@ -426,7 +490,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     setPoison: async (candy) => {
-        const { gameMode, isSettingPoisonFor, gameId, opponentId } = get();
+        const { gameMode, isSettingPoisonFor, gameId, opponentId, opponentPoison } = get();
 
         if (isSettingPoisonFor === 'player') {
             set({ selectedPoison: candy });
@@ -434,16 +498,24 @@ export const useGameStore = create<GameState>((set, get) => ({
             if (gameMode === 'offline') {
                 // Switch to Player 2 (Opponent) selection
                 set({ isSettingPoisonFor: 'opponent' });
-            } else {
-                // Single player or Online
+            } else if (gameMode === 'ai') {
+                // Single player vs AI - start immediately since AI poison is already set
                 set({ isSettingPoisonFor: null, gameStarted: true });
-                if (gameMode === 'online' && opponentId) {
-                    webSocketService.sendMessage({ type: 'match_poison', target_id: opponentId, candy: candy });
-                    // If we already have opponent poison (received via WS), start game
-                    if (get().opponentPoison) {
-                        set({ gameStarted: true, isSettingPoisonFor: null });
-                    }
+            } else if (gameMode === 'online' && opponentId) {
+                // Online mode - send our poison to opponent and check if both are set
+                webSocketService.sendMessage({ type: 'match_poison', target_id: opponentId, candy: candy });
+                set({ isSettingPoisonFor: null });
+
+                // If we already have opponent's poison, BOTH are now set - start game
+                if (opponentPoison) {
+                    console.log('🎮 Both poisons set - starting game!');
+                    set({ gameStarted: true });
+                } else {
+                    console.log('⏳ Waiting for opponent to set poison...');
                 }
+            } else {
+                // Fallback for other modes (friends, etc)
+                set({ isSettingPoisonFor: null, gameStarted: true });
             }
         } else if (isSettingPoisonFor === 'opponent') {
             set({ opponentPoison: candy, isSettingPoisonFor: null, gameStarted: true });
@@ -514,7 +586,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         // Switch turns
         const nextPlayerTurn = winResult.switchToOpponent ? false : (winResult.switchToPlayer ? true : !state.isPlayerTurn);
         const timerLimits = { Dubai: 30, Cairo: 20, Oslo: 10 };
-        const nextTimer = state.gameMode === 'online' && state.selectedCity ? timerLimits[state.selectedCity as keyof typeof timerLimits] : 30;
+        const nextTimer = state.gameMode === 'online' && state.selectedCity ? timerLimits[state.selectedCity as keyof typeof timerLimits] :
+            (state.gameMode === 'ai' ? state.config.aiConfig[state.difficulty].turnTimer : 30);
 
         set({
             playerCollection: newPlayerCollection,
@@ -539,15 +612,20 @@ export const useGameStore = create<GameState>((set, get) => ({
                         player_candies: s.playerCandies,
                         opponent_collection: s.opponentCollection,
                         player_poison: s.selectedPoison!,
-                        difficulty: s.difficulty
+                        difficulty: s.difficulty,
+                        game_id: s.gameId
                     });
 
                     if (result && result.choice) {
+                        // RE-CHECK STATE after await to prevent race condition timeout bug
+                        if (get().gameEnded) return;
                         get().pickCandy(result.choice);
                     }
                 } catch (error) {
                     console.error("AI Error:", error);
                     // Fallback to random if AI fails
+                    // RE-CHECK STATE after await to prevent race condition timeout bug
+                    if (get().gameEnded) return;
                     const avail = s.playerCandies.filter(c => !s.opponentCollection.includes(c));
                     if (avail.length > 0) {
                         get().pickCandy(avail[Math.floor(Math.random() * avail.length)]);
@@ -584,4 +662,15 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
     setIsReconnecting: (val) => set({ isReconnecting: val }),
     clearMatchFound: () => set({ matchFound: false }),
+
+    fetchQueueStats: async () => {
+        try {
+            const result = await apiService.getQueueStats();
+            if (result.success && result.data) {
+                set({ queueStats: result.data });
+            }
+        } catch (error) {
+            console.error('Failed to fetch queue stats:', error);
+        }
+    },
 }));

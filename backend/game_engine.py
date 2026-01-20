@@ -13,11 +13,15 @@ Corrected Game Mechanics (Version A):
 import time
 import uuid
 import json
+import random
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Set, Any
 from utils.redis_client import redis_client
 from game_config import WIN_THRESHOLD
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class GameState(Enum):
@@ -70,20 +74,8 @@ class PoisonedCandyDuel:
     def __init__(self):
         self.games: Dict[str, GameSession] = {}
     
-    def create_game(self, player1_name: str, player2_name: str, p1_id: str = None, p2_id: str = None) -> str:
-        """Create a new game session between two players.
-        
-        Args:
-            player1_name: Name of the first player
-            player2_name: Name of the second player
-            p1_id: Optional ID for player 1 (uses UUID if None)
-            p2_id: Optional ID for player 2 (uses UUID if None)
-            
-        Returns:
-            The unique game ID
-        """
-        game_id = str(uuid.uuid4())
-        
+    def generate_initial_state(self, player1_name: str, player2_name: str, p1_id: str = None, p2_id: str = None) -> Dict[str, Any]:
+        """Generate the initial state for a new game without storing it."""
         # Define candy emojis to match frontend
         candy_emojis = [
             '🍬', '🍭', '🍫', '🧁', '🍰', '🎂', '🍪', '🍩', '🍯', '🍮',
@@ -91,39 +83,50 @@ class PoisonedCandyDuel:
             '🍊', '🍋', '🍌', '🍈', '🍎', '🍏', '🥥', '🥕', '🌽', '🥜'
         ]
         
-        import random
-        
         # Use unique set to avoid any duplicates in the source
         unique_source = list(dict.fromkeys(candy_emojis))
         random.shuffle(unique_source)
         
         # Take first 24 unique candies
-        if len(unique_source) < 24:
-            # This shouldn't happen with the default list, but for robustness:
-            print("⚠️ Not enough unique candies! Performance might degrade.")
-            
         selected_24 = unique_source[:24]
-        player1_candies = set(selected_24[:12])
-        player2_candies = set(selected_24[12:24])
+        player1_candies = sorted(list(selected_24[:12]))
+        player2_candies = sorted(list(selected_24[12:24]))
+
+        p1_guid = p1_id if p1_id else str(uuid.uuid4())
+        p2_guid = p2_id if p2_id else str(uuid.uuid4())
+
+        return {
+            "state": GameState.SETUP.value,
+            "current_turn": 1,
+            "result": GameResult.ONGOING.value,
+            "player1": {
+                "id": p1_guid,
+                "name": player1_name,
+                "owned_candies": player1_candies,
+                "collected_candies": [],
+                "poison_choice": None,
+                "timeout_count": 0
+            },
+            "player2": {
+                "id": p2_guid,
+                "name": player2_name,
+                "owned_candies": player2_candies,
+                "collected_candies": [],
+                "poison_choice": None,
+                "timeout_count": 0
+            }
+        }
+
+    def create_game(self, player1_name: str, player2_name: str, p1_id: str = None, p2_id: str = None) -> str:
+        """Create a new game session between two players and store it."""
+        game_id = str(uuid.uuid4())
+        initial_state = self.generate_initial_state(player1_name, player2_name, p1_id, p2_id)
         
-        player1 = Player(
-            id=p1_id if p1_id else str(uuid.uuid4()), 
-            name=player1_name,
-            owned_candies=player1_candies
-        )
-        player2 = Player(
-            id=p2_id if p2_id else str(uuid.uuid4()), 
-            name=player2_name,
-            owned_candies=player2_candies
-        )
+        self.load_game_from_data({
+            "id": game_id,
+            "game_state": initial_state
+        })
         
-        game = GameSession(
-            id=game_id,
-            player1=player1,
-            player2=player2
-        )
-        
-        self.games[game_id] = game
         return game_id
     
     def set_poison_choice(
@@ -142,50 +145,50 @@ class PoisonedCandyDuel:
         Returns:
             True if successful, False otherwise
         """
-        print(f"🧪 set_poison_choice called: game_id={game_id}, player_id={player_id}, poison_candy={poison_candy}")
+        logger.info(f"🧪 set_poison_choice called: game_id={game_id}, player_id={player_id}, poison_candy={poison_candy}")
         
         if game_id not in self.games:
-            print(f"❌ Game {game_id} not found")
+            logger.info(f"❌ Game {game_id} not found")
             return False
         
         game = self.games[game_id]
-        print(f"🎲 Current game state: {game.state}")
+        logger.info(f"🎲 Current game state: {game.state}")
         
         if game.state != GameState.SETUP:
-            print(f"❌ Game not in setup state, current state: {game.state}")
+            logger.info(f"❌ Game not in setup state, current state: {game.state}")
             return False
         
         # Find the player
         target_player = None
         if game.player1.id == player_id:
             target_player = game.player1
-            print(f"✅ Setting poison for Player 1: {target_player.name}")
+            logger.info(f"✅ Setting poison for Player 1: {target_player.name}")
         elif game.player2.id == player_id:
             target_player = game.player2
-            print(f"✅ Setting poison for Player 2: {target_player.name}")
+            logger.info(f"✅ Setting poison for Player 2: {target_player.name}")
         else:
-            print(f"❌ Invalid player ID: {player_id}")
+            logger.info(f"❌ Invalid player ID: {player_id}")
             return False
         
         # Check if player has already set their poison
         if target_player.poison_choice is not None:
-            print(f"❌ Player {target_player.name} already set poison")
+            logger.info(f"❌ Player {target_player.name} already set poison")
             return False  # Poison already set, cannot change
         
         # VERSION A: Validate poison candy is from PLAYER'S OWN pool
         if poison_candy not in target_player.owned_candies:
-            print(f"❌ Poison candy {poison_candy} not in player's owned candies")
-            print(f"Available candies: {list(target_player.owned_candies)}")
+            logger.info(f"❌ Poison candy {poison_candy} not in player's owned candies")
+            logger.info(f"Available candies: {list(target_player.owned_candies)}")
             return False
         
         # Set poison choice
         target_player.poison_choice = poison_candy
-        print(f"✅ Poison set: {poison_candy}")
+        logger.info(f"✅ Poison set: {poison_candy}")
         
         # Check if both players have made their poison choices
         if game.player1.poison_choice and game.player2.poison_choice:
             game.state = GameState.PLAYING
-            print(f"🎮 Both players set poison - transitioning to PLAYING state")
+            logger.info(f"🎮 Both players set poison - transitioning to PLAYING state")
         
         game.last_updated = time.time()
         return True
@@ -209,10 +212,18 @@ class PoisonedCandyDuel:
             
             # 2. Update DB (Required for waiting_for_poison phase)
             if db_service:
-                await db_service.update_game(game_id, {
+                db_payload = {
                     "game_state": game_state,
                     "status": "in_progress" if game_state.get("state") == "playing" else "waiting_for_poison"
-                })
+                }
+                # Sync secret choice to isolated column
+                game = self.games[game_id]
+                if game.player1.id == player_id:
+                    db_payload["p1_poison"] = poison_candy
+                else:
+                    db_payload["p2_poison"] = poison_candy
+                    
+                await db_service.update_game(game_id, db_payload)
         return success
     
     def make_move(
@@ -231,19 +242,19 @@ class PoisonedCandyDuel:
         Returns:
             Dictionary with success status and game information
         """
-        print(f"🎮 make_move called: game_id={game_id}, player_id={player_id}, candy={candy}")
+        logger.info(f"🎮 make_move called: game_id={game_id}, player_id={player_id}, candy={candy}")
         
         if game_id not in self.games:
-            print(f"❌ Game {game_id} not found")
+            logger.info(f"❌ Game {game_id} not found")
             return {"success": False, "error": "Game not found"}
         
         game = self.games[game_id]
-        print(f"🎲 Current game state: {game.state}")
-        print(f"🎯 Player1 ID: {game.player1.id}")
-        print(f"🎯 Player2 ID: {game.player2.id}")
+        logger.info(f"🎲 Current game state: {game.state}")
+        logger.info(f"🎯 Player1 ID: {game.player1.id}")
+        logger.info(f"🎯 Player2 ID: {game.player2.id}")
         
         if game.state != GameState.PLAYING:
-            print(f"❌ Game not in playing state, current state: {game.state}")
+            logger.info(f"❌ Game not in playing state, current state: {game.state}")
             return {"success": False, "error": "Game not in playing state"}
         
         # Find which player is making the move
@@ -253,14 +264,14 @@ class PoisonedCandyDuel:
         if game.player1.id == player_id:
             current_player = game.player1
             opponent_player = game.player2
-            print(f"✅ Player found: {current_player.name} (Player 1)")
+            logger.info(f"✅ Player found: {current_player.name} (Player 1)")
         elif game.player2.id == player_id:
             current_player = game.player2
             opponent_player = game.player1
-            print(f"✅ Player found: {current_player.name} (Player 2)")
+            logger.info(f"✅ Player found: {current_player.name} (Player 2)")
         else:
-            print(f"❌ Invalid player ID: {player_id}")
-            print(f"Available player IDs: {game.player1.id}, {game.player2.id}")
+            logger.info(f"❌ Invalid player ID: {player_id}")
+            logger.info(f"Available player IDs: {game.player1.id}, {game.player2.id}")
             return {"success": False, "error": "Invalid player"}
         
         # Determine whose turn it is (alternating turns starting with player1)
@@ -269,21 +280,21 @@ class PoisonedCandyDuel:
         )
         
         if current_player != expected_player:
-            print(f"❌ Not player's turn. Current turn: {game.current_turn}, Expected: {expected_player.name}")
+            logger.info(f"❌ Not player's turn. Current turn: {game.current_turn}, Expected: {expected_player.name}")
             return {"success": False, "error": "Not your turn"}
         
         # Validate candy is from opponent's pool and available
         if candy not in opponent_player.owned_candies:
-            print(f"❌ Candy {candy} not in opponent's pool")
+            logger.info(f"❌ Candy {candy} not in opponent's pool")
             return {"success": False, "error": "Candy not available in opponent's pool"}
         
         # Check if candy was already collected by either player
         if (candy in current_player.collected_candies or 
             candy in opponent_player.collected_candies):
-            print(f"❌ Candy {candy} already collected")
+            logger.info(f"❌ Candy {candy} already collected")
             return {"success": False, "error": "Candy already collected"}
         
-        print(f"✅ Move validation passed")
+        logger.info(f"✅ Move validation passed")
         
         # Check if picked candy is opponent's poison
         picked_poison = (candy == opponent_player.poison_choice)
@@ -295,12 +306,12 @@ class PoisonedCandyDuel:
                 GameResult.PLAYER2_WIN if current_player == game.player1 
                 else GameResult.PLAYER1_WIN
             )
-            print(f"💀 {current_player.name} picked poison! Game over. Winner: {opponent_player.name}")
+            logger.info(f"💀 {current_player.name} picked poison! Game over. Winner: {opponent_player.name}")
         else:
             # Add candy to current player's collection if it's new
             if candy not in current_player.collected_candies:
                 current_player.collected_candies.append(candy)
-                print(f"🍬 Added {candy} to {current_player.name}'s collection")
+                logger.info(f"🍬 Added {candy} to {current_player.name}'s collection")
             
             # Calculate current game state
             p1_count = len(game.player1.collected_candies)
@@ -308,7 +319,7 @@ class PoisonedCandyDuel:
             all_collected = set(game.player1.collected_candies + game.player2.collected_candies)
             total_pickable = len(game.player1.owned_candies) + len(game.player2.owned_candies) - len(all_collected)
             
-            print(f"🎲 Game state: P1={p1_count}/{WIN_THRESHOLD}, P2={p2_count}/{WIN_THRESHOLD}, remaining={total_pickable}")
+            logger.info(f"🎲 Game state: P1={p1_count}/{WIN_THRESHOLD}, P2={p2_count}/{WIN_THRESHOLD}, remaining={total_pickable}")
             
             # CORRECTED WIN LOGIC
             # Check if both players have reached WIN_THRESHOLD candies
@@ -316,7 +327,7 @@ class PoisonedCandyDuel:
                 # Both players have WIN_THRESHOLD candies - immediate DRAW
                 game.state = GameState.FINISHED
                 game.result = GameResult.DRAW
-                print(f"🤝 Draw! Both players collected {WIN_THRESHOLD} candies!")
+                logger.info(f"🤝 Draw! Both players collected {WIN_THRESHOLD} candies!")
             elif p1_count == WIN_THRESHOLD or p2_count == WIN_THRESHOLD:
                 # One player has reached WIN_THRESHOLD candies
                 # Check if the other player can mathematically still reach WIN_THRESHOLD
@@ -344,11 +355,11 @@ class PoisonedCandyDuel:
                 
                 if opponent_max_possible >= WIN_THRESHOLD:
                     # Opponent can still potentially reach WIN_THRESHOLD - continue game
-                    print(f"🔄 {current_player.name} has {current_player_count}, {opponent_player.name} can still reach {WIN_THRESHOLD} (currently {opponent_count}, max possible {opponent_max_possible})")
+                    logger.info(f"🔄 {current_player.name} has {current_player_count}, {opponent_player.name} can still reach {WIN_THRESHOLD} (currently {opponent_count}, max possible {opponent_max_possible})")
                     game.current_turn += 1
                 else:
                     # Opponent cannot possibly reach WIN_THRESHOLD - current player wins
-                    print(f"🏆 {current_player.name} wins! Opponent cannot reach {WIN_THRESHOLD} (currently {opponent_count}, max possible {opponent_max_possible})")
+                    logger.info(f"🏆 {current_player.name} wins! Opponent cannot reach {WIN_THRESHOLD} (currently {opponent_count}, max possible {opponent_max_possible})")
                     game.state = GameState.FINISHED
                     game.result = (
                         GameResult.PLAYER1_WIN if current_player == game.player1 
@@ -357,7 +368,7 @@ class PoisonedCandyDuel:
             else:
                 # Neither player has reached 11 yet - continue game
                 game.current_turn += 1
-                print(f"🔄 Turn advanced to: {game.current_turn}")
+                logger.info(f"🔄 Turn advanced to: {game.current_turn}")
         
         game.last_updated = time.time()
         
@@ -371,7 +382,7 @@ class PoisonedCandyDuel:
             elif game.result == GameResult.DRAW:
                 result_str = "draw"
         
-        print(f"🎯 Move completed. Result: {result_str}")
+        logger.info(f"🎯 Move completed. Result: {result_str}")
         
         return {
             "success": True,
@@ -414,7 +425,7 @@ class PoisonedCandyDuel:
                         "game_state": game_state,
                         "status": status
                     })
-                    print(f"💾 Checkpointed game {game_id} to database (Move {move_count})")
+                    logger.info(f"💾 Checkpointed game {game_id} to database (Move {move_count})")
         return result
 
     def handle_timeout(self, game_id: str, player_id: str) -> Dict[str, Any]:
@@ -439,7 +450,7 @@ class PoisonedCandyDuel:
             
             if opponent.poison_choice:
                 # Opponent was ready, I wasn't -> I FORFEIT
-                print(f"💀 Setup Timeout: {target_player.name} forfeited (Opponent was ready)")
+                logger.info(f"💀 Setup Timeout: {target_player.name} forfeited (Opponent was ready)")
                 game.state = GameState.FINISHED
                 game.result = (
                     GameResult.PLAYER2_WIN if target_player == game.player1 
@@ -454,7 +465,7 @@ class PoisonedCandyDuel:
                 }
             else:
                 # Neither player was ready -> CANCEL GAME + REFUND
-                print(f"🛑 Setup Timeout: Both players idle. Cancelling game {game_id}")
+                logger.info(f"🛑 Setup Timeout: Both players idle. Cancelling game {game_id}")
                 game.state = GameState.FINISHED
                 game.result = GameResult.ONGOING # Special marker, or handled via type
                 # We need to mark it as cancelled for the manager to know to refund
@@ -471,7 +482,7 @@ class PoisonedCandyDuel:
             if expected_player.id != player_id:
                 return {"success": False, "error": "Not your turn to timeout"}
 
-            print(f"💀 {expected_player.name} forfeited by timeout in game {game_id}!")
+            logger.info(f"💀 {expected_player.name} forfeited by timeout in game {game_id}!")
             game.state = GameState.FINISHED
             game.result = (
                 GameResult.PLAYER2_WIN if expected_player == game.player1 
@@ -589,21 +600,26 @@ class PoisonedCandyDuel:
     
         return state
 
-    def get_game_state(self, game_id: str) -> Optional[Dict[str, Any]]:
-        """Get game state by ID."""
+    def get_game_state(self, game_id: str, viewer_id: str = None) -> Optional[Dict[str, Any]]:
+        """Get game state by ID, filtering secrets based on viewer_id."""
         if game_id not in self.games:
             return None
         
         game = self.games[game_id]
         state = self._get_game_state(game)
         
-        # Add end game information if finished
+        # Add end game information if finished - Reveal ONLY when game is truly over
         if game.state == GameState.FINISHED:
             state["result"] = game.result.value
             state["poison_reveal"] = {
                 "player1_poison": game.player1.poison_choice,
                 "player2_poison": game.player2.poison_choice
             }
+        
+        # Security: Never leak other player's poison choice during setup/play
+        # (Though _get_game_state already avoids including it in the nested dicts)
+        
+        return state
         
         return state
 
@@ -619,20 +635,20 @@ class PoisonedCandyDuel:
             if cached:
                 success = self.load_game_from_data({"id": game_id, "game_state": json.loads(cached)})
                 if success:
-                    print(f"🔥 Restored game {game_id} from Redis (Hot)")
+                    logger.info(f"🔥 Restored game {game_id} from Redis (Hot)")
                     return True
         except: pass
 
         # 2. Try Database (Fallback/Cold)
-        print(f"🔍 Game {game_id} not in hot store, checking database...")
+        logger.info(f"🔍 Game {game_id} not in hot store, checking database...")
         db_game = await db_service.get_game(game_id)
         if db_game:
             success = self.load_game_from_data(db_game)
             if success:
-                print(f"✅ Successfully restored game {game_id} from database")
+                logger.info(f"✅ Successfully restored game {game_id} from database")
                 return True
         
-        print(f"❌ Failed to restore game {game_id}")
+        logger.info(f"❌ Failed to restore game {game_id}")
         return False
     
     def update_game_state(self, game_id: str, new_state: Dict[str, Any]) -> bool:
@@ -742,7 +758,7 @@ class PoisonedCandyDuel:
                 name=player1_data["name"],
                 owned_candies=set(player1_data["owned_candies"]),
                 collected_candies=player1_data["collected_candies"],
-                poison_choice=player1_data.get("poison_choice")
+                poison_choice=db_game.get("p1_poison") or player1_data.get("poison_choice")
             )
             
             player2 = Player(
@@ -750,7 +766,7 @@ class PoisonedCandyDuel:
                 name=player2_data["name"],
                 owned_candies=set(player2_data["owned_candies"]),
                 collected_candies=player2_data["collected_candies"],
-                poison_choice=player2_data.get("poison_choice")
+                poison_choice=db_game.get("p2_poison") or player2_data.get("poison_choice")
             )
             
             # Reconstruct game session
@@ -771,5 +787,5 @@ class PoisonedCandyDuel:
             return True
             
         except Exception as e:
-            print(f"Error loading game from database: {e}")
+            logger.info(f"Error loading game from database: {e}")
             return False 

@@ -35,9 +35,9 @@ export type CityName = keyof typeof CITY_CONFIG;
 
 // AI Mode Configuration  
 export const AI_CONFIG = {
-    easy: { entryFee: 0, prizeAmount: 0 },
-    medium: { entryFee: 100, prizeAmount: 180 },
-    hard: { entryFee: 250, prizeAmount: 450 },
+    easy: { entryFee: 0, prizeAmount: 0, turnTimer: 30 },
+    medium: { entryFee: 100, prizeAmount: 180, turnTimer: 20 },
+    hard: { entryFee: 250, prizeAmount: 450, turnTimer: 10 },
 } as const;
 
 export type Difficulty = keyof typeof AI_CONFIG;

@@ -3,6 +3,7 @@ import json
 from datetime import datetime, timezone
 import uuid
 import secrets
+import logging
 from abc import ABC, abstractmethod
 from config import settings
 from utils.redis_client import redis_client
@@ -13,6 +14,8 @@ try:
     SUPABASE_AVAILABLE = bool(settings.SUPABASE_URL and settings.SUPABASE_KEY)
 except ImportError:
     SUPABASE_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 def calculate_rank_info(wins: int, stars: int = 0) -> Dict[str, Any]:
     """Calculate rank title and tier based on wins and champion stars."""
@@ -55,13 +58,25 @@ class BaseDatabaseService(ABC):
     async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]: pass
     @abstractmethod
     async def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]: pass
+    @abstractmethod
+    async def initiate_duel_atomic(
+        self,
+        p1_id: str,
+        p1_name: str,
+        p2_id: str,
+        p2_name: str,
+        city: str,
+        fee: int,
+        game_id: str,
+        initial_state: Dict[str, Any]
+    ) -> Dict[str, Any]: pass
 
 class InMemoryDatabaseService(BaseDatabaseService):
     def __init__(self):
         self.games: Dict[str, Dict[str, Any]] = {}
         self.players: Dict[str, Dict[str, Any]] = {}
         self.transactions: List[Dict[str, Any]] = []
-        print("🟡 Using in-memory database")
+        logger.info("🟡 Using in-memory database")
 
     async def create_game(self, game_data: Dict[str, Any]) -> str:
         gid = game_data["id"]
@@ -124,6 +139,17 @@ class InMemoryDatabaseService(BaseDatabaseService):
     async def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         return next((u for u in self.players.values() if u.get("id") == user_id), None)
 
+    async def initiate_duel_atomic(self, p1_id, p1_name, p2_id, p2_name, city, fee, game_id, initial_state):
+        p1 = self.players.get(p1_name)
+        p2 = self.players.get(p2_name)
+        if not p1 or not p2: return {"success": False, "error": "Player not found"}
+        if p1.get("coin_balance", 0) < fee: return {"success": False, "error": "P1 insufficient funds"}
+        if p2.get("coin_balance", 0) < fee: return {"success": False, "error": "P2 insufficient funds"}
+        p1["coin_balance"] -= fee
+        p2["coin_balance"] -= fee
+        self.games[game_id] = {"id": game_id, "game_state": initial_state, "status": "waiting_for_poison"}
+        return {"success": True, "game_id": game_id}
+
 class SupabaseService(BaseDatabaseService):
     def __init__(self):
         # Public client (anon key) - respects RLS policies
@@ -133,10 +159,10 @@ class SupabaseService(BaseDatabaseService):
         # Used for: balance updates, transaction logging, admin operations
         if settings.SUPABASE_SERVICE_KEY:
             self.supabase_admin = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
-            print("🟢 Using Supabase database (dual-client mode)")
+            logger.info("🟢 Using Supabase database (dual-client mode)")
         else:
             self.supabase_admin = self.supabase
-            print("🟡 Using Supabase database (single-client mode - service key not configured)")
+            logger.info("🟡 Using Supabase database (single-client mode - service key not configured)")
 
     async def create_game(self, game_data: Dict[str, Any]) -> str:
         # Strip columns that might be missing in older schemas
@@ -237,15 +263,15 @@ class SupabaseService(BaseDatabaseService):
                         "coin_balance": 10000 + coin_delta, 
                         "diamonds_balance": 500 + diamond_delta
                     }).execute()
-                    print(f"✅ Created new player: {player_name}")
+                    logger.info(f"✅ Created new player: {player_name}")
                     return True
                 except Exception as e:
-                    print(f"❌ Failed to create player {player_name}: {e}")
+                    logger.info(f"❌ Failed to create player {player_name}: {e}")
                     return False
             
             player_id = player.get("id")
             if not player_id:
-                print(f"❌ Player {player_name} has no ID")
+                logger.info(f"❌ Player {player_name} has no ID")
                 return False
             
             # Call atomic balance update function via service client
@@ -260,15 +286,15 @@ class SupabaseService(BaseDatabaseService):
             }).execute()
             
             if result.data and result.data.get("success"):
-                print(f"✅ Balance updated for {player_name}: {coin_delta:+d} coins, {diamond_delta:+d} diamonds")
+                logger.info(f"✅ Balance updated for {player_name}: {coin_delta:+d} coins, {diamond_delta:+d} diamonds")
                 return True
             else:
                 error = result.data.get("error", "Unknown error") if result.data else "No response"
-                print(f"❌ Balance update failed for {player_name}: {error}")
+                logger.info(f"❌ Balance update failed for {player_name}: {error}")
                 return False
                 
         except Exception as e:
-            print(f"❌ Database error updating balance for {player_name}: {e}")
+            logger.info(f"❌ Database error updating balance for {player_name}: {e}")
             # Fallback to legacy method if RPC not available
             return await self._legacy_balance_update(player_name, coin_delta, diamond_delta)
     
@@ -283,7 +309,7 @@ class SupabaseService(BaseDatabaseService):
             new_diamonds = p["diamonds_balance"] + diamond_delta
             
             if new_coins < 0:
-                print(f"❌ Legacy balance update denied: {player_name} would have negative balance")
+                logger.info(f"❌ Legacy balance update denied: {player_name} would have negative balance")
                 return False
 
             res = self.supabase_admin.table("players").update({
@@ -293,7 +319,7 @@ class SupabaseService(BaseDatabaseService):
             
             return len(res.data) > 0
         except Exception as e:
-            print(f"❌ Legacy balance update failed for {player_name}: {e}")
+            logger.info(f"❌ Legacy balance update failed for {player_name}: {e}")
             return False
 
     async def update_player_stats(self, player_name: str, won: bool) -> bool:
@@ -311,7 +337,7 @@ class SupabaseService(BaseDatabaseService):
                 return True
             return False
         except Exception as e:
-            print(f"❌ Database error updating stats for {player_name}: {e}")
+            logger.info(f"❌ Database error updating stats for {player_name}: {e}")
             return False
 
     async def get_leaderboard(self, sort_by: str = "wins", limit: int = 10) -> List[Dict[str, Any]]:
@@ -344,7 +370,7 @@ class SupabaseService(BaseDatabaseService):
             res = self.supabase_admin.table("coin_transactions").insert(clean_data).execute()
             return res.data[0]["id"] if res.data else str(uuid.uuid4())
         except Exception as e:
-            print(f"⚠️ Transaction log failed: {e}")
+            logger.info(f"⚠️ Transaction log failed: {e}")
             return str(uuid.uuid4())
     async def get_player_by_profile_id(self, pid):
         res = self.supabase.table("players").select("*").eq("profile_id", pid).execute()
@@ -402,6 +428,38 @@ class SupabaseService(BaseDatabaseService):
             except: pass
             return user
         return None
+
+    async def initiate_duel_atomic(
+        self,
+        p1_id: str,
+        p1_name: str,
+        p2_id: str,
+        p2_name: str,
+        city: str,
+        fee: int,
+        game_id: str,
+        initial_state: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Call the SECURE atomic initiation RPC."""
+        try:
+            result = self.supabase_admin.rpc("initiate_duel_atomic", {
+                "p_p1_id": p1_id,
+                "p_p1_name": p1_name,
+                "p_p2_id": p2_id,
+                "p_p2_name": p2_name,
+                "p_city": city.lower(),
+                "p_fee": fee,
+                "p_game_id": game_id,
+                "p_initial_state": initial_state
+            }).execute()
+            
+            if result.data and result.data.get("success"):
+                return {"success": True, "game_id": result.data.get("game_id")}
+            else:
+                return {"success": False, "error": result.data.get("error") if result.data else "No response"}
+        except Exception as e:
+            logger.info(f"❌ Failed atomic duel initiation: {e}")
+            return {"success": False, "error": str(e)}
 
 # Initialize global DB service
 if SUPABASE_AVAILABLE:

@@ -22,6 +22,22 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 logger = logging.getLogger(__name__)
 
 
+@router.get("/ping")
+async def ping():
+    """
+    Simple health check for debugging connectivity.
+    
+    Use this to verify the auth service is reachable from iOS/Android.
+    """
+    import time
+    return {
+        "success": True,
+        "message": "Auth service is alive",
+        "timestamp": time.time(),
+        "service": "auth"
+    }
+
+
 @router.post("/register", response_model=SuccessResponse)
 async def register_user(request: RegisterRequest, db_service=Depends(get_db_service)):
     """

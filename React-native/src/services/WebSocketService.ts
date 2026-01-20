@@ -52,7 +52,7 @@ class WebSocketService {
         return 'disconnected';
     }
 
-    connect(playerId: string, onMessage: (data: MatchmakingMessage) => void, onStatusChange?: (state: ConnectionState) => void) {
+    connect(playerId: string, token: string, onMessage: (data: MatchmakingMessage) => void, onStatusChange?: (state: ConnectionState) => void) {
         this.playerId = playerId;
         this.onMessageCallback = onMessage;
         this.onStatusChange = onStatusChange || null;
@@ -60,11 +60,19 @@ class WebSocketService {
 
         // Convert http://... to ws://...
         const wsBase = BASE_URL.replace('http', 'ws');
-        const wsUrl = `${wsBase}/matchmaking/ws/${playerId}`;
+        // SECURITY: Append JWT token as query parameter
+        const wsUrl = `${wsBase}/matchmaking/ws/${playerId}?token=${token}`;
 
-        console.log('🔌 Connecting to WebSocket:', wsUrl);
+        console.log('🔌 Connecting to WebSocket (Secure):', `${wsBase}/matchmaking/ws/${playerId}?token=REDACTED`);
         this.onStatusChange?.('connecting');
         this.socket = new WebSocket(wsUrl);
+
+        // ... rest of the code ...
+        // Note: For reconnection, we need to ensure we have a fresh token or the stored one
+        const retryConnection = () => {
+            const freshToken = require('../store/authStore').useAuthStore.getState().token;
+            this.connect(this.playerId, freshToken || token, onMessage, onStatusChange);
+        };
 
         this.socket.onopen = () => {
             console.log('✅ WebSocket Connected');
@@ -99,7 +107,10 @@ class WebSocketService {
                 const delay = this.baseDelay * Math.pow(2, this.reconnectAttempts);
                 this.reconnectAttempts++;
                 console.log(`🔄 Reconnecting in ${delay / 1000}s... (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-                setTimeout(() => this.connect(this.playerId, onMessage, onStatusChange), delay);
+                // Get fresh token for reconnection
+                const authState = require('../store/authStore').useAuthStore.getState();
+                const freshToken = authState.token || '';
+                setTimeout(() => this.connect(this.playerId, freshToken, onMessage, onStatusChange), delay);
             } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
                 console.error('❌ Max reconnection attempts reached.');
             }

@@ -1,6 +1,7 @@
 import json
 import asyncio
 import logging
+import uuid
 from typing import Dict, List, Any, Optional
 from fastapi import WebSocket
 from game_config import CITY_CONFIG
@@ -12,59 +13,89 @@ class ConnectionManager:
     """Manages WebSocket connections with reconnection support and state authority."""
     
     def __init__(self):
-        self.active_sockets: Dict[str, WebSocket] = {} # player_id -> websocket
-        self.player_states: Dict[str, str] = {} # player_id -> state (IDLE, QUEUE, IN_GAME)
-        self.player_games: Dict[str, str] = {} # player_id -> game_id
-        self.disconnected_players: Dict[str, asyncio.TimerHandle] = {} # player_id -> timer
+        self.active_sockets: Dict[str, WebSocket] = {} # player_id -> websocket (LOCAL ONLY)
+        self.pubsub_tasks: Dict[str, asyncio.Task] = {} # player_id -> listening task
+    
+    async def get_player_state(self, player_id: str) -> str:
+        r = await redis_client.connect()
+        state = await r.hget("pcd:player_states", player_id)
+        return state.decode('utf-8') if state else "IDLE"
+
+    async def set_player_state(self, player_id: str, state: str):
+        r = await redis_client.connect()
+        await r.hset("pcd:player_states", player_id, state)
+
+    async def get_player_game(self, player_id: str) -> Optional[str]:
+        r = await redis_client.connect()
+        game_id = await r.hget("pcd:player_games", player_id)
+        return game_id.decode('utf-8') if game_id else None
+
+    async def set_player_game(self, player_id: str, game_id: str):
+        r = await redis_client.connect()
+        await r.hset("pcd:player_games", player_id, game_id)
     
     async def connect(self, websocket: WebSocket, player_id: str):
         self.active_sockets[player_id] = websocket
         
-        # Handle reconnection
-        if player_id in self.disconnected_players:
-            print(f"🔄 Player {player_id} reconnected. Cancelling expiry timer.")
-            self.disconnected_players[player_id].cancel()
-            del self.disconnected_players[player_id]
+        # Start Pub/Sub listener for this player
+        self.pubsub_tasks[player_id] = asyncio.create_task(self._listen_for_messages(player_id))
+        
+        # Check if they were in a game (AUTH: Redis is source of truth)
+        game_id = await self.get_player_game(player_id)
+        if game_id:
+            await self.set_player_state(player_id, "IN_GAME")
+            logger.info(f"🎮 Player {player_id} restored to game {game_id}")
             
-            # Check if they were in a game
-            game_id = self.player_games.get(player_id)
-            if game_id:
-                self.player_states[player_id] = "IN_GAME"
-                print(f"🎮 Player {player_id} restored to game {game_id}")
-                
-                # Immediately sync them back to the game state
-                # Note: We need the engine and db here, or just send a 'reconnected' event
-                await self.send_personal_message({
-                    "type": "reconnected",
-                    "game_id": game_id,
-                    "state": "IN_GAME"
-                }, player_id)
-            else:
-                self.player_states[player_id] = "IDLE"
+            await self.broadcast_to_player(player_id, {
+                "type": "reconnected",
+                "game_id": game_id,
+                "state": "IN_GAME"
+            })
         else:
-            self.player_states[player_id] = "IDLE"
-            print(f"✅ Player {player_id} connected (Initial)")
+            await self.set_player_state(player_id, "IDLE")
+            logger.info(f"✅ Player {player_id} connected")
     
+    async def _listen_for_messages(self, player_id: str):
+        """Listen to Redis channel for messages intended for this specific player."""
+        try:
+            r = await redis_client.connect()
+            pubsub = r.pubsub()
+            channel_name = f"pcd:msg:{player_id}"
+            await pubsub.subscribe(channel_name)
+            
+            async for message in pubsub.listen():
+                if message['type'] == 'message':
+                    data = json.loads(message['data'])
+                    ws = self.active_sockets.get(player_id)
+                    if ws:
+                        try:
+                            await ws.send_text(json.dumps(data))
+                        except Exception as e:
+                            logger.error(f"Error sending WS to {player_id}: {e}")
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"PubSub error for {player_id}: {e}")
+    
+    async def broadcast_to_player(self, player_id: str, message: dict):
+        """Global broadcast: Publish to Redis so any server instance can deliver it."""
+        r = await redis_client.connect()
+        await r.publish(f"pcd:msg:{player_id}", json.dumps(message))
+
     def disconnect(self, player_id: str):
         if player_id in self.active_sockets:
             del self.active_sockets[player_id]
         
-        # Start grace period timer for game recovery if they were in a game
-        if self.player_states.get(player_id) == "IN_GAME":
-            loop = asyncio.get_event_loop()
-            self.disconnected_players[player_id] = loop.call_later(
-                60.0, # 60 seconds grace period
-                lambda: asyncio.create_task(self.handle_grace_period_expiry(player_id))
-            )
-            print(f"⏳ Player {player_id} disconnected mid-game. 60s grace period started.")
-        else:
-            # If they weren't in a game, just clean up
-            self.player_states.pop(player_id, None)
-            self.player_games.pop(player_id, None)
+        if player_id in self.pubsub_tasks:
+            self.pubsub_tasks[player_id].cancel()
+            del self.pubsub_tasks[player_id]
+        
+        # In a real distributed system, we might keep the Redis state for a bit 
+        # to allow for reconnection on a DIFFERENT server.
 
     async def handle_grace_period_expiry(self, player_id: str):
         if player_id in self.disconnected_players:
-            print(f"⏰ Grace period expired for player {player_id}")
+            logger.info(f"⏰ Grace period expired for player {player_id}")
             # Clean up state
             self.player_states.pop(player_id, None)
             game_id = self.player_games.pop(player_id, None)
@@ -73,11 +104,8 @@ class ConnectionManager:
                 del self.disconnected_players[player_id]
 
     async def send_personal_message(self, message: dict, player_id: str):
-        if player_id in self.active_sockets:
-            try:
-                await self.active_sockets[player_id].send_text(json.dumps(message))
-            except Exception as e:
-                print(f"❌ Failed to send message to {player_id}: {e}")
+        # Legacy method redirected to new distributed broadcast
+        await self.broadcast_to_player(player_id, message)
 
 class CityMatchmakingQueue:
     """Manages city-specific matchmaking queues with atomic transactions."""
@@ -97,9 +125,9 @@ class CityMatchmakingQueue:
             "entry_fee": 500, "prize_amount": 950, "turn_timer": 30
         })
 
-    async def add_player(self, player_id: str, player_name: str, city: str, websocket: WebSocket):
+    async def add_player(self, player_id: str, player_name: str, city: str, websocket: WebSocket, device_id: str = "unknown", ip_address: str = "0.0.0.0"):
         city_lower = city.lower()
-        print(f"👤 Player {player_name} ({player_id}) joining {city_lower} queue")
+        logger.info(f"👤 Player {player_name} ({player_id}) joining {city_lower} queue (IP: {ip_address})")
         
         # 1. Authoritative Balance Check
         player_data = await self.db_service.get_player(player_name)
@@ -107,29 +135,30 @@ class CityMatchmakingQueue:
         current_balance = player_data.get("coin_balance", 0) if player_data else 10000 
         
         if current_balance < entry_fee:
-            print(f"❌ Matchmaking failed: {player_name} has insufficient balance")
+            logger.info(f"❌ Matchmaking failed: {player_name} has insufficient balance")
             await websocket.send_text(json.dumps({
                 "type": "matchmaking_error", 
                 "message": f"Insufficient coins. Need {entry_fee}."
             }))
             return
 
-        # 2. Add to Redis Queue
+        # 2. Add to Redis Queue with Metadata for Anti-Fraud
         r = await redis_client.connect()
-        player_info = {"id": player_id, "name": player_name, "city": city_lower}
+        player_info = {
+            "id": player_id, 
+            "name": player_name, 
+            "city": city_lower,
+            "device_id": device_id,
+            "ip_address": ip_address
+        }
         await r.rpush(f"pcd:queue:{city_lower}", json.dumps(player_info))
         
-        self.connection_manager.player_states[player_id] = "QUEUE"
+        await self.connection_manager.set_player_state(player_id, "QUEUE")
         
-        # Start timeout timer
-        loop = asyncio.get_event_loop()
-        if player_id in self.player_timers: self.player_timers[player_id].cancel()
-        self.player_timers[player_id] = loop.call_later(
-            30.0, 
-            lambda: asyncio.create_task(self.handle_matchmaking_timeout(player_id, city_lower))
-        )
+        # Use Redis for queue timeouts for distributed tracking
+        await r.setex(f"pcd:queue_timeout:{player_id}", 31, city_lower)
         
-        # 3. Trigger Matching
+        # Instance still starts the matching process
         asyncio.create_task(self.try_match_players(city_lower))
 
     async def try_match_players(self, city: str):
@@ -150,47 +179,63 @@ class CityMatchmakingQueue:
             p1, p2 = json.loads(p1_raw), json.loads(p2_raw)
             config = self.get_city_config(city)
             
-            print(f"⚔️ Match found in {city}: {p1['name']} vs {p2['name']}")
+            logger.info(f"⚔️ Match found in {city}: {p1['name']} vs {p2['name']}")
+
+            # ANTI-FRAUD: Check for IP or Device Match
+            if p1['ip_address'] == p2['ip_address'] or p1['device_id'] == p2['device_id']:
+                logger.warning(f"🚫 Anti-Fraud: Blocked match between {p1['name']} and {p2['name']} (Match: {p1['ip_address']})")
+                await r.lpush(queue_key, json.dumps(p2))
+                # Cycle P1 to the back to avoid immediate re-match loop
+                await r.rpush(queue_key, json.dumps(p1))
+                return
+
+            # ANTI-FRAUD: Recent Opponent Cooldown (5 minutes)
+            recent1 = await r.get(f"pcd:recent_opponent:{p1['id']}")
+            recent2 = await r.get(f"pcd:recent_opponent:{p2['id']}")
+            
+            if (recent1 and recent1.decode() == p2['id']) or (recent2 and recent2.decode() == p1['id']):
+                logger.info(f"⏳ Cooldown: Blocked immediate re-match for {p1['name']} and {p2['name']}")
+                await r.lpush(queue_key, json.dumps(p2))
+                await r.rpush(queue_key, json.dumps(p1))
+                return
 
             try:
-                # Deduct Fees
+                # 3. ATOMIC TRANSACTION: Deduct fees AND create game record
                 fee = config["entry_fee"]
-                success1 = await self.db_service.update_player_balance(p1["name"], -fee)
-                success2 = await self.db_service.update_player_balance(p2["name"], -fee)
+                game_id = str(uuid.uuid4())
+                initial_state = self.game_engine.generate_initial_state(p1["name"], p2["name"], p1["id"], p2["id"])
+
+                result = await self.db_service.initiate_duel_atomic(
+                    p1["id"], p1["name"], p2["id"], p2["name"], city, fee, game_id, initial_state
+                )
                 
-                if not success1 or not success2:
-                    if success1: await self.db_service.update_player_balance(p1["name"], fee)
-                    if success2: await self.db_service.update_player_balance(p2["name"], fee)
-                    print("❌ Transaction failed during matching. Returning players to queue.")
+                if not result.get("success"):
+                    logger.error(f"❌ Atomic Initiation Failed: {result.get('error')}")
+                    # Return players to queue - maybe they have enough now? or someone else will match
                     await r.lpush(queue_key, json.dumps(p2))
                     await r.lpush(queue_key, json.dumps(p1))
                     return
 
-                await self.db_service.create_transaction({"player_name": p1["name"], "amount": -fee, "type": "entry_fee", "city": city})
-                await self.db_service.create_transaction({"player_name": p2["name"], "amount": -fee, "type": "entry_fee", "city": city})
-
-                game_id = self.game_engine.create_game(p1["name"], p2["name"], p1["id"], p2["id"])
-                game_state = self.game_engine.get_game_state(game_id)
-                
-                await self.db_service.create_game({
+                # 4. Activate in Engine
+                self.game_engine.load_game_from_data({
                     "id": game_id,
-                    "player1_name": p1["name"],
-                    "player2_name": p2["name"],
-                    "game_state": game_state,
-                    "status": "waiting_for_poison",
-                    "city": city
+                    "game_state": initial_state
                 })
+                game_state = self.game_engine.get_game_state(game_id)
 
                 await r.hset("pcd:player_game", p1["id"], game_id)
                 await r.hset("pcd:player_game", p2["id"], game_id)
                 await r.hset("pcd:game_city", game_id, city)
 
                 for p in [p1, p2]:
-                    self.connection_manager.player_states[p["id"]] = "IN_GAME"
-                    self.connection_manager.player_games[p["id"]] = game_id
-                    if p["id"] in self.player_timers:
-                        self.player_timers[p["id"]].cancel()
-                        del self.player_timers[p["id"]]
+                    await self.connection_manager.set_player_state(p["id"], "IN_GAME")
+                    await self.connection_manager.set_player_game(p["id"], game_id)
+                    # Cleanup the timeout key
+                    await r.delete(f"pcd:queue_timeout:{p['id']}")
+                
+                # Set Cooldowns (5 mins)
+                await r.setex(f"pcd:recent_opponent:{p1['id']}", 300, p2['id'])
+                await r.setex(f"pcd:recent_opponent:{p2['id']}", 300, p1['id'])
 
                 await self.connection_manager.send_personal_message({
                     "type": "match_found",
@@ -215,12 +260,12 @@ class CityMatchmakingQueue:
                     setup_duration = 30 
                     await self.timer_manager.start_timer(game_id, p1["id"], setup_duration)
                     await self.timer_manager.start_timer(game_id, p2["id"], setup_duration)
-                    print(f"⏱️ Setup timers started for {p1['name']} and {p2['name']}")
+                    logger.info(f"⏱️ Setup timers started for {p1['name']} and {p2['name']}")
 
-                print(f"🏁 Successfully notified {p1['name']} and {p2['name']}")
+                logger.info(f"🏁 Successfully notified {p1['name']} and {p2['name']}")
 
             except Exception as e:
-                print(f"💥 Critical error during matching: {e}")
+                logger.info(f"💥 Critical error during matching: {e}")
                 await r.lpush(queue_key, json.dumps(p1))
                 await r.lpush(queue_key, json.dumps(p2))
 
@@ -231,7 +276,7 @@ class CityMatchmakingQueue:
 
     async def handle_matchmaking_timeout(self, player_id: str, city: str):
         if self.connection_manager.player_states.get(player_id) == "QUEUE":
-            print(f"⏰ Matchmaking timeout for {player_id}")
+            logger.info(f"⏰ Matchmaking timeout for {player_id}")
             await self.connection_manager.send_personal_message({
                 "type": "matchmaking_timeout", 
                 "city": city
@@ -302,7 +347,7 @@ class GameTimerManager:
                 await asyncio.sleep(1.0)
             
             # AUTHORITATIVE TIMEOUT
-            print(f"⏰ Timer expired for player {player_id} in {game_id}. Advancing turn/setup.")
+            logger.info(f"⏰ Timer expired for player {player_id} in {game_id}. Advancing turn/setup.")
             result = await self.game_engine.handle_timeout_persistent(game_id, player_id, self.db_service)
             
             if result.get("success"):
@@ -311,15 +356,38 @@ class GameTimerManager:
                 players_in_game = [pid for pid, gid in self.connection_manager.player_games.items() if gid == game_id]
                 
                 if result.get("type") == "timeout_forfeit":
-                    # FORFEIT! Game over.
+                    # FORFEIT! Game over - the player who timed out LOSES
+                    # Winner is the OTHER player
+                    timed_out_id = player_id
+                    p1_id = game_state["player1"]["id"]
+                    p2_id = game_state["player2"]["id"]
+                    winner_id = p2_id if timed_out_id == p1_id else p1_id
+                    
+                    # AWARD PRIZE to winner
+                    city = await r.hget("pcd:game_city", game_id) or "dubai"
+                    if isinstance(city, bytes): city = city.decode('utf-8')
+                    config = self.matchmaking_queue.get_city_config(city)
+                    prize = config.get("prize_amount", 950)
+                    
+                    winner_name = game_state["player1"]["name"] if p1_id == winner_id else game_state["player2"]["name"]
+                    await self.db_service.update_player_balance(winner_name, prize)
+                    await self.db_service.update_player_stats(winner_name, True)
+                    await self.db_service.create_transaction({
+                        "player_name": winner_name, 
+                        "amount": prize, 
+                        "transaction_type": "prize_payout",
+                        "description": f"Victory by timeout in {city.title()}"
+                    })
+                    
                     timeout_msg = {
                         "type": "game_over",
                         "game_id": game_id,
-                        "winner_id": result["game_state"].get("winner"), # winner added in handle_timeout if state finished
+                        "winner_id": winner_id,
                         "reason": "timeout",
+                        "is_draw": False,
                         "game_state": game_state
                     }
-                    print(f"💀 Broadcast Game Over (Timeout Forfeit) for {game_id}")
+                    logger.info(f"💀 Broadcast Game Over (Timeout Forfeit) for {game_id}. Winner: {winner_name} (+{prize})")
                 
                 elif result.get("type") == "game_cancelled":
                     # BOTH TIMED OUT -> CANCEL & REFUND
@@ -344,7 +412,7 @@ class GameTimerManager:
                         
                         if p_name:
                             await self.db_service.update_player_balance(p_name, refund_amount)
-                            print(f"💰 Refunded {refund_amount} to {p_name}")
+                            logger.info(f"💰 Refunded {refund_amount} to {p_name}")
 
                     timeout_msg = {
                         "type": "game_cancelled",
@@ -352,7 +420,7 @@ class GameTimerManager:
                         "reason": "setup_timeout",
                         "message": "Game cancelled (No poison selected). Coins refunded."
                     }
-                    print(f"🛑 Broadcast Game Cancelled for {game_id}")
+                    logger.info(f"🛑 Broadcast Game Cancelled for {game_id}")
 
                 else:
                     timeout_msg = {

@@ -252,6 +252,11 @@ export const apiService = {
         return response.data;
     },
 
+    createAIGame: async (difficulty: string = 'easy'): Promise<ApiResponse> => {
+        const response = await apiClient.post(`/games/ai?difficulty=${difficulty}`);
+        return response.data;
+    },
+
     getGame: async (gameId: string): Promise<ApiResponse> => {
         const response = await apiClient.get(`/games/${gameId}/state`);
         return response.data;
@@ -365,6 +370,16 @@ export const apiService = {
         return response.data;
     },
 
+    getQueueStats: async (): Promise<ApiResponse<{
+        [city: string]: {
+            players_waiting: number;
+            city_config: any;
+        }
+    }>> => {
+        const response = await apiClient.get('/matchmaking/queue-stats');
+        return response.data;
+    },
+
     // =========================================================================
     // AI & CONFIG
     // =========================================================================
@@ -385,6 +400,7 @@ export const apiService = {
         opponent_collection: string[];
         player_poison: string;
         difficulty: string;
+        game_id?: string | null;
     }): Promise<any> => {
         const response = await apiClient.post('/ai/move', data);
         return response.data;
