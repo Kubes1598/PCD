@@ -605,7 +605,12 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (!nextPlayerTurn && state.gameMode === 'ai') {
             setTimeout(async () => {
                 const s = get();
-                if (s.gameEnded) return;
+
+                // SAFETY: Don't execute AI move if game ended or not started
+                if (s.gameEnded || !s.gameStarted) {
+                    console.log('🛑 AI move cancelled: game ended or not started');
+                    return;
+                }
 
                 try {
                     const result = await apiService.getAIMove({
@@ -618,14 +623,21 @@ export const useGameStore = create<GameState>((set, get) => ({
 
                     if (result && result.choice) {
                         // RE-CHECK STATE after await to prevent race condition timeout bug
-                        if (get().gameEnded) return;
+                        if (get().gameEnded || !get().gameStarted) {
+                            console.log('🛑 AI move cancelled after API call: game state changed');
+                            return;
+                        }
                         get().pickCandy(result.choice);
                     }
                 } catch (error) {
                     console.error("AI Error:", error);
                     // Fallback to random if AI fails
                     // RE-CHECK STATE after await to prevent race condition timeout bug
-                    if (get().gameEnded) return;
+                    const currentState = get();
+                    if (currentState.gameEnded || !currentState.gameStarted) {
+                        console.log('🛑 AI fallback cancelled: game state changed');
+                        return;
+                    }
                     const avail = s.playerCandies.filter(c => !s.opponentCollection.includes(c));
                     if (avail.length > 0) {
                         get().pickCandy(avail[Math.floor(Math.random() * avail.length)]);
@@ -651,13 +663,36 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (turnTimeRemaining > 0) {
             set({ turnTimeRemaining: turnTimeRemaining - 1 });
         } else {
+            // Timeout occurred
             if (gameMode === 'online') {
+                // Online mode: server handles timeout, just show it
                 set({ turnTimeRemaining: 0 });
                 return;
             }
+
+            // AI/Local mode: handle timeout immediately
             const winner = isPlayerTurn ? 'opponent' : 'player';
-            set({ gameEnded: true, gameWinner: winner, winReason: 'timeout', turnTimeRemaining: 0 });
+
+            // CRITICAL: End game FIRST before any other logic
+            set({
+                gameEnded: true,
+                gameWinner: winner,
+                winReason: 'timeout',
+                turnTimeRemaining: 0
+            });
+
             feedbackService.triggerError();
+
+            // Report loss if player timed out
+            if (isPlayerTurn && gameMode === 'ai') {
+                const authState = useAuthStore.getState();
+                if (authState.user && !authState.isGuest) {
+                    apiService.updatePlayerStats({
+                        player_name: authState.user.username,
+                        won: false
+                    });
+                }
+            }
         }
     },
     setIsReconnecting: (val) => set({ isReconnecting: val }),

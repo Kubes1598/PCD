@@ -112,10 +112,26 @@ export const useAuth = () => {
 
     /**
      * Guest Login (via backend API - creates server-side guest session)
+     * 
+     * Persistent: If device_id is available, guest progress is saved and restored
      */
     const guestLogin = async () => {
         try {
-            const result = await apiService.guestAuth();
+            // Get persistent device ID (see gameStore.ts getDeviceId utility)
+            // Import dynamically to avoid circular dependencies
+            let deviceId: string | undefined;
+            try {
+                const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+                deviceId = await AsyncStorage.getItem('pcd_device_id');
+                if (!deviceId) {
+                    deviceId = 'dev_' + Math.random().toString(36).substring(2, 11);
+                    await AsyncStorage.setItem('pcd_device_id', deviceId);
+                }
+            } catch {
+                deviceId = undefined; // Fallback to ephemeral guest
+            }
+
+            const result = await apiService.guestAuth(deviceId);
             if (result.success) {
                 const userData = result.data.user;
                 // Mark as guest in local store as well
@@ -123,6 +139,13 @@ export const useAuth = () => {
                 if (userData.coin_balance !== undefined) {
                     setBalances(userData.coin_balance, userData.diamonds_balance || 0);
                 }
+
+                // Check if restored or new
+                const isRestored = result.message?.includes('back');
+                if (isRestored) {
+                    console.log('✅ Guest session restored with saved progress');
+                }
+
                 return { success: true, message: result.message };
             }
             return { success: false, message: result.message };

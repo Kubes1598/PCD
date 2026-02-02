@@ -58,7 +58,7 @@ const ScreenContainer: React.FC<ScreenContainerProps> = ({
 
     // Optional content padding
     const contentPadding: ViewStyle = withPadding ? {
-        paddingHorizontal: spacing.md,
+        paddingHorizontal: spacing.lg, // Standardized to Large
     } : {};
 
     return (
@@ -102,11 +102,11 @@ const styles = StyleSheet.create({
     },
     backButton: {
         position: 'absolute',
-        left: scale(20),
+        left: spacing.lg,
         zIndex: 50,
-        width: scale(44),
-        height: scale(44),
-        borderRadius: moderateScale(22),
+        width: moderateScale(40),
+        height: moderateScale(40),
+        borderRadius: moderateScale(20),
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
         justifyContent: 'center',
         alignItems: 'center',

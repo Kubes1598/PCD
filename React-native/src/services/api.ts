@@ -11,7 +11,7 @@ import { useAuthStore } from '../store/authStore';
 import { getFriendlyError, isAuthError } from '../utils/errorMapping';
 
 // Use your machine's local IP to connect from simulators and physical devices
-const DEV_MACHINE_IP = '192.168.8.248';
+const DEV_MACHINE_IP = '192.168.18.3';
 export const BASE_URL = `http://${DEV_MACHINE_IP}:8000`;
 
 const apiClient = axios.create({

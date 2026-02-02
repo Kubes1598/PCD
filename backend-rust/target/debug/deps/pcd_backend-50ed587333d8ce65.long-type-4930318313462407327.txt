@@ -1,0 +1,7 @@
+std::option::Option<i32>
+i32: From<std::option::Option<i32>>
+From<deranged::RangedI32<MIN, MAX>>
+From<socket2::Domain>
+From<socket2::Protocol>
+From<zerocopy::byteorder::I16<O>>
+From<zerocopy::byteorder::I32<O>>

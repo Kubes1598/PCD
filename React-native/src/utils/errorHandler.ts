@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 
 /**
  * Global Error Handler for React Native
@@ -6,6 +6,12 @@ import { Alert } from 'react-native';
  */
 
 export const setupGlobalErrorHandler = () => {
+    // ErrorUtils is only available in Native environments
+    if (Platform.OS === 'web') {
+        console.log('Skipping native ErrorUtils on Web');
+        return;
+    }
+
     // @ts-ignore - ErrorUtils is a global in React Native environment
     const globalHandler = ErrorUtils.getGlobalHandler();
 
