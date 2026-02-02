@@ -1,2 +1,0 @@
-fn(axum::extract::State<AppState>) -> impl futures::Future<Output = {type error}> {get_status}
-fn(axum::extract::State<AppState>) -> impl futures::Future<Output = {type error}> {get_status}: Handler<_, _>
