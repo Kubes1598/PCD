@@ -95,13 +95,25 @@ impl GameTimerManager {
                             // Notify players if we have connection manager
                             if let Some(cm) = connection_manager {
                                 if let Some(ref g) = game {
-                                    let msg = serde_json::json!({
+                                    // Send to player 1
+                                    let state1 = g.for_viewer(g.player1.id);
+                                    let msg1 = serde_json::json!({
+                                        "type": "game_over",
+                                        "reason": "timeout",
+                                        "data": result.clone(),
+                                        "game_state": state1
+                                    });
+                                    cm.send_message(&g.player1.id, axum::extract::ws::Message::Text(msg1.to_string()));
+
+                                    // Send to player 2
+                                    let state2 = g.for_viewer(g.player2.id);
+                                    let msg2 = serde_json::json!({
                                         "type": "game_over",
                                         "reason": "timeout",
                                         "data": result,
-                                        "game_state": g
+                                        "game_state": state2
                                     });
-                                    cm.broadcast(&[g.player1.id, g.player2.id], axum::extract::ws::Message::Text(msg.to_string()));
+                                    cm.send_message(&g.player2.id, axum::extract::ws::Message::Text(msg2.to_string()));
                                 }
                             }
 

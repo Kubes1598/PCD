@@ -287,14 +287,25 @@ async fn handle_message(
                         });
                         state.connection_manager.send_message(&player_id, Message::Text(response.to_string()));
 
-                        // If game started, notify both players with initial state
+                        // If game started, notify both players with sanitized state
                         if started {
-                            let game_state = serde_json::json!({
+                            // Send to player 1
+                            let state1 = game.for_viewer(p1_id);
+                            let msg1 = serde_json::json!({
                                 "type": "game_started",
                                 "game_id": game_id,
-                                "game_state": game
+                                "game_state": state1
                             });
-                            state.connection_manager.broadcast(&[p1_id, p2_id], Message::Text(game_state.to_string()));
+                            state.connection_manager.send_message(&p1_id, Message::Text(msg1.to_string()));
+
+                            // Send to player 2
+                            let state2 = game.for_viewer(p2_id);
+                            let msg2 = serde_json::json!({
+                                "type": "game_started",
+                                "game_id": game_id,
+                                "game_state": state2
+                            });
+                            state.connection_manager.send_message(&p2_id, Message::Text(msg2.to_string()));
                         }
                     }
                     Err(e) => {
@@ -321,13 +332,24 @@ async fn handle_message(
                         let p1_id = game.player1.id;
                         let p2_id = game.player2.id;
 
-                        // Broadcast move result and new state to both players
-                        let response = serde_json::json!({
+                        // Send move result and sanitized state to both players
+                        // Send to player 1
+                        let state1 = game.for_viewer(p1_id);
+                        let msg1 = serde_json::json!({
+                            "type": "move_result",
+                            "data": result.clone(),
+                            "game_state": state1
+                        });
+                        state.connection_manager.send_message(&p1_id, Message::Text(msg1.to_string()));
+
+                        // Send to player 2
+                        let state2 = game.for_viewer(p2_id);
+                        let msg2 = serde_json::json!({
                             "type": "move_result",
                             "data": result,
-                            "game_state": game
+                            "game_state": state2
                         });
-                        state.connection_manager.broadcast(&[p1_id, p2_id], Message::Text(response.to_string()));
+                        state.connection_manager.send_message(&p2_id, Message::Text(msg2.to_string()));
 
                         // 4. If game over, process victory reward or draw refund
                         if result.game_over {

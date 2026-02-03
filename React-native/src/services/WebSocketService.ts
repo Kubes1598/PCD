@@ -1,7 +1,7 @@
 import { BASE_URL } from './api';
 
 export type MatchmakingMessage = {
-    type: 'match_found' | 'queue_status' | 'matchmaking_timeout' | 'pong' | 'match_move' | 'match_poison' | 'opponent_disconnected' | 'timer_sync' | 'timer_expired' | 'game_over' | 'reconnected' | 'matchmaking_error' | 'game_cancelled' | 'game_state_update';
+    type: 'match_found' | 'queue_status' | 'matchmaking_timeout' | 'pong' | 'match_move' | 'match_poison' | 'opponent_disconnected' | 'timer_sync' | 'timer_expired' | 'game_over' | 'reconnected' | 'matchmaking_error' | 'game_cancelled' | 'game_state_update' | 'city_stats_update';
     game_id?: string;
     game_state?: any;
     your_role?: 'player1' | 'player2';

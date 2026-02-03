@@ -87,13 +87,22 @@ async fn main() {
             for (city, count) in stats {
                 if count >= 2 {
                         if let Some((p1, p2, game_id)) = mm_state.matchmaking_queue.try_match(&city).await {
-                            let (waiting, fee, prize) = mm_state.matchmaking_queue.get_city_stats(&city).await;
+                            let (_waiting, fee, prize) = mm_state.matchmaking_queue.get_city_stats(&city).await;
                             
                             // 1. Deduct entry fees atomically for both players
                             if let Err(e) = mm_state.db.execute_matchmaking_entry(&p1.id, &p2.id, fee, game_id).await {
-                                tracing::error!("Payment failed for match! {:?}", e);
-                                // If payment fails (e.g. insufficient funds), we should probably notify the players and abort.
-                                // But for now, we just skip this match to keep the loop robust.
+                                tracing::error!("Payment failed for match {}! {:?}", game_id, e);
+                                
+                                // Notify players of failure
+                                let failure_msg = serde_json::json!({
+                                    "type": "match_error",
+                                    "message": "Match aborted: payment failed. Please check your balance."
+                                });
+                                mm_state.connection_manager.send_message(&p1.id, axum::extract::ws::Message::Text(failure_msg.to_string()));
+                                mm_state.connection_manager.send_message(&p2.id, axum::extract::ws::Message::Text(failure_msg.to_string()));
+                                
+                                // Clean up game from engine
+                                mm_state.game_engine.remove_game(game_id);
                                 continue;
                             }
 
@@ -103,20 +112,23 @@ async fn main() {
                             let game = mm_state.game_engine.get_game(game_id).unwrap();
                             
                             // 3. Notify players of the match
+                            let game_p1 = game.for_viewer(p1.id);
                             let msg_p1 = serde_json::json!({
                                 "type": "match_found",
                                 "game_id": game_id,
                                 "your_role": "player1",
                                 "opponent": { "id": p2.id, "name": p2.name },
-                                "game_state": game,
+                                "game_state": game_p1,
                                 "city": city
                             });
+                            
+                            let game_p2 = game.for_viewer(p2.id);
                             let msg_p2 = serde_json::json!({
                                 "type": "match_found",
                                 "game_id": game_id,
                                 "your_role": "player2",
                                 "opponent": { "id": p1.id, "name": p1.name },
-                                "game_state": game,
+                                "game_state": game_p2,
                                 "city": city
                             });
 

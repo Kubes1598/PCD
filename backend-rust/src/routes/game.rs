@@ -149,7 +149,6 @@ async fn create_ai_game(
             "game_id": game_id,
             "player1_id": game.player1.id,
             "player2_id": game.player2.id,
-            "opponent_poison": ai_poison,
             "state": game.state,
             "game_state": {
                 "player1": {

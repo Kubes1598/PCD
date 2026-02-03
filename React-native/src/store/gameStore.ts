@@ -432,8 +432,23 @@ export const useGameStore = create<GameState>((set, get) => ({
                     gameStarted: false,
                     turnTimeRemaining: 0
                 });
+            } else if (data.type === 'city_stats_update') {
+                if (data.city) {
+                    set((state) => ({
+                        queueStats: {
+                            ...state.queueStats,
+                            [data.city as string]: {
+                                players_waiting: data.players_waiting || 0,
+                                players_online: (data as any).players_online || 0,
+                                city_config: {
+                                    entry_fee: (data as any).entry_fee,
+                                    prize_pool: (data as any).prize_pool
+                                }
+                            }
+                        }
+                    }));
+                }
             }
-
             // Always attempt balance refresh on significant events
             if (authState.user) {
                 apiService.getBalance(authState.user.username).then((res: any) => {
@@ -498,9 +513,18 @@ export const useGameStore = create<GameState>((set, get) => ({
             if (gameMode === 'offline') {
                 // Switch to Player 2 (Opponent) selection
                 set({ isSettingPoisonFor: 'opponent' });
-            } else if (gameMode === 'ai') {
-                // Single player vs AI - start immediately since AI poison is already set
-                set({ isSettingPoisonFor: null, gameStarted: true });
+            } else if (gameMode === 'ai' && gameId) {
+                // Report poison to server for AI mode (authoritative)
+                const auth = useAuthStore.getState();
+                const pId = auth.user?.id || `guest_unknown`;
+                try {
+                    await apiService.setPoison(gameId, pId, candy);
+                    set({ isSettingPoisonFor: null, gameStarted: true });
+                } catch (error) {
+                    console.error("Failed to set poison on server:", error);
+                    // Fallback to local if server fails (not ideal but avoids getting stuck)
+                    set({ isSettingPoisonFor: null, gameStarted: true });
+                }
             } else if (gameMode === 'online' && opponentId) {
                 // Online mode - send our poison to opponent and check if both are set
                 webSocketService.sendMessage({ type: 'match_poison', target_id: opponentId, candy: candy });
@@ -596,8 +620,12 @@ export const useGameStore = create<GameState>((set, get) => ({
             turnTimeRemaining: nextTimer
         });
 
-        // Send move to opponent if online and it's our turn
-        if (state.gameMode === 'online' && state.opponentId && !isRemote) {
+        // Send move to server if in AI mode or Online mode
+        if (state.gameMode === 'ai' && state.gameId && !isRemote) {
+            const auth = useAuthStore.getState();
+            const pId = auth.user?.id || `guest_unknown`;
+            apiService.pickCandy(state.gameId, pId, candy).catch(e => console.error("AI move sync error:", e));
+        } else if (state.gameMode === 'online' && state.opponentId && !isRemote) {
             webSocketService.sendMessage({ type: 'match_move', target_id: state.opponentId, move: candy });
         }
 
@@ -620,13 +648,17 @@ export const useGameStore = create<GameState>((set, get) => ({
                         difficulty: s.difficulty,
                         game_id: s.gameId
                     });
-
                     if (result && result.choice) {
-                        // RE-CHECK STATE after await to prevent race condition timeout bug
                         if (get().gameEnded || !get().gameStarted) {
                             console.log('🛑 AI move cancelled after API call: game state changed');
                             return;
                         }
+
+                        // Sync AI move with server
+                        if (s.gameId && s.opponentId) {
+                            apiService.pickCandy(s.gameId, s.opponentId, result.choice).catch(e => console.error("AI move sync error:", e));
+                        }
+
                         get().pickCandy(result.choice);
                     }
                 } catch (error) {

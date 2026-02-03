@@ -109,4 +109,35 @@ impl GameSession {
             .unwrap()
             .as_secs_f64();
     }
+
+    /// Create a sanitized version of the game session for a specific viewer
+    /// This hides sensitive information like the opponent's poison choice.
+    pub fn for_viewer(&self, viewer_id: Uuid) -> serde_json::Value {
+        let mut session_val = serde_json::to_value(self).unwrap();
+        
+        // Sanitize players
+        if let Some(players) = session_val.get_mut("player1").and_then(|p| Some(vec![p])).or_else(|| {
+             // If player1 and player2 are separate fields
+             None
+        }) {
+             // This doesn't work well because session_val is a Map
+        }
+
+        // Simpler approach: construct manually or modify the Map
+        if let Some(obj) = session_val.as_object_mut() {
+            for p_key in &["player1", "player2"] {
+                if let Some(player) = obj.get_mut(*p_key).and_then(|p| p.as_object_mut()) {
+                    let player_id_str = player.get("id").and_then(|id| id.as_str()).unwrap_or("");
+                    let is_viewer = player_id_str == viewer_id.to_string();
+                    
+                    // Hide poison choice if not the viewer and game is not finished
+                    if !is_viewer && self.state != crate::game::types::GameState::Finished {
+                        player.remove("poison_choice");
+                    }
+                }
+            }
+        }
+        
+        session_val
+    }
 }

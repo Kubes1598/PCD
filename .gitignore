@@ -71,3 +71,23 @@ yarn-error.log*
 *.temp
 .tmp/
 .temp/ 
+# Rust
+target/
+**/*.rs.bk
+
+# Node / React Native
+node_modules/
+.expo/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.lock-wscript
+
+# Android/iOS
+android/build/
+ios/build/
+ios/Pods/
+*.ipa
+*.apk
+*.bundle
