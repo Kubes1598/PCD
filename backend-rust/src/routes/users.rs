@@ -8,7 +8,10 @@ use axum::{
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::{error::{AppError, Result}, AppState};
+use crate::{
+    error::{AppError, Result},
+    AppState,
+};
 
 /// Create users router
 pub fn router() -> Router<AppState> {
@@ -50,7 +53,10 @@ async fn get_player_stats(
     State(state): State<AppState>,
     Path(name): Path<String>,
 ) -> Result<Json<ApiResponse<UserProfile>>> {
-    let player = state.db.get_player_by_name(&name).await?
+    let player = state
+        .db
+        .get_player_by_name(&name)
+        .await?
         .ok_or_else(|| AppError::NotFound(format!("Player {} not found", name)))?;
 
     Ok(Json(ApiResponse {
@@ -84,7 +90,8 @@ async fn get_profile(
         state.db.get_player_by_name(&profile_id).await?
     };
 
-    let player = player.ok_or_else(|| AppError::NotFound(format!("Profile {} not found", profile_id)))?;
+    let player =
+        player.ok_or_else(|| AppError::NotFound(format!("Profile {} not found", profile_id)))?;
 
     Ok(Json(ApiResponse {
         success: true,
@@ -106,9 +113,7 @@ async fn get_profile(
 }
 
 /// Get friends
-async fn get_friends(
-    Path(name): Path<String>,
-) -> Result<Json<ApiResponse<Vec<String>>>> {
+async fn get_friends(Path(name): Path<String>) -> Result<Json<ApiResponse<Vec<String>>>> {
     Ok(Json(ApiResponse {
         success: true,
         message: format!("Friends for {} (Stub)", name),
@@ -117,9 +122,7 @@ async fn get_friends(
 }
 
 /// Get quests
-async fn get_quests(
-    Path(name): Path<String>,
-) -> Result<Json<ApiResponse<Vec<String>>>> {
+async fn get_quests(Path(name): Path<String>) -> Result<Json<ApiResponse<Vec<String>>>> {
     Ok(Json(ApiResponse {
         success: true,
         message: format!("Quests for {} (Stub)", name),
@@ -132,10 +135,14 @@ async fn get_balance(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>> {
-    let name = req["player_name"].as_str()
+    let name = req["player_name"]
+        .as_str()
         .ok_or_else(|| AppError::BadRequest("Missing player_name".into()))?;
 
-    let player = state.db.get_player_by_name(name).await?
+    let player = state
+        .db
+        .get_player_by_name(name)
+        .await?
         .ok_or_else(|| AppError::NotFound(format!("Player {} not found", name)))?;
 
     Ok(Json(ApiResponse {

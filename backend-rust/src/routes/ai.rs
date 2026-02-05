@@ -4,13 +4,15 @@ use axum::{routing::post, Json, Router};
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::{Result, AppError}, AppState};
+use crate::{
+    error::{AppError, Result},
+    AppState,
+};
 use uuid::Uuid;
 
 /// Create AI router
 pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/move", post(calculate_move))
+    Router::new().route("/move", post(calculate_move))
 }
 
 /// AI move request
@@ -32,20 +34,19 @@ pub struct AIMoveResponse {
 }
 
 /// Calculate AI move
-async fn calculate_move(
-    Json(req): Json<AIMoveRequest>,
-) -> Result<Json<AIMoveResponse>> {
+async fn calculate_move(Json(req): Json<AIMoveRequest>) -> Result<Json<AIMoveResponse>> {
     let difficulty = req.difficulty.to_lowercase();
-    
+
     // Find candies still in the pool (not yet collected by AI)
-    let available_pool: Vec<String> = req.player_candies
+    let available_pool: Vec<String> = req
+        .player_candies
         .iter()
         .filter(|c| !req.opponent_collection.contains(c))
         .cloned()
         .collect();
 
     if available_pool.is_empty() {
-         return Err(AppError::BadRequest("No candies left in pool".into()));
+        return Err(AppError::BadRequest("No candies left in pool".into()));
     }
 
     // Determine the safe candidates (excluding poison)
@@ -80,15 +81,15 @@ async fn calculate_move(
                 "easy" => {
                     // Random safe choice
                     safe_candidates.choose(&mut rng).unwrap().clone()
-                },
+                }
                 "medium" | "hard" => {
-                    // Try to pick a candy that doesn't exist in human's collection yet? 
+                    // Try to pick a candy that doesn't exist in human's collection yet?
                     // Actually, the human doesn't have a "collection" from THEIR OWN pool.
                     // Strategic moves in this game are mostly about avoiding poison.
-                    // For hard, we could implement a more advanced strategy, 
+                    // For hard, we could implement a more advanced strategy,
                     // but random safe is already quite effective.
                     safe_candidates.choose(&mut rng).unwrap().clone()
-                },
+                }
                 _ => safe_candidates.choose(&mut rng).unwrap().clone(),
             }
         }

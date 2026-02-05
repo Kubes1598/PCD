@@ -264,15 +264,15 @@ export const apiService = {
 
     setPoison: async (gameId: string, playerId: string, poisonChoice: string): Promise<ApiResponse> => {
         const response = await apiClient.post(`/games/${gameId}/poison`, {
-            player_id: playerId,
-            poison_candy: poisonChoice,
+            player: playerId,        // Backend expects 'player' (renamed via serde)
+            poison_choice: poisonChoice,
         });
         return response.data;
     },
 
-    pickCandy: async (gameId: string, player: string, candyChoice: string): Promise<ApiResponse> => {
+    pickCandy: async (gameId: string, playerId: string, candyChoice: string): Promise<ApiResponse> => {
         const response = await apiClient.post(`/games/${gameId}/pick`, {
-            player,
+            player: playerId,        // Backend expects 'player' (renamed via serde)
             candy_choice: candyChoice,
         });
         return response.data;

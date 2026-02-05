@@ -57,41 +57,38 @@ pub async fn require_auth(
     mut request: Request<Body>,
     next: Next,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
-    let token = extract_token(&request)
-        .ok_or_else(|| {
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(serde_json::json!({
-                    "success": false,
-                    "message": "Authentication required",
-                    "error_code": "AUTH_REQUIRED"
-                })),
-            )
-        })?;
+    let token = extract_token(&request).ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({
+                "success": false,
+                "message": "Authentication required",
+                "error_code": "AUTH_REQUIRED"
+            })),
+        )
+    })?;
 
-    let claims = validate_token(&token, &state.config.jwt_secret)
-        .map_err(|_| {
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(serde_json::json!({
-                    "success": false,
-                    "message": "Invalid or expired token",
-                    "error_code": "INVALID_TOKEN"
-                })),
-            )
-        })?;
+    let claims = validate_token(&token, &state.config.jwt_secret).map_err(|_| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({
+                "success": false,
+                "message": "Invalid or expired token",
+                "error_code": "INVALID_TOKEN"
+            })),
+        )
+    })?;
 
-    let user_id = Uuid::parse_str(&claims.sub)
-        .map_err(|_| {
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(serde_json::json!({
-                    "success": false,
-                    "message": "Invalid token payload",
-                    "error_code": "INVALID_TOKEN"
-                })),
-            )
-        })?;
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({
+                "success": false,
+                "message": "Invalid token payload",
+                "error_code": "INVALID_TOKEN"
+            })),
+        )
+    })?;
 
     request.extensions_mut().insert(AuthUser { id: user_id });
     Ok(next.run(request).await)

@@ -12,6 +12,7 @@ import { feedbackService } from '../services/FeedbackService';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
 import { scale, moderateScale, spacing, radii, SCREEN_WIDTH, isSmallDevice, platformValue } from '../utils/responsive';
 import { apiService } from '../services/api';
+import { CITY_CONFIG, AI_CONFIG } from '../config/gameConfig';
 
 type HomeScreenProps = {
     navigation: DrawerNavigationProp<any, any>;
@@ -76,8 +77,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }, [matchFound, gameId]);
 
     const handleStartGame = async (mode: 'ai' | 'online' | 'offline', difficulty?: 'easy' | 'medium' | 'hard', arena?: 'Dubai' | 'Cairo' | 'Oslo') => {
-        const fees = { easy: 0, medium: 100, hard: 250, online: 500, Dubai: 500, Cairo: 1000, Oslo: 5000 };
-        const fee = mode === 'online' ? (arena ? fees[arena] : 500) : (mode === 'ai' && difficulty ? fees[difficulty] : 0);
+        // Use config values instead of hardcoded fees
+        let fee = 0;
+        if (mode === 'online' && arena) {
+            fee = CITY_CONFIG[arena]?.entryFee || 500;
+        } else if (mode === 'ai' && difficulty) {
+            fee = AI_CONFIG[difficulty]?.entryFee || 0;
+        }
 
         if (coins < fee) {
             alert(`Insufficient Coins! You need ${fee} coins to enter.`);
@@ -346,30 +352,33 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
                         <View style={styles.difficultyOptions}>
                             {[
-                                { level: 'easy', label: 'Easy', fee: 0, color: '#10B981', desc: 'Relaxed gameplay' },
-                                { level: 'medium', label: 'Medium', fee: 100, color: '#F59E0B', desc: 'Balanced challenge' },
-                                { level: 'hard', label: 'Hard', fee: 250, color: '#EF4444', desc: 'Expert mode' },
-                            ].map((diff) => (
-                                <TouchableOpacity
-                                    key={diff.level}
-                                    style={[styles.difficultyItem, { borderColor: diff.color + '40' }]}
-                                    onPress={() => handleStartGame('ai', diff.level as any)}
-                                >
-                                    <View style={[styles.difficultyIcon, { backgroundColor: diff.color + '20' }]}>
-                                        <Sword color={diff.color} size={moderateScale(24)} />
-                                    </View>
-                                    <View style={{ flex: 1, marginLeft: spacing.md }}>
-                                        <Text style={[styles.difficultyLabel, { color: diff.color }]}>{diff.label}</Text>
-                                        <Text style={styles.difficultyDesc}>{diff.desc}</Text>
-                                    </View>
-                                    {diff.fee > 0 && (
-                                        <View style={styles.difficultyFee}>
-                                            <CoinIcon color="#F59E0B" size={moderateScale(12)} />
-                                            <Text style={styles.difficultyFeeText}>{diff.fee}</Text>
+                                { level: 'easy' as const, label: 'Easy', color: '#10B981', desc: 'Relaxed gameplay' },
+                                { level: 'medium' as const, label: 'Medium', color: '#F59E0B', desc: 'Balanced challenge' },
+                                { level: 'hard' as const, label: 'Hard', color: '#EF4444', desc: 'Expert mode' },
+                            ].map((diff) => {
+                                const aiConfig = AI_CONFIG[diff.level];
+                                return (
+                                    <TouchableOpacity
+                                        key={diff.level}
+                                        style={[styles.difficultyItem, { borderColor: diff.color + '40' }]}
+                                        onPress={() => handleStartGame('ai', diff.level as any)}
+                                    >
+                                        <View style={[styles.difficultyIcon, { backgroundColor: diff.color + '20' }]}>
+                                            <Sword color={diff.color} size={moderateScale(24)} />
                                         </View>
-                                    )}
-                                </TouchableOpacity>
-                            ))}
+                                        <View style={{ flex: 1, marginLeft: spacing.md }}>
+                                            <Text style={[styles.difficultyLabel, { color: diff.color }]}>{diff.label}</Text>
+                                            <Text style={styles.difficultyDesc}>{diff.desc}</Text>
+                                        </View>
+                                        {aiConfig.entryFee > 0 && (
+                                            <View style={styles.difficultyFee}>
+                                                <CoinIcon color="#F59E0B" size={moderateScale(12)} />
+                                                <Text style={styles.difficultyFeeText}>{aiConfig.entryFee}</Text>
+                                            </View>
+                                        )}
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </View>
 
                         <TouchableOpacity
@@ -445,28 +454,29 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                         </View>
 
                         <View style={styles.difficultyOptions}>
-                            {[
-                                { name: 'Dubai', fee: 500, prize: 900, color: '#F59E0B', desc: 'Standard Arena' },
-                                { name: 'Cairo', fee: 1000, prize: 1800, color: '#3B82F6', desc: 'Pro Arena' },
-                                { name: 'Oslo', fee: 5000, prize: 9000, color: '#8B5CF6', desc: 'Elite Arena' },
-                            ].map((arena) => (
-                                <TouchableOpacity
-                                    key={arena.name}
-                                    style={[styles.difficultyItem, { borderColor: arena.color + '40' }]}
-                                    onPress={() => handleStartGame('online', undefined, arena.name as any)}
-                                >
-                                    <View style={[styles.difficultyIcon, { backgroundColor: arena.color + '20' }]}>
-                                        <Globe color={arena.color} size={moderateScale(24)} />
-                                    </View>
-                                    <View style={{ flex: 1, marginLeft: spacing.md }}>
-                                        <Text style={[styles.difficultyLabel, { color: arena.color }]}>{arena.name}</Text>
-                                        <Text style={styles.difficultyDesc}>{arena.desc}</Text>
-                                    </View>
-                                    <View style={styles.difficultyFee}>
-                                        <Text style={styles.difficultyFeeText}>Fee: {arena.fee}</Text>
-                                    </View>
-                                </TouchableOpacity>
-                            ))}
+                            {(['Dubai', 'Cairo', 'Oslo'] as const).map((cityName) => {
+                                const cityConfig = CITY_CONFIG[cityName];
+                                const color = cityName === 'Dubai' ? '#F59E0B' : cityName === 'Cairo' ? '#3B82F6' : '#8B5CF6';
+                                const desc = cityName === 'Dubai' ? 'Standard Arena' : cityName === 'Cairo' ? 'Pro Arena' : 'Elite Arena';
+                                return (
+                                    <TouchableOpacity
+                                        key={cityName}
+                                        style={[styles.difficultyItem, { borderColor: color + '40' }]}
+                                        onPress={() => handleStartGame('online', undefined, cityName)}
+                                    >
+                                        <View style={[styles.difficultyIcon, { backgroundColor: color + '20' }]}>
+                                            <Globe color={color} size={moderateScale(24)} />
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: spacing.md }}>
+                                            <Text style={[styles.difficultyLabel, { color }]}>{cityName}</Text>
+                                            <Text style={styles.difficultyDesc}>{desc}</Text>
+                                        </View>
+                                        <View style={styles.difficultyFee}>
+                                            <Text style={styles.difficultyFeeText}>Fee: {cityConfig.entryFee}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </View>
 
                         <TouchableOpacity

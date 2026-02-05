@@ -13,8 +13,11 @@ use uuid::Uuid;
 
 use crate::AppState;
 
+use axum::{
+    routing::{get, post},
+    Json,
+};
 use tokio::sync::mpsc;
-use axum::{Json, routing::{get, post}};
 
 /// Create matchmaking router
 pub fn router() -> axum::Router<AppState> {
@@ -25,7 +28,6 @@ pub fn router() -> axum::Router<AppState> {
         .route("/queue-stats", get(get_queue_stats))
         .route("/ws/:player_id", get(ws_handler))
 }
-
 
 /// Join matchmaking request
 #[derive(Debug, Deserialize)]
@@ -40,7 +42,7 @@ async fn join_matchmaking(
     Json(req): Json<JoinRequest>,
 ) -> Json<serde_json::Value> {
     let player_id = Uuid::new_v4();
-    
+
     // City config defaults
     let (entry_cost, prize_pool, turn_timer) = match req.city.to_lowercase().as_str() {
         "dubai" => (50, 950, 30),
@@ -48,7 +50,7 @@ async fn join_matchmaking(
         "oslo" => (200, 3800, 20),
         _ => (50, 950, 30),
     };
-    
+
     Json(serde_json::json!({
         "success": true,
         "message": "Use WebSocket endpoint for real-time matchmaking",
@@ -76,19 +78,20 @@ async fn leave_matchmaking(
 }
 
 /// Get queue statistics per city
-async fn get_queue_stats(
-    State(state): State<AppState>,
-) -> Json<serde_json::Value> {
+async fn get_queue_stats(State(state): State<AppState>) -> Json<serde_json::Value> {
     let stats = state.matchmaking_queue.get_stats().await;
     let mut city_stats = std::collections::HashMap::new();
-    
+
     for (city, count) in stats {
-        city_stats.insert(city, serde_json::json!({
-            "players_waiting": count,
-            "city_config": {}
-        }));
+        city_stats.insert(
+            city,
+            serde_json::json!({
+                "players_waiting": count,
+                "city_config": {}
+            }),
+        );
     }
-    
+
     Json(serde_json::json!({
         "success": true,
         "message": "Queue stats retrieved",
@@ -96,12 +99,11 @@ async fn get_queue_stats(
     }))
 }
 
-
 /// Get matchmaking status
 async fn get_status(State(state): State<AppState>) -> Json<serde_json::Value> {
     let stats = state.matchmaking_queue.get_stats().await;
     let total_waiting: usize = stats.iter().map(|(_, count)| count).sum();
-    
+
     Json(serde_json::json!({
         "success": true,
         "queue_size": total_waiting,
@@ -121,14 +123,17 @@ pub async fn ws_handler(
 /// Handle WebSocket connection
 async fn handle_socket(socket: WebSocket, state: AppState, player_id: Uuid) {
     let (mut sender, mut receiver) = socket.split();
-    
+
     // Create a channel for outgoing messages
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
 
     tracing::info!("Player {} connected via WebSocket", player_id);
 
     // Register connection
-    state.connection_manager.connect(player_id, tx.clone()).await;
+    state
+        .connection_manager
+        .connect(player_id, tx.clone())
+        .await;
 
     // Send welcome message
     let welcome = serde_json::json!({
@@ -136,7 +141,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, player_id: Uuid) {
         "player_id": player_id,
         "message": "Connected to PCD matchmaking server"
     });
-    
+
     let _ = tx.send(Message::Text(welcome.to_string()));
 
     // Spawn a task to handle outgoing messages from the channel
@@ -182,7 +187,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, player_id: Uuid) {
     if let Some(city_name) = city {
         broadcast_city_stats(state, &city_name).await;
     }
-    
+
     tracing::info!("Player {} disconnected", player_id);
 }
 
@@ -190,7 +195,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, player_id: Uuid) {
 async fn broadcast_city_stats(state: AppState, city: &str) {
     let (waiting, entry_fee, prize) = state.matchmaking_queue.get_city_stats(city).await;
     let online = state.connection_manager.get_online_count(city);
-    
+
     let stats = serde_json::json!({
         "type": "city_stats_update",
         "city": city,
@@ -199,8 +204,10 @@ async fn broadcast_city_stats(state: AppState, city: &str) {
         "entry_fee": entry_fee,
         "prize_pool": prize
     });
-    
-    state.connection_manager.broadcast_to_city(city, Message::Text(stats.to_string()));
+
+    state
+        .connection_manager
+        .broadcast_to_city(city, Message::Text(stats.to_string()));
 }
 
 /// Handle incoming WebSocket message
@@ -215,16 +222,20 @@ async fn handle_message(
     match msg_type {
         "ping" => {
             let pong = serde_json::json!({"type": "pong"});
-            state.connection_manager.send_message(&player_id, Message::Text(pong.to_string()));
+            state
+                .connection_manager
+                .send_message(&player_id, Message::Text(pong.to_string()));
         }
         "select_city" => {
             let city = msg["city"].as_str().unwrap_or("dubai");
-            state.connection_manager.set_location(player_id, city.to_string());
-            
+            state
+                .connection_manager
+                .set_location(player_id, city.to_string());
+
             // Send initial stats for the selected city
             let (waiting, entry_fee, prize) = state.matchmaking_queue.get_city_stats(city).await;
             let online = state.connection_manager.get_online_count(city);
-            
+
             let response = serde_json::json!({
                 "type": "city_joined",
                 "city": city,
@@ -233,25 +244,33 @@ async fn handle_message(
                 "entry_fee": entry_fee,
                 "prize_pool": prize
             });
-            state.connection_manager.send_message(&player_id, Message::Text(response.to_string()));
-            
+            state
+                .connection_manager
+                .send_message(&player_id, Message::Text(response.to_string()));
+
             // Broadcast update to others in the city
             broadcast_city_stats(state.clone(), city).await;
         }
         "join_queue" => {
             let city = msg["city"].as_str().unwrap_or("dubai");
             let player_name = msg["player_name"].as_str().unwrap_or("Anonymous");
-            
+
             tracing::info!("Player {} joining {} queue", player_name, city);
-            
-            if state.matchmaking_queue.join(player_id, player_name.to_string(), city.to_string()).await? {
+
+            if state
+                .matchmaking_queue
+                .join(player_id, player_name.to_string(), city.to_string())
+                .await?
+            {
                 let response = serde_json::json!({
                     "type": "queue_joined",
                     "city": city,
                     "message": "Added to matchmaking queue"
                 });
-                state.connection_manager.send_message(&player_id, Message::Text(response.to_string()));
-                
+                state
+                    .connection_manager
+                    .send_message(&player_id, Message::Text(response.to_string()));
+
                 // Broadcast updated stats
                 broadcast_city_stats(state.clone(), city).await;
             }
@@ -262,19 +281,26 @@ async fn handle_message(
                     "type": "queue_left",
                     "message": "Removed from queue"
                 });
-                state.connection_manager.send_message(&player_id, Message::Text(response.to_string()));
-                
+                state
+                    .connection_manager
+                    .send_message(&player_id, Message::Text(response.to_string()));
+
                 // Broadcast updated stats
                 broadcast_city_stats(state.clone(), &city).await;
             }
         }
         "match_poison" => {
-            let game_id = msg["target_id"].as_str()
+            let game_id = msg["target_id"]
+                .as_str()
                 .and_then(|s| Uuid::parse_str(s).ok());
             let candy = msg["candy"].as_str().unwrap_or("");
 
             if let Some(game_id) = game_id {
-                match state.game_engine.set_poison_choice(game_id, player_id, candy).await {
+                match state
+                    .game_engine
+                    .set_poison_choice(game_id, player_id, candy)
+                    .await
+                {
                     Ok(started) => {
                         let game = state.game_engine.get_game(game_id).unwrap();
                         let p1_id = game.player1.id;
@@ -285,7 +311,9 @@ async fn handle_message(
                             "type": "poison_set",
                             "game_started": started
                         });
-                        state.connection_manager.send_message(&player_id, Message::Text(response.to_string()));
+                        state
+                            .connection_manager
+                            .send_message(&player_id, Message::Text(response.to_string()));
 
                         // If game started, notify both players with sanitized state
                         if started {
@@ -296,7 +324,9 @@ async fn handle_message(
                                 "game_id": game_id,
                                 "game_state": state1
                             });
-                            state.connection_manager.send_message(&p1_id, Message::Text(msg1.to_string()));
+                            state
+                                .connection_manager
+                                .send_message(&p1_id, Message::Text(msg1.to_string()));
 
                             // Send to player 2
                             let state2 = game.for_viewer(p2_id);
@@ -305,7 +335,9 @@ async fn handle_message(
                                 "game_id": game_id,
                                 "game_state": state2
                             });
-                            state.connection_manager.send_message(&p2_id, Message::Text(msg2.to_string()));
+                            state
+                                .connection_manager
+                                .send_message(&p2_id, Message::Text(msg2.to_string()));
                         }
                     }
                     Err(e) => {
@@ -313,15 +345,19 @@ async fn handle_message(
                             "type": "error",
                             "message": e.to_string()
                         });
-                        state.connection_manager.send_message(&player_id, Message::Text(response.to_string()));
+                        state
+                            .connection_manager
+                            .send_message(&player_id, Message::Text(response.to_string()));
                     }
                 }
             }
         }
         "match_move" => {
-            let game_id = msg["target_id"].as_str()
+            let game_id = msg["target_id"]
+                .as_str()
                 .and_then(|s| Uuid::parse_str(s).ok());
-            let candy = msg["candy"].as_str()
+            let candy = msg["candy"]
+                .as_str()
                 .or_else(|| msg["move"].as_str())
                 .unwrap_or("");
 
@@ -340,7 +376,9 @@ async fn handle_message(
                             "data": result.clone(),
                             "game_state": state1
                         });
-                        state.connection_manager.send_message(&p1_id, Message::Text(msg1.to_string()));
+                        state
+                            .connection_manager
+                            .send_message(&p1_id, Message::Text(msg1.to_string()));
 
                         // Send to player 2
                         let state2 = game.for_viewer(p2_id);
@@ -349,7 +387,9 @@ async fn handle_message(
                             "data": result,
                             "game_state": state2
                         });
-                        state.connection_manager.send_message(&p2_id, Message::Text(msg2.to_string()));
+                        state
+                            .connection_manager
+                            .send_message(&p2_id, Message::Text(msg2.to_string()));
 
                         // 4. If game over, process victory reward or draw refund
                         if result.game_over {
@@ -361,18 +401,49 @@ async fn handle_message(
                                 if fee > 0 {
                                     let ref1 = format!("{}_{}_draw_refund", game_id, p1_id);
                                     let ref2 = format!("{}_{}_draw_refund", game_id, p2_id);
-                                    let _ = state.db.execute_transaction(&p1_id, fee, "draw_refund", Some(game_id), Some(ref1)).await;
-                                    let _ = state.db.execute_transaction(&p2_id, fee, "draw_refund", Some(game_id), Some(ref2)).await;
+                                    let _ = state
+                                        .db
+                                        .execute_transaction(
+                                            &p1_id,
+                                            fee,
+                                            "draw_refund",
+                                            Some(game_id),
+                                            Some(ref1),
+                                        )
+                                        .await;
+                                    let _ = state
+                                        .db
+                                        .execute_transaction(
+                                            &p2_id,
+                                            fee,
+                                            "draw_refund",
+                                            Some(game_id),
+                                            Some(ref2),
+                                        )
+                                        .await;
                                 }
                             } else if prize > 0 {
                                 if let Some(winner_name) = result.winner.as_deref() {
-                                    let winner_id = if winner_name == game.player1.name { Some(game.player1.id) }
-                                                   else if winner_name == game.player2.name { Some(game.player2.id) }
-                                                   else { None };
-                                    
+                                    let winner_id = if winner_name == game.player1.name {
+                                        Some(game.player1.id)
+                                    } else if winner_name == game.player2.name {
+                                        Some(game.player2.id)
+                                    } else {
+                                        None
+                                    };
+
                                     if let Some(w_id) = winner_id {
                                         let ref_id = format!("{}_{}_victory", game_id, w_id);
-                                        let _ = state.db.execute_transaction(&w_id, prize, "victory_reward", Some(game_id), Some(ref_id)).await;
+                                        let _ = state
+                                            .db
+                                            .execute_transaction(
+                                                &w_id,
+                                                prize,
+                                                "victory_reward",
+                                                Some(game_id),
+                                                Some(ref_id),
+                                            )
+                                            .await;
                                     }
                                 }
                             }
@@ -383,7 +454,9 @@ async fn handle_message(
                             "type": "error",
                             "message": e.to_string()
                         });
-                        state.connection_manager.send_message(&player_id, Message::Text(response.to_string()));
+                        state
+                            .connection_manager
+                            .send_message(&player_id, Message::Text(response.to_string()));
                     }
                 }
             }

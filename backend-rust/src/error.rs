@@ -57,36 +57,16 @@ pub struct ErrorResponse {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, error_code, message) = match &self {
-            AppError::Unauthorized => (
-                StatusCode::UNAUTHORIZED,
-                "AUTH_REQUIRED",
-                self.to_string(),
-            ),
+            AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "AUTH_REQUIRED", self.to_string()),
             AppError::InvalidCredentials => (
                 StatusCode::UNAUTHORIZED,
                 "INVALID_CREDENTIALS",
                 self.to_string(),
             ),
-            AppError::Forbidden => (
-                StatusCode::FORBIDDEN,
-                "ACCESS_DENIED",
-                self.to_string(),
-            ),
-            AppError::NotFound(msg) => (
-                StatusCode::NOT_FOUND,
-                "NOT_FOUND",
-                msg.clone(),
-            ),
-            AppError::BadRequest(msg) => (
-                StatusCode::BAD_REQUEST,
-                "BAD_REQUEST",
-                msg.clone(),
-            ),
-            AppError::Conflict(msg) => (
-                StatusCode::CONFLICT,
-                "CONFLICT",
-                msg.clone(),
-            ),
+            AppError::Forbidden => (StatusCode::FORBIDDEN, "ACCESS_DENIED", self.to_string()),
+            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, "NOT_FOUND", msg.clone()),
+            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, "BAD_REQUEST", msg.clone()),
+            AppError::Conflict(msg) => (StatusCode::CONFLICT, "CONFLICT", msg.clone()),
             AppError::RateLimited => (
                 StatusCode::TOO_MANY_REQUESTS,
                 "RATE_LIMITED",

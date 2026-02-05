@@ -1,12 +1,12 @@
 //! Routes module
 
-pub mod auth;
-pub mod game;
-pub mod users;
 pub mod ai;
+pub mod auth;
+pub mod config;
+pub mod game;
 pub mod matchmaking;
 pub mod oauth;
-pub mod config;
+pub mod users;
 
 use axum::{extract::State, Json};
 use serde::Serialize;

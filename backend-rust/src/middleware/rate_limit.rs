@@ -1,16 +1,16 @@
 use axum::{
     body::Body,
     extract::{ConnectInfo, State},
-    http::{header, Request, StatusCode, Response, HeaderValue},
+    http::{header, HeaderValue, Request, Response, StatusCode},
     middleware::Next,
     Json,
 };
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use once_cell::sync::Lazy;
 
 use crate::AppState;
 
@@ -28,6 +28,12 @@ pub struct RateLimiter {
     last_cleanup: Arc<RwLock<Instant>>,
 }
 
+impl Default for RateLimiter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RateLimiter {
     /// Create new rate limiter
     pub fn new() -> Self {
@@ -40,7 +46,7 @@ impl RateLimiter {
     /// Check if request is allowed
     pub async fn check(&self, key: &str, limit: u32, window_secs: u64) -> bool {
         let now = Instant::now();
-        
+
         // Periodic cleanup (every 10 minutes)
         let should_cleanup = {
             let last = self.last_cleanup.read().await;
@@ -85,9 +91,7 @@ impl RateLimiter {
         // Keep entries for 1 hour to avoid frequent re-creation
         let expiry = Duration::from_secs(3600);
 
-        buckets.retain(|_, bucket| {
-            now.duration_since(bucket.window_start) < expiry
-        });
+        buckets.retain(|_, bucket| now.duration_since(bucket.window_start) < expiry);
     }
 }
 
@@ -113,19 +117,19 @@ fn get_path_config(path: &str) -> (u32, u64, String) {
     let (limit, window) = match prefix {
         "auth" => {
             if path.contains("/login") {
-                (5, 60)      // 5 per minute for login
+                (5, 60) // 5 per minute for login
             } else if path.contains("/register") {
-                (10, 60)     // 10 per minute for register
+                (10, 60) // 10 per minute for register
             } else {
-                (20, 60)     // 20 per minute for other auth
+                (20, 60) // 20 per minute for other auth
             }
         }
-        "oauth" => (20, 60),    // 20 per minute for oauth
+        "oauth" => (20, 60),              // 20 per minute for oauth
         "matchmaking" | "ws" => (30, 60), // 30 per minute
-        "games" => (100, 60),   // 100 per minute
-        "users" => (60, 60),    // 60 per minute
-        "ai" => (200, 60),      // 200 per minute (moves are fast)
-        _ => (60, 60),          // Default 60 per minute
+        "games" => (100, 60),             // 100 per minute
+        "users" => (60, 60),              // 60 per minute
+        "ai" => (200, 60),                // 200 per minute (moves are fast)
+        _ => (60, 60),                    // Default 60 per minute
     };
 
     (limit, window, prefix.to_string())
@@ -140,7 +144,7 @@ pub async fn rate_limit_middleware(
     let path = request.uri().path();
 
     // 1. Skip rate limiting for specific paths
-    if SKIP_PATHS.iter().any(|&p| path == p) {
+    if SKIP_PATHS.contains(&path) {
         return Ok(next.run(request).await);
     }
 
@@ -163,7 +167,10 @@ pub async fn rate_limit_middleware(
 
     // 5. Try Redis rate limiting if available
     if let Some(redis) = &state.redis {
-        match redis.check_rate_limit(&identifier, limit as i64, window as i64).await {
+        match redis
+            .check_rate_limit(&identifier, limit as i64, window as i64)
+            .await
+        {
             Ok(allowed) => {
                 if !allowed {
                     return Err(build_rate_limit_error(window, &identifier));
@@ -192,7 +199,7 @@ pub async fn rate_limit_middleware(
     if let Ok(limit_val) = HeaderValue::from_str(&limit.to_string()) {
         headers.insert("X-RateLimit-Limit", limit_val);
     }
-    
+
     Ok(response)
 }
 
@@ -208,7 +215,7 @@ fn is_websocket_upgrade(request: &Request<Body>) -> bool {
 
 /// Check if IP address is local/dev
 fn is_local_address(ip: &str) -> bool {
-    ip.starts_with("127.") 
+    ip.starts_with("127.")
         || ip.starts_with("192.168.")
         || ip.starts_with("10.")
         || ip == "localhost"
@@ -218,7 +225,10 @@ fn is_local_address(ip: &str) -> bool {
 }
 
 /// Helper to build a rate limit error response
-fn build_rate_limit_error(window_secs: u64, identifier: &str) -> (StatusCode, Json<serde_json::Value>) {
+fn build_rate_limit_error(
+    window_secs: u64,
+    identifier: &str,
+) -> (StatusCode, Json<serde_json::Value>) {
     tracing::warn!("Rate limit exceeded for: {}", identifier);
     (
         StatusCode::TOO_MANY_REQUESTS,

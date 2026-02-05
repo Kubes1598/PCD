@@ -1,15 +1,19 @@
 //! Game routes
 
 use axum::{
-    extract::{Path, State, Query},
+    extract::{Path, Query, State},
     routing::{delete, get, post},
-    Json, Router, Extension,
+    Extension, Json, Router,
 };
+use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use rand::seq::SliceRandom;
 
-use crate::{error::{AppError, Result}, AppState, middleware::auth::AuthUser};
+use crate::{
+    error::{AppError, Result},
+    middleware::auth::AuthUser,
+    AppState,
+};
 
 /// Create game router
 pub fn router() -> Router<AppState> {
@@ -60,14 +64,25 @@ async fn create_game(
     State(state): State<AppState>,
     Json(req): Json<CreateGameRequest>,
 ) -> Result<Json<GameResponse>> {
-    let game_id = state.game_engine.create_game(
-        req.player1_name.clone(),
-        req.player2_name.clone(),
-        req.player1_id,
-        req.player2_id,
-    ).await;
+    // Default timers for generic game creation
+    let turn_timer = 30u32;
+    let poison_timer = 60u32;
 
-    let game = state.game_engine.get_game(game_id)
+    let game_id = state
+        .game_engine
+        .create_game(
+            req.player1_name.clone(),
+            req.player2_name.clone(),
+            req.player1_id,
+            req.player2_id,
+            turn_timer,
+            poison_timer,
+        )
+        .await;
+
+    let game = state
+        .game_engine
+        .get_game(game_id)
         .ok_or_else(|| AppError::Internal("Failed to create game".into()))?;
 
     Ok(Json(GameResponse {
@@ -95,9 +110,12 @@ async fn create_ai_game(
     Query(query): Query<AIDifficultyQuery>,
 ) -> Result<Json<GameResponse>> {
     let difficulty = query.difficulty.unwrap_or_else(|| "easy".to_string());
-    
+
     // Get player name
-    let player = state.db.get_player(&user.id).await?
+    let player = state
+        .db
+        .get_player(&user.id)
+        .await?
         .ok_or_else(|| AppError::NotFound("Player not found".into()))?;
 
     // Deduct entry fee (using AI_CONFIG equivalents)
@@ -109,17 +127,33 @@ async fn create_ai_game(
 
     if fee > 0 {
         let reference_id = format!("ai_{}_{}", user.id, Uuid::new_v4()); // AI games don't have a shared ID yet, use random for unique deduction
-        state.db.execute_transaction(&user.id, -fee, "ai_entry_fee", None, Some(reference_id)).await
+        state
+            .db
+            .execute_transaction(&user.id, -fee, "ai_entry_fee", None, Some(reference_id))
+            .await
             .map_err(|_| AppError::Internal("Failed to deduct coins".into()))?;
     }
 
-    // Create game session
-    let game_id = state.game_engine.create_game(
-        player.name.clone(),
-        "Computer".to_string(),
-        Some(user.id),
-        Some(Uuid::new_v4()), // Random ID for computer
-    ).await;
+    // Get difficulty-based timer configuration
+    let turn_timer = match difficulty.as_str() {
+        "medium" => 20u32,
+        "hard" => 10u32,
+        _ => 30u32, // easy
+    };
+    let poison_timer = 60u32; // Standard poison selection time
+
+    // Create game session with difficulty-based timers
+    let game_id = state
+        .game_engine
+        .create_game(
+            player.name.clone(),
+            "Computer".to_string(),
+            Some(user.id),
+            Some(Uuid::new_v4()), // Random ID for computer
+            turn_timer,
+            poison_timer,
+        )
+        .await;
 
     // Set stakes for AI game
     let prize = match difficulty.as_str() {
@@ -129,18 +163,24 @@ async fn create_ai_game(
     };
     state.game_engine.set_stakes(game_id, fee, prize);
 
-    let game = state.game_engine.get_game(game_id)
+    let game = state
+        .game_engine
+        .get_game(game_id)
         .ok_or_else(|| AppError::Internal("Failed to retrieve new game".into()))?;
 
     // Randomly pick AI poison
     let ai_id = game.player2.id;
     let ai_candies: Vec<String> = game.player2.owned_candies.iter().cloned().collect();
-    let ai_poison = ai_candies.choose(&mut rand::thread_rng())
+    let ai_poison = ai_candies
+        .choose(&mut rand::thread_rng())
         .ok_or_else(|| AppError::Internal("Failed to pick AI poison".into()))?
         .clone();
 
     // Set AI poison
-    state.game_engine.set_poison_choice(game_id, ai_id, &ai_poison).await?;
+    state
+        .game_engine
+        .set_poison_choice(game_id, ai_id, &ai_poison)
+        .await?;
 
     Ok(Json(GameResponse {
         success: true,
@@ -169,7 +209,9 @@ async fn get_game(
     State(state): State<AppState>,
     Path(game_id): Path<Uuid>,
 ) -> Result<Json<GameResponse>> {
-    let game = state.game_engine.get_game(game_id)
+    let game = state
+        .game_engine
+        .get_game(game_id)
         .ok_or_else(|| AppError::NotFound(format!("Game {} not found", game_id)))?;
 
     Ok(Json(GameResponse {
@@ -201,7 +243,9 @@ async fn delete_game(
     State(state): State<AppState>,
     Path(game_id): Path<Uuid>,
 ) -> Result<Json<GameResponse>> {
-    state.game_engine.remove_game(game_id)
+    state
+        .game_engine
+        .remove_game(game_id)
         .ok_or_else(|| AppError::NotFound(format!("Game {} not found", game_id)))?;
 
     Ok(Json(GameResponse {
@@ -217,11 +261,10 @@ async fn set_poison(
     Path(game_id): Path<Uuid>,
     Json(req): Json<SetPoisonRequest>,
 ) -> Result<Json<GameResponse>> {
-    let game_started = state.game_engine.set_poison_choice(
-        game_id,
-        req.player_id,
-        &req.poison_choice,
-    ).await?;
+    let game_started = state
+        .game_engine
+        .set_poison_choice(game_id, req.player_id, &req.poison_choice)
+        .await?;
 
     let message = if game_started {
         "Poison set - game started!"
@@ -244,36 +287,57 @@ async fn pick_candy(
     Path(game_id): Path<Uuid>,
     Json(req): Json<PickCandyRequest>,
 ) -> Result<Json<GameResponse>> {
-    let result = state.game_engine.make_move(
-        game_id,
-        req.player_id,
-        &req.candy_choice,
-    ).await?;
+    let result = state
+        .game_engine
+        .make_move(game_id, req.player_id, &req.candy_choice)
+        .await?;
 
     // If game over, process victory/draw settlement
     if result.game_over {
         let game = state.game_engine.get_game(game_id).unwrap();
         let prize = game.prize;
-        
+
         if result.result == crate::game::GameResult::Draw {
             // Refund entry fee in case of draw
             let fee = game.entry_fee;
             if fee > 0 {
                 let ref1 = format!("{}_{}_draw_refund", game_id, game.player1.id);
-                let _ = state.db.execute_transaction(&game.player1.id, fee, "draw_refund", Some(game_id), Some(ref1)).await;
+                let _ = state
+                    .db
+                    .execute_transaction(
+                        &game.player1.id,
+                        fee,
+                        "draw_refund",
+                        Some(game_id),
+                        Some(ref1),
+                    )
+                    .await;
                 // If player2 is a real player (not AI), refund them too
                 // In AI mode, player2 is a random UUID from Uuid::new_v4() which won't exist in DB,
                 // so execute_transaction will gracefully return RowNotFound or we can skip it.
             }
         } else if prize > 0 {
             if let Some(winner_name) = result.winner.as_deref() {
-                let winner_id = if winner_name == game.player1.name { Some(game.player1.id) }
-                               else if winner_name == game.player2.name { Some(game.player2.id) }
-                               else { None };
-                
+                let winner_id = if winner_name == game.player1.name {
+                    Some(game.player1.id)
+                } else if winner_name == game.player2.name {
+                    Some(game.player2.id)
+                } else {
+                    None
+                };
+
                 if let Some(w_id) = winner_id {
                     let ref_id = format!("{}_{}_victory", game_id, w_id);
-                    let _ = state.db.execute_transaction(&w_id, prize, "victory_reward", Some(game_id), Some(ref_id)).await;
+                    let _ = state
+                        .db
+                        .execute_transaction(
+                            &w_id,
+                            prize,
+                            "victory_reward",
+                            Some(game_id),
+                            Some(ref_id),
+                        )
+                        .await;
                 }
             }
         }
@@ -284,7 +348,10 @@ async fn pick_candy(
         message: if result.is_poison {
             "You picked the poison!".into()
         } else if result.game_over {
-            format!("Game over - {} wins!", result.winner.as_deref().unwrap_or("Unknown"))
+            format!(
+                "Game over - {} wins!",
+                result.winner.as_deref().unwrap_or("Unknown")
+            )
         } else {
             "Candy collected".into()
         },

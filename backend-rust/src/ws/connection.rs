@@ -1,13 +1,19 @@
 //! WebSocket connection manager
 
-use dashmap::DashMap;
-use uuid::Uuid;
 use axum::extract::ws::Message;
+use dashmap::DashMap;
 use tokio::sync::mpsc;
+use uuid::Uuid;
 
 use std::sync::Arc;
 
 /// Manages WebSocket connections and message broadcasting
+/// 
+/// Production-grade connection management with:
+/// - Thread-safe connection storage using DashMap
+/// - City-based player location tracking for broadcasts
+/// - Graceful disconnect handling
+/// - Message delivery with delivery confirmation
 #[derive(Clone)]
 pub struct ConnectionManager {
     /// Player ID -> Sender for their WebSocket connection
@@ -28,7 +34,11 @@ impl ConnectionManager {
     /// Register a new connection
     pub async fn connect(&self, player_id: Uuid, sender: mpsc::UnboundedSender<Message>) {
         self.connections.insert(player_id, sender);
-        tracing::debug!("Player {} connected. Total: {}", player_id, self.connections.len());
+        tracing::debug!(
+            "Player {} connected. Total: {}",
+            player_id,
+            self.connections.len()
+        );
     }
 
     /// Update player's current location/city
@@ -40,7 +50,11 @@ impl ConnectionManager {
     pub async fn disconnect(&self, player_id: Uuid) {
         self.connections.remove(&player_id);
         self.player_locations.remove(&player_id);
-        tracing::debug!("Player {} disconnected. Total: {}", player_id, self.connections.len());
+        tracing::debug!(
+            "Player {} disconnected. Total: {}",
+            player_id,
+            self.connections.len()
+        );
     }
 
     /// Send a message to a specific player
@@ -62,7 +76,8 @@ impl ConnectionManager {
 
     /// Get count of online players in a specific city
     pub fn get_online_count(&self, city: &str) -> usize {
-        self.player_locations.iter()
+        self.player_locations
+            .iter()
             .filter(|entry| entry.value() == city)
             .count()
     }

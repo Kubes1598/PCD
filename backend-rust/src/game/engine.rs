@@ -3,8 +3,8 @@
 //! Core game logic ported from Python.
 
 use dashmap::DashMap;
-use uuid::Uuid;
 use std::sync::Arc;
+use uuid::Uuid;
 
 use super::{GameResult, GameSession, GameState, MoveResult, TimeoutResult, WIN_THRESHOLD};
 use crate::error::{AppError, Result};
@@ -49,20 +49,29 @@ impl GameEngine {
         }
     }
 
-    /// Create a new game session
+    /// Create a new game session with configurable timers
     pub async fn create_game(
         &self,
         player1_name: String,
         player2_name: String,
         p1_id: Option<Uuid>,
         p2_id: Option<Uuid>,
+        turn_timer_secs: u32,   // City/difficulty-based turn timer
+        poison_timer_secs: u32, // Poison selection timer (typically 60s)
     ) -> Uuid {
-        let mut session = GameSession::new(player1_name, player2_name, p1_id, p2_id);
+        let mut session = GameSession::new(
+            player1_name,
+            player2_name,
+            p1_id,
+            p2_id,
+            turn_timer_secs,
+            poison_timer_secs,
+        );
         let game_id = session.id;
-        
+
         // Transition to poison selection
         session.state = GameState::PoisonSelection;
-        
+
         // Persist to DB if possible
         let db_lock = self.db.read().await;
         if let Some(db) = &*db_lock {
@@ -77,21 +86,26 @@ impl GameEngine {
             }
         }
 
-        self.games.insert(game_id, session);
-        
-        // Start poison selection timers (usually 30-60s)
+        self.games.insert(game_id, session.clone());
+
+        // Start poison selection timers using configured duration
         let tm_lock = self.timer_manager.read().await;
-        let tm_opt: &Option<Arc<crate::ws::GameTimerManager>> = &*tm_lock;
+        let tm_opt: &Option<Arc<crate::ws::GameTimerManager>> = &tm_lock;
         if let Some(tm) = tm_opt {
             if let Some(id) = p1_id {
-                tm.start_timer(game_id, id, 60).await;
+                tm.start_timer(game_id, id, session.poison_timer_secs).await;
             }
             if let Some(id) = p2_id {
-                tm.start_timer(game_id, id, 60).await;
+                tm.start_timer(game_id, id, session.poison_timer_secs).await;
             }
         }
-        
-        tracing::info!("Created game {}", game_id);
+
+        tracing::info!(
+            "Created game {} with turn_timer={}s, poison_timer={}s",
+            game_id,
+            turn_timer_secs,
+            poison_timer_secs
+        );
         game_id
     }
 
@@ -102,20 +116,24 @@ impl GameEngine {
         player_id: Uuid,
         poison_candy: &str,
     ) -> Result<bool> {
-        let mut game = self.games
+        let mut game = self
+            .games
             .get_mut(&game_id)
             .ok_or_else(|| AppError::NotFound(format!("Game {} not found", game_id)))?;
 
         // ... validation ...
         if game.state != GameState::PoisonSelection {
-             return Err(AppError::BadRequest("Not in poison selection phase".into()));
+            return Err(AppError::BadRequest("Not in poison selection phase".into()));
         }
 
-        let player = game.get_player_mut(&player_id)
+        let player = game
+            .get_player_mut(&player_id)
             .ok_or_else(|| AppError::NotFound("Player not in this game".into()))?;
 
         if !player.owned_candies.contains(poison_candy) || player.poison_choice.is_some() {
-            return Err(AppError::BadRequest("Invalid candy or poison already set".into()));
+            return Err(AppError::BadRequest(
+                "Invalid candy or poison already set".into(),
+            ));
         }
 
         player.poison_choice = Some(poison_candy.to_string());
@@ -123,19 +141,20 @@ impl GameEngine {
 
         // Stop this player's poison timer
         let tm_lock = self.timer_manager.read().await;
-        let tm_opt: &Option<Arc<crate::ws::GameTimerManager>> = &*tm_lock;
+        let tm_opt: &Option<Arc<crate::ws::GameTimerManager>> = &tm_lock;
         if let Some(tm) = tm_opt {
             tm.stop_timer(game_id, player_id).await;
         }
 
         if game.both_poisons_set() {
             game.state = GameState::Playing;
-            
-            // Start turn timer for first player (typically p1)
+
+            // Start turn timer for first player using configured duration
             if let Some(tm) = tm_opt {
-                 tm.start_timer(game_id, game.player1.id, 30).await;
+                tm.start_timer(game_id, game.player1.id, game.turn_timer_secs)
+                    .await;
             }
-            
+
             Ok(true)
         } else {
             Ok(false)
@@ -149,7 +168,8 @@ impl GameEngine {
         player_id: Uuid,
         candy: &str,
     ) -> Result<MoveResult> {
-        let mut game = self.games
+        let mut game = self
+            .games
             .get_mut(&game_id)
             .ok_or_else(|| AppError::NotFound(format!("Game {} not found", game_id)))?;
 
@@ -167,18 +187,25 @@ impl GameEngine {
 
         // Get opponent's candies
         let (opponent_owned, opponent_poison) = {
-            let opponent = game.get_opponent(&player_id)
+            let opponent = game
+                .get_opponent(&player_id)
                 .ok_or_else(|| AppError::NotFound("Opponent not found".into()))?;
-            (opponent.owned_candies.clone(), opponent.poison_choice.clone())
+            (
+                opponent.owned_candies.clone(),
+                opponent.poison_choice.clone(),
+            )
         };
 
         if !opponent_owned.contains(candy) {
-            return Err(AppError::BadRequest("Candy not available in opponent's pool".into()));
+            return Err(AppError::BadRequest(
+                "Candy not available in opponent's pool".into(),
+            ));
         }
 
         // Check if candy was already collected by either player
-        if game.player1.collected_candies.contains(&candy.to_string()) || 
-           game.player2.collected_candies.contains(&candy.to_string()) {
+        if game.player1.collected_candies.contains(&candy.to_string())
+            || game.player2.collected_candies.contains(&candy.to_string())
+        {
             return Err(AppError::BadRequest("Candy already collected".into()));
         }
 
@@ -205,31 +232,52 @@ impl GameEngine {
             // Check win/draw logic
             let p1_count = game.player1.collected_candies.len();
             let p2_count = game.player2.collected_candies.len();
-            
-            let all_collected_count = game.player1.collected_candies.len() + game.player2.collected_candies.len();
+
+            let all_collected_count =
+                game.player1.collected_candies.len() + game.player2.collected_candies.len();
             let total_pickable = 24 - all_collected_count;
 
             if p1_count == WIN_THRESHOLD && p2_count == WIN_THRESHOLD {
                 (true, GameResult::Draw, None)
             } else if p1_count == WIN_THRESHOLD || p2_count == WIN_THRESHOLD {
-                let current_is_winner = if current_player_is_p1 { p1_count == WIN_THRESHOLD } else { p2_count == WIN_THRESHOLD };
-                
+                let current_is_winner = if current_player_is_p1 {
+                    p1_count == WIN_THRESHOLD
+                } else {
+                    p2_count == WIN_THRESHOLD
+                };
+
                 if current_is_winner {
-                    let opponent_count = if current_player_is_p1 { p2_count } else { p1_count };
-                    let opponent_future_turns = if current_player_is_p1 { (total_pickable + 1) / 2 } else { total_pickable / 2 };
-                    
-                    if opponent_count + (opponent_future_turns as usize) >= WIN_THRESHOLD {
+                    let opponent_count = if current_player_is_p1 {
+                        p2_count
+                    } else {
+                        p1_count
+                    };
+                    let opponent_future_turns = if current_player_is_p1 {
+                        total_pickable.div_ceil(2)
+                    } else {
+                        total_pickable / 2
+                    };
+
+                    if opponent_count + opponent_future_turns >= WIN_THRESHOLD {
                         (false, GameResult::Ongoing, None)
                     } else {
-                        let winner = if current_player_is_p1 { Some(game.player1.id) } else { Some(game.player2.id) };
-                        let result = if current_player_is_p1 { GameResult::Player1Win } else { GameResult::Player2Win };
+                        let winner = if current_player_is_p1 {
+                            Some(game.player1.id)
+                        } else {
+                            Some(game.player2.id)
+                        };
+                        let result = if current_player_is_p1 {
+                            GameResult::Player1Win
+                        } else {
+                            GameResult::Player2Win
+                        };
                         (true, result, winner)
                     }
                 } else {
                     (false, GameResult::Ongoing, None)
                 }
             } else if total_pickable == 0 {
-                 (true, GameResult::Draw, None)
+                (true, GameResult::Draw, None)
             } else {
                 (false, GameResult::Ongoing, None)
             }
@@ -238,35 +286,40 @@ impl GameEngine {
         if game_over {
             game.state = GameState::Finished;
             game.result = result;
-            
+
             // Financial Settlement (Reward winner)
             if let Some(winner_id) = winner_id {
                 let prize = game.prize;
                 if prize > 0 {
                     // Start an async task to handle the reward (don't block the move)
                     // In a production app, this would be queue-based
-                    tracing::info!("Victory! Rewarding player {} with {} coins", winner_id, prize);
+                    tracing::info!(
+                        "Victory! Rewarding player {} with {} coins",
+                        winner_id,
+                        prize
+                    );
                 }
             }
         } else {
             game.current_turn += 1;
         }
-        
+
         game.touch();
 
         // Timer Management
         let tm_lock = self.timer_manager.read().await;
-        let tm_opt: &Option<Arc<crate::ws::GameTimerManager>> = &*tm_lock;
+        let tm_opt: &Option<Arc<crate::ws::GameTimerManager>> = &tm_lock;
         if let Some(tm) = tm_opt {
             // Stop current player's timer
             tm.stop_timer(game_id, player_id).await;
-            
+
             if game_over {
                 // Stop all remaining timers for this game
                 tm.stop_game_timers(game_id).await;
             } else {
-                // Start next player's timer
-                tm.start_timer(game_id, game.current_player_id(), 30).await;
+                // Start next player's timer using configured duration
+                tm.start_timer(game_id, game.current_player_id(), game.turn_timer_secs)
+                    .await;
             }
         }
 
@@ -288,7 +341,8 @@ impl GameEngine {
 
     /// Handle timeout - forfeit the game
     pub fn handle_timeout(&self, game_id: Uuid, player_id: Uuid) -> Result<TimeoutResult> {
-        let mut game = self.games
+        let mut game = self
+            .games
             .get_mut(&game_id)
             .ok_or_else(|| AppError::NotFound(format!("Game {} not found", game_id)))?;
 
@@ -307,21 +361,31 @@ impl GameEngine {
 
                 if opponent.poison_choice.is_some() {
                     // Opponent ready, target player idle -> forfeit
-                    let res = if target_player_is_p1 { GameResult::Player2Win } else { GameResult::Player1Win };
+                    let res = if target_player_is_p1 {
+                        GameResult::Player2Win
+                    } else {
+                        GameResult::Player1Win
+                    };
                     (true, res, Some(player_id), false)
                 } else {
                     // Both idle -> cancel
                     (true, GameResult::Ongoing, None, true)
                 }
-            },
+            }
             GameState::Playing => {
                 if game.current_player_id() != player_id {
                     return Err(AppError::BadRequest("Not your turn to timeout".into()));
                 }
-                let res = if game.player1.id == player_id { GameResult::Player2Win } else { GameResult::Player1Win };
+                let res = if game.player1.id == player_id {
+                    GameResult::Player2Win
+                } else {
+                    GameResult::Player1Win
+                };
                 (true, res, Some(player_id), false)
-            },
-            GameState::Finished => return Err(AppError::BadRequest("Game already finished".into())),
+            }
+            GameState::Finished => {
+                return Err(AppError::BadRequest("Game already finished".into()))
+            }
         };
 
         if game_over {
@@ -331,15 +395,19 @@ impl GameEngine {
         game.touch();
 
         let loser_name = loser_id.and_then(|id| {
-            if id == game.player1.id { Some(game.player1.name.clone()) }
-            else if id == game.player2.id { Some(game.player2.name.clone()) }
-            else { None }
+            if id == game.player1.id {
+                Some(game.player1.name.clone())
+            } else if id == game.player2.id {
+                Some(game.player2.name.clone())
+            } else {
+                None
+            }
         });
 
-        let msg = if type_cancelled { 
-            "Both players idle (Cancelled)".to_string() 
-        } else { 
-            format!("{} forfeited", loser_name.as_deref().unwrap_or("unknown")) 
+        let msg = if type_cancelled {
+            "Both players idle (Cancelled)".to_string()
+        } else {
+            format!("{} forfeited", loser_name.as_deref().unwrap_or("unknown"))
         };
         tracing::info!("Game {} ended by timeout - {}", game_id, msg);
 

@@ -21,6 +21,12 @@ export type MatchmakingMessage = {
     prize?: number;
     timed_out_player?: string;
     is_draw?: boolean;
+    // City stats update fields
+    city?: string;
+    players_waiting?: number;
+    players_online?: number;
+    entry_fee?: number;
+    prize_pool?: number;
 };
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';

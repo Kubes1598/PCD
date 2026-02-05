@@ -15,8 +15,8 @@ pub mod ws;
 use axum::middleware::from_fn_with_state;
 use axum::routing::get;
 use axum::Router;
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use std::sync::Arc;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use crate::config::Config;
 use crate::db::{Database, RedisClient};
@@ -56,9 +56,17 @@ pub fn create_app(state: AppState) -> Router {
         // Add state
         .with_state(state.clone())
         // Add middleware layers
-        .layer(from_fn_with_state(state.clone(), middleware::auth::auth_middleware))
-        .layer(from_fn_with_state(state.clone(), middleware::rate_limit::rate_limit_middleware))
-        .layer(axum::middleware::from_fn(middleware::security::security_headers))
+        .layer(from_fn_with_state(
+            state.clone(),
+            middleware::auth::auth_middleware,
+        ))
+        .layer(from_fn_with_state(
+            state.clone(),
+            middleware::rate_limit::rate_limit_middleware,
+        ))
+        .layer(axum::middleware::from_fn(
+            middleware::security::security_headers,
+        ))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
 }

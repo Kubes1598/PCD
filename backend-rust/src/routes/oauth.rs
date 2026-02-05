@@ -7,7 +7,10 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{error::{AppError, Result}, AppState};
+use crate::{
+    error::{AppError, Result},
+    AppState,
+};
 
 /// Create OAuth router
 pub fn router() -> Router<AppState> {
@@ -60,7 +63,8 @@ async fn google_callback(
         }));
     }
 
-    let id_token = params.id_token
+    let id_token = params
+        .id_token
         .ok_or_else(|| AppError::BadRequest("Missing id_token".into()))?;
 
     // TODO: Verify Google ID token with Google's public keys
@@ -68,13 +72,9 @@ async fn google_callback(
     let claims = decode_google_token(&id_token)?;
 
     // Find or create user
-    let user_id = find_or_create_oauth_user(
-        &state,
-        &claims.email,
-        &claims.name,
-        "google",
-        &claims.sub,
-    ).await?;
+    let user_id =
+        find_or_create_oauth_user(&state, &claims.email, &claims.name, "google", &claims.sub)
+            .await?;
 
     // Generate JWT
     let token = generate_jwt(user_id, &state.config.jwt_secret)?;
@@ -106,7 +106,8 @@ async fn apple_callback(
         }));
     }
 
-    let id_token = params.id_token
+    let id_token = params
+        .id_token
         .ok_or_else(|| AppError::BadRequest("Missing id_token".into()))?;
 
     // TODO: Verify Apple ID token
@@ -120,7 +121,8 @@ async fn apple_callback(
         "Apple User", // Apple may not provide name
         "apple",
         &claims.sub,
-    ).await?;
+    )
+    .await?;
 
     // Generate JWT
     let token = generate_jwt(user_id, &state.config.jwt_secret)?;
@@ -139,18 +141,19 @@ async fn apple_callback(
 }
 
 /// Guest login (anonymous)
-async fn guest_login(
-    State(state): State<AppState>,
-) -> Result<Json<OAuthResponse>> {
+async fn guest_login(State(state): State<AppState>) -> Result<Json<OAuthResponse>> {
     let guest_id = uuid::Uuid::new_v4();
     let guest_name = format!("Guest_{}", &guest_id.to_string()[..8]);
 
     // Create guest user
-    let user_id = state.db.create_user(&crate::db::CreateUser {
-        username: guest_name.clone(),
-        email: format!("{}@guest.pcd", guest_id),
-        password_hash: String::new(), // No password for guests
-    }).await?;
+    let user_id = state
+        .db
+        .create_user(&crate::db::CreateUser {
+            username: guest_name.clone(),
+            email: format!("{}@guest.pcd", guest_id),
+            password_hash: String::new(), // No password for guests
+        })
+        .await?;
 
     // Generate JWT
     let token = generate_jwt(user_id, &state.config.jwt_secret)?;
@@ -191,10 +194,11 @@ fn decode_google_token(token: &str) -> Result<GoogleClaims> {
         return Err(AppError::BadRequest("Invalid token format".into()));
     }
 
-    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-    let payload = URL_SAFE_NO_PAD.decode(parts[1])
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+    let payload = URL_SAFE_NO_PAD
+        .decode(parts[1])
         .map_err(|_| AppError::BadRequest("Invalid token encoding".into()))?;
-    
+
     serde_json::from_slice(&payload)
         .map_err(|_| AppError::BadRequest("Invalid token payload".into()))
 }
@@ -206,10 +210,11 @@ fn decode_apple_token(token: &str) -> Result<AppleClaims> {
         return Err(AppError::BadRequest("Invalid token format".into()));
     }
 
-    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-    let payload = URL_SAFE_NO_PAD.decode(parts[1])
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+    let payload = URL_SAFE_NO_PAD
+        .decode(parts[1])
         .map_err(|_| AppError::BadRequest("Invalid token encoding".into()))?;
-    
+
     serde_json::from_slice(&payload)
         .map_err(|_| AppError::BadRequest("Invalid token payload".into()))
 }
@@ -228,11 +233,14 @@ async fn find_or_create_oauth_user(
     }
 
     // Create new user
-    let user_id = state.db.create_user(&crate::db::CreateUser {
-        username: name.to_string(),
-        email: email.to_string(),
-        password_hash: String::new(), // OAuth users don't have passwords
-    }).await?;
+    let user_id = state
+        .db
+        .create_user(&crate::db::CreateUser {
+            username: name.to_string(),
+            email: email.to_string(),
+            password_hash: String::new(), // OAuth users don't have passwords
+        })
+        .await?;
 
     Ok(user_id)
 }

@@ -28,8 +28,7 @@ impl Config {
             database_url: env::var("DATABASE_URL")
                 .map_err(|_| ConfigError::Missing("DATABASE_URL"))?,
             redis_url: env::var("REDIS_URL").ok(),
-            jwt_secret: env::var("JWT_SECRET")
-                .map_err(|_| ConfigError::Missing("JWT_SECRET"))?,
+            jwt_secret: env::var("JWT_SECRET").map_err(|_| ConfigError::Missing("JWT_SECRET"))?,
             jwt_expiry_seconds: env::var("JWT_EXPIRY_SECONDS")
                 .unwrap_or_else(|_| "604800".to_string())
                 .parse()
@@ -38,8 +37,7 @@ impl Config {
                 .unwrap_or_else(|_| "8000".to_string())
                 .parse()
                 .unwrap_or(8000),
-            environment: env::var("ENVIRONMENT")
-                .unwrap_or_else(|_| "development".to_string()),
+            environment: env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string()),
         })
     }
 

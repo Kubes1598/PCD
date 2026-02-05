@@ -7,7 +7,11 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{error::{AppError, Result}, middleware::auth::AuthUser, AppState};
+use crate::{
+    error::{AppError, Result},
+    middleware::auth::AuthUser,
+    AppState,
+};
 
 /// Create auth router
 pub fn router() -> Router<AppState> {
@@ -36,25 +40,34 @@ async fn refresh_token(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<AuthResponse>> {
-    let refresh_token = req["refresh_token"].as_str()
+    let refresh_token = req["refresh_token"]
+        .as_str()
         .ok_or_else(|| AppError::BadRequest("Missing refresh_token".into()))?;
-    
+
     // In a real app, we would verify the refresh token against the DB
     // For now, let's just decode the old one to get user ID
     use jsonwebtoken::{decode, DecodingKey, Validation};
     #[derive(Debug, Deserialize, Serialize)]
-    struct Claims { sub: String, exp: u64, iat: u64 }
+    struct Claims {
+        sub: String,
+        exp: u64,
+        iat: u64,
+    }
 
     let token_data = decode::<Claims>(
         refresh_token,
         &DecodingKey::from_secret(state.config.jwt_secret.as_bytes()),
         &Validation::default(),
-    ).map_err(|_| AppError::Unauthorized)?;
+    )
+    .map_err(|_| AppError::Unauthorized)?;
 
-    let user_id = uuid::Uuid::parse_str(&token_data.claims.sub)
-        .map_err(|_| AppError::Unauthorized)?;
+    let user_id =
+        uuid::Uuid::parse_str(&token_data.claims.sub).map_err(|_| AppError::Unauthorized)?;
 
-    let player = state.db.get_player(&user_id).await?
+    let player = state
+        .db
+        .get_player(&user_id)
+        .await?
         .ok_or_else(|| AppError::Unauthorized)?;
 
     let token = generate_jwt(user_id, &state.config.jwt_secret)?;
@@ -87,11 +100,14 @@ async fn guest_login(
     let guest_name = format!("Guest_{}", &guest_id.to_string()[..8]);
 
     // Create guest user
-    let user_id = state.db.create_user(&crate::db::CreateUser {
-        username: guest_name.clone(),
-        email: format!("{}@guest.pcd", guest_id),
-        password_hash: format!("device:{}", device_id), // Use device ID as a pseudo-password
-    }).await?;
+    let user_id = state
+        .db
+        .create_user(&crate::db::CreateUser {
+            username: guest_name.clone(),
+            email: format!("{}@guest.pcd", guest_id),
+            password_hash: format!("device:{}", device_id), // Use device ID as a pseudo-password
+        })
+        .await?;
 
     let token = generate_jwt(user_id, &state.config.jwt_secret)?;
 
@@ -118,12 +134,13 @@ async fn google_auth(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<AuthResponse>> {
-    let id_token = req["id_token"].as_str()
+    let id_token = req["id_token"]
+        .as_str()
         .ok_or_else(|| AppError::BadRequest("Missing id_token".into()))?;
 
     // Stub for Google authentication
     tracing::info!("Google Auth attempt with token: {}...", &id_token[..10]);
-    
+
     // In production, verify token and get email/name
     let email = "google_user@example.com";
     let name = "Google User";
@@ -131,11 +148,14 @@ async fn google_auth(
     let player = if let Some(p) = state.db.get_player_by_name(name).await? {
         p
     } else {
-        let user_id = state.db.create_user(&crate::db::CreateUser {
-            username: name.to_string(),
-            email: email.to_string(),
-            password_hash: "oauth:google".into(),
-        }).await?;
+        let user_id = state
+            .db
+            .create_user(&crate::db::CreateUser {
+                username: name.to_string(),
+                email: email.to_string(),
+                password_hash: "oauth:google".into(),
+            })
+            .await?;
         state.db.get_player(&user_id).await?.unwrap()
     };
 
@@ -164,7 +184,8 @@ async fn apple_auth(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<AuthResponse>> {
-    let _id_token = req["id_token"].as_str()
+    let _id_token = req["id_token"]
+        .as_str()
         .ok_or_else(|| AppError::BadRequest("Missing id_token".into()))?;
 
     // Stub for Apple authentication
@@ -174,11 +195,14 @@ async fn apple_auth(
     let player = if let Some(p) = state.db.get_player_by_name(name).await? {
         p
     } else {
-        let user_id = state.db.create_user(&crate::db::CreateUser {
-            username: name.to_string(),
-            email: email.to_string(),
-            password_hash: "oauth:apple".into(),
-        }).await?;
+        let user_id = state
+            .db
+            .create_user(&crate::db::CreateUser {
+                username: name.to_string(),
+                email: email.to_string(),
+                password_hash: "oauth:apple".into(),
+            })
+            .await?;
         state.db.get_player(&user_id).await?.unwrap()
     };
 
@@ -269,7 +293,9 @@ async fn register(
 
     // Validate password strength
     if req.password.len() < 8 {
-        return Err(AppError::BadRequest("Password must be at least 8 characters".into()));
+        return Err(AppError::BadRequest(
+            "Password must be at least 8 characters".into(),
+        ));
     }
 
     // Check if user exists
@@ -281,11 +307,14 @@ async fn register(
     let password_hash = hash_password(&req.password)?;
 
     // Create user
-    let user_id = state.db.create_user(&crate::db::CreateUser {
-        username: req.username.clone(),
-        email: req.email.clone(),
-        password_hash,
-    }).await?;
+    let user_id = state
+        .db
+        .create_user(&crate::db::CreateUser {
+            username: req.username.clone(),
+            email: req.email.clone(),
+            password_hash,
+        })
+        .await?;
 
     // Generate JWT
     let token = generate_jwt(user_id, &state.config.jwt_secret)?;
@@ -314,19 +343,27 @@ async fn login(
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>> {
     // Find user
-    let user = state.db.get_user_by_email(&req.email).await?
+    let user = state
+        .db
+        .get_user_by_email(&req.email)
+        .await?
         .ok_or(AppError::InvalidCredentials)?;
 
     // Verify password
-    let password_hash = user.password_hash.as_ref()
+    let password_hash = user
+        .password_hash
+        .as_ref()
         .ok_or(AppError::InvalidCredentials)?;
-    
+
     if !verify_password(&req.password, password_hash)? {
         return Err(AppError::InvalidCredentials);
     }
 
     // Get full player data
-    let player = state.db.get_player(&user.id).await?
+    let player = state
+        .db
+        .get_player(&user.id)
+        .await?
         .ok_or(AppError::Internal("Player data not found".into()))?;
 
     // Generate JWT
@@ -355,7 +392,10 @@ async fn me(
     State(state): State<AppState>,
     Extension(user): Extension<AuthUser>,
 ) -> Result<Json<AuthResponse>> {
-    let player = state.db.get_player(&user.id).await?
+    let player = state
+        .db
+        .get_player(&user.id)
+        .await?
         .ok_or_else(|| AppError::NotFound("User not found".into()))?;
 
     Ok(Json(AuthResponse {
@@ -385,7 +425,7 @@ fn hash_password(password: &str) -> Result<String> {
 
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
-    
+
     argon2
         .hash_password(password.as_bytes(), &salt)
         .map(|h| h.to_string())
@@ -399,9 +439,9 @@ fn verify_password(password: &str, hash: &str) -> Result<bool> {
         Argon2,
     };
 
-    let parsed_hash = PasswordHash::new(hash)
-        .map_err(|_| AppError::Internal("Invalid password hash".into()))?;
-    
+    let parsed_hash =
+        PasswordHash::new(hash).map_err(|_| AppError::Internal("Invalid password hash".into()))?;
+
     Ok(Argon2::default()
         .verify_password(password.as_bytes(), &parsed_hash)
         .is_ok())

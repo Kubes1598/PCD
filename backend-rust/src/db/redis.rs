@@ -110,9 +110,9 @@ impl RedisClient {
         window_secs: i64,
     ) -> Result<bool, redis::RedisError> {
         let key = format!("ratelimit:{}", identifier);
-        
+
         let count: i64 = self.incr(&key).await?;
-        
+
         if count == 1 {
             self.expire(&key, window_secs).await?;
         }

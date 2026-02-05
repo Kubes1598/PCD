@@ -19,10 +19,7 @@ impl Database {
             .await?;
 
         // Run migrations on startup
-        sqlx::migrate!("./migrations")
-            .run(&pool)
-            .await
-            .ok(); // Ignore if migrations folder doesn't exist yet
+        sqlx::migrate!("./migrations").run(&pool).await.ok(); // Ignore if migrations folder doesn't exist yet
 
         Ok(Self { pool })
     }
@@ -34,9 +31,7 @@ impl Database {
 
     /// Health check - verify database connectivity
     pub async fn health_check(&self) -> Result<(), sqlx::Error> {
-        sqlx::query("SELECT 1")
-            .execute(&self.pool)
-            .await?;
+        sqlx::query("SELECT 1").execute(&self.pool).await?;
         Ok(())
     }
 }
@@ -47,7 +42,10 @@ impl Database {
 
 impl Database {
     /// Get player by ID
-    pub async fn get_player(&self, player_id: &uuid::Uuid) -> Result<Option<super::Player>, sqlx::Error> {
+    pub async fn get_player(
+        &self,
+        player_id: &uuid::Uuid,
+    ) -> Result<Option<super::Player>, sqlx::Error> {
         sqlx::query_as!(
             super::Player,
             r#"
@@ -64,7 +62,10 @@ impl Database {
     }
 
     /// Get player by name
-    pub async fn get_player_by_name(&self, name: &str) -> Result<Option<super::Player>, sqlx::Error> {
+    pub async fn get_player_by_name(
+        &self,
+        name: &str,
+    ) -> Result<Option<super::Player>, sqlx::Error> {
         sqlx::query_as!(
             super::Player,
             r#"
@@ -82,9 +83,9 @@ impl Database {
 
     /// Update player stats after game
     pub async fn update_player_stats(
-        &self, 
-        player_id: &uuid::Uuid, 
-        won: bool
+        &self,
+        player_id: &uuid::Uuid,
+        won: bool,
     ) -> Result<(), sqlx::Error> {
         if won {
             sqlx::query!(
@@ -218,8 +219,9 @@ impl Database {
         // 1. Check/Deduct Player 1
         let ref1 = format!("{}_{}_entry", game_id, p1_id);
         let exists1 = sqlx::query!("SELECT id FROM transactions WHERE reference_id = $1", ref1)
-            .fetch_optional(&mut *tx).await?;
-        
+            .fetch_optional(&mut *tx)
+            .await?;
+
         if exists1.is_none() {
             let res = sqlx::query!(
                 "UPDATE players SET coin_balance = coin_balance - $1 WHERE id = $2 AND coin_balance >= $1",
@@ -240,7 +242,8 @@ impl Database {
         // 2. Check/Deduct Player 2
         let ref2 = format!("{}_{}_entry", game_id, p2_id);
         let exists2 = sqlx::query!("SELECT id FROM transactions WHERE reference_id = $1", ref2)
-            .fetch_optional(&mut *tx).await?;
+            .fetch_optional(&mut *tx)
+            .await?;
 
         if exists2.is_none() {
             let res = sqlx::query!(
@@ -372,7 +375,10 @@ impl Database {
         Ok(result.id)
     }
 
-    pub async fn get_user_by_email(&self, email: &str) -> Result<Option<super::UserAuth>, sqlx::Error> {
+    pub async fn get_user_by_email(
+        &self,
+        email: &str,
+    ) -> Result<Option<super::UserAuth>, sqlx::Error> {
         sqlx::query_as!(
             super::UserAuth,
             r#"

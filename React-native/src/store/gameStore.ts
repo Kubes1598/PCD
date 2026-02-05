@@ -9,6 +9,7 @@ import { useCurrencyStore } from './currencyStore';
 import { useAuthStore } from './authStore';
 import { WIN_THRESHOLD, CANDY_COUNT, CITY_CONFIG, AI_CONFIG, CityName, Difficulty } from '../config/gameConfig';
 
+export type { Difficulty, CityName };
 export type GameMode = 'ai' | 'online' | 'friends' | 'offline';
 
 interface GameProgress {
@@ -48,6 +49,7 @@ interface GameState {
     totalWaiting: number;
     lastReward: number;
     opponentId: string | null;
+    playerId: string | null;  // Server-assigned player ID for current game
     isReconnecting: boolean;
     matchFound: boolean;
     isSettingPoisonFor: 'player' | 'opponent' | null;
@@ -180,6 +182,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     lastReward: 0,
     isSettingPoisonFor: null,
     opponentId: null,
+    playerId: null,
     isReconnecting: false,
     matchFound: false,
     queueStats: {},
@@ -226,6 +229,8 @@ export const useGameStore = create<GameState>((set, get) => ({
                 const res = await apiService.createAIGame(difficulty);
                 if (res.success && res.data) {
                     serverGameId = res.data.game_id;
+                    // Store the server-assigned player ID for this game
+                    set({ playerId: res.data.player1_id });
                     const gs = res.data.game_state;
                     pCandies = gs.player1.owned_candies;
                     oCandies = gs.player2.owned_candies;
@@ -515,8 +520,13 @@ export const useGameStore = create<GameState>((set, get) => ({
                 set({ isSettingPoisonFor: 'opponent' });
             } else if (gameMode === 'ai' && gameId) {
                 // Report poison to server for AI mode (authoritative)
-                const auth = useAuthStore.getState();
-                const pId = auth.user?.id || `guest_unknown`;
+                const state = get();
+                const pId = state.playerId;  // Use server-assigned player ID
+                if (!pId) {
+                    console.error("No player ID for AI game");
+                    set({ isSettingPoisonFor: null, gameStarted: true });
+                    return;
+                }
                 try {
                     await apiService.setPoison(gameId, pId, candy);
                     set({ isSettingPoisonFor: null, gameStarted: true });
@@ -609,9 +619,11 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         // Switch turns
         const nextPlayerTurn = winResult.switchToOpponent ? false : (winResult.switchToPlayer ? true : !state.isPlayerTurn);
-        const timerLimits = { Dubai: 30, Cairo: 20, Oslo: 10 };
-        const nextTimer = state.gameMode === 'online' && state.selectedCity ? timerLimits[state.selectedCity as keyof typeof timerLimits] :
-            (state.gameMode === 'ai' ? state.config.aiConfig[state.difficulty].turnTimer : 30);
+
+        // Use config for timer - no hardcoded values
+        const nextTimer = state.gameMode === 'online' && state.selectedCity
+            ? state.config.cityConfig[state.selectedCity]?.turnTimer || 30
+            : (state.gameMode === 'ai' ? state.config.aiConfig[state.difficulty]?.turnTimer || 30 : 30);
 
         set({
             playerCollection: newPlayerCollection,
@@ -620,57 +632,50 @@ export const useGameStore = create<GameState>((set, get) => ({
             turnTimeRemaining: nextTimer
         });
 
-        // Send move to server if in AI mode or Online mode
-        if (state.gameMode === 'ai' && state.gameId && !isRemote) {
-            const auth = useAuthStore.getState();
-            const pId = auth.user?.id || `guest_unknown`;
-            apiService.pickCandy(state.gameId, pId, candy).catch(e => console.error("AI move sync error:", e));
-        } else if (state.gameMode === 'online' && state.opponentId && !isRemote) {
+        // Send move to server - only for online mode (AI games run locally after creation)
+        if (state.gameMode === 'online' && state.opponentId && !isRemote) {
             webSocketService.sendMessage({ type: 'match_move', target_id: state.opponentId, move: candy });
         }
 
         // AI Logic
         if (!nextPlayerTurn && state.gameMode === 'ai') {
             setTimeout(async () => {
-                const s = get();
+                const currentState = get();
 
                 // SAFETY: Don't execute AI move if game ended or not started
-                if (s.gameEnded || !s.gameStarted) {
+                if (currentState.gameEnded || !currentState.gameStarted) {
                     console.log('🛑 AI move cancelled: game ended or not started');
                     return;
                 }
 
                 try {
                     const result = await apiService.getAIMove({
-                        player_candies: s.playerCandies,
-                        opponent_collection: s.opponentCollection,
-                        player_poison: s.selectedPoison!,
-                        difficulty: s.difficulty,
-                        game_id: s.gameId
+                        player_candies: currentState.playerCandies,
+                        opponent_collection: currentState.opponentCollection,
+                        player_poison: currentState.selectedPoison!,
+                        difficulty: currentState.difficulty,
+                        game_id: currentState.gameId
                     });
+
+                    // Re-check state after async API call
+                    const stateAfterApi = get();
+                    if (stateAfterApi.gameEnded || !stateAfterApi.gameStarted) {
+                        console.log('🛑 AI move cancelled after API call: game state changed');
+                        return;
+                    }
+
                     if (result && result.choice) {
-                        if (get().gameEnded || !get().gameStarted) {
-                            console.log('🛑 AI move cancelled after API call: game state changed');
-                            return;
-                        }
-
-                        // Sync AI move with server
-                        if (s.gameId && s.opponentId) {
-                            apiService.pickCandy(s.gameId, s.opponentId, result.choice).catch(e => console.error("AI move sync error:", e));
-                        }
-
                         get().pickCandy(result.choice);
                     }
                 } catch (error) {
                     console.error("AI Error:", error);
                     // Fallback to random if AI fails
-                    // RE-CHECK STATE after await to prevent race condition timeout bug
-                    const currentState = get();
-                    if (currentState.gameEnded || !currentState.gameStarted) {
+                    const fallbackState = get();
+                    if (fallbackState.gameEnded || !fallbackState.gameStarted) {
                         console.log('🛑 AI fallback cancelled: game state changed');
                         return;
                     }
-                    const avail = s.playerCandies.filter(c => !s.opponentCollection.includes(c));
+                    const avail = fallbackState.playerCandies.filter(c => !fallbackState.opponentCollection.includes(c));
                     if (avail.length > 0) {
                         get().pickCandy(avail[Math.floor(Math.random() * avail.length)]);
                     }

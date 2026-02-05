@@ -29,14 +29,19 @@ impl Default for CityConfig {
     fn default() -> Self {
         Self {
             name: "dubai".into(),
-            entry_fee: 100,
-            prize: 180,
+            entry_fee: 500,
+            prize: 900,
             turn_timer: 30,
         }
     }
 }
 
 /// City matchmaking queue
+/// 
+/// Thread-safe matchmaking queue that groups players by city.
+/// Each city has its own independent queue with configurable 
+/// entry fees, prizes, and turn timers.
+#[derive(Clone)]
 pub struct CityMatchmakingQueue {
     /// City -> Queue of waiting players
     queues: DashMap<String, Arc<RwLock<VecDeque<QueuedPlayer>>>>,
@@ -58,31 +63,45 @@ impl CityMatchmakingQueue {
             game_engine,
         };
 
-        // Initialize city configs with premium values
-        queue.configs.insert("dubai".into(), CityConfig {
-            name: "dubai".into(),
-            entry_fee: 100,
-            prize: 180,
-            turn_timer: 30,
-        });
-        queue.configs.insert("cairo".into(), CityConfig {
-            name: "cairo".into(),
-            entry_fee: 500,
-            prize: 900,
-            turn_timer: 25,
-        });
-        queue.configs.insert("oslo".into(), CityConfig {
-            name: "oslo".into(),
-            entry_fee: 1000,
-            prize: 1800,
-            turn_timer: 20,
-        });
+        // Initialize city configs - MUST match routes/config.rs
+        queue.configs.insert(
+            "dubai".into(),
+            CityConfig {
+                name: "dubai".into(),
+                entry_fee: 500,
+                prize: 900,
+                turn_timer: 30, // Easy
+            },
+        );
+        queue.configs.insert(
+            "cairo".into(),
+            CityConfig {
+                name: "cairo".into(),
+                entry_fee: 1000,
+                prize: 1800,
+                turn_timer: 20, // Medium
+            },
+        );
+        queue.configs.insert(
+            "oslo".into(),
+            CityConfig {
+                name: "oslo".into(),
+                entry_fee: 5000,
+                prize: 9000,
+                turn_timer: 10, // Hard
+            },
+        );
 
         queue
     }
 
     /// Add player to queue
-    pub async fn join(&self, player_id: Uuid, player_name: String, city: String) -> crate::error::Result<bool> {
+    pub async fn join(
+        &self,
+        player_id: Uuid,
+        player_name: String,
+        city: String,
+    ) -> crate::error::Result<bool> {
         // If already in a queue, leave it first
         if let Some(old_city) = self.player_cities.get(&player_id).map(|c| c.clone()) {
             if old_city == city {
@@ -92,7 +111,9 @@ impl CityMatchmakingQueue {
         }
 
         // Get or create queue for city
-        let queue = self.queues.entry(city.to_string())
+        let queue = self
+            .queues
+            .entry(city.to_string())
             .or_insert_with(|| Arc::new(RwLock::new(VecDeque::new())));
 
         // Add player
@@ -135,15 +156,32 @@ impl CityMatchmakingQueue {
             self.player_cities.remove(&p1.id);
             self.player_cities.remove(&p2.id);
 
-            // Create game instance
-            let game_id = self.game_engine.create_game(
-                p1.name.clone(),
-                p2.name.clone(),
-                Some(p1.id),
-                Some(p2.id),
-            ).await;
+            let turn_timer = self.get_turn_timer(city);
+            // Standard poison selection time - 60 seconds for all cities
+            // This is intentionally longer than turn timers to allow thoughtful poison choice
+            let poison_timer = 60u32;
 
-            tracing::info!("Match Found! {} vs {} in City: {} [Game ID: {}]", p1.name, p2.name, city, game_id);
+            // Create game instance with city-specific timers
+            let game_id = self
+                .game_engine
+                .create_game(
+                    p1.name.clone(),
+                    p2.name.clone(),
+                    Some(p1.id),
+                    Some(p2.id),
+                    turn_timer,
+                    poison_timer,
+                )
+                .await;
+
+            tracing::info!(
+                "Match Found! {} vs {} in City: {} [Game ID: {}, Timer: {}s]",
+                p1.name,
+                p2.name,
+                city,
+                game_id,
+                turn_timer
+            );
 
             return Some((p1, p2, game_id));
         }
@@ -158,7 +196,7 @@ impl CityMatchmakingQueue {
         } else {
             0
         };
-        
+
         let config = self.get_city_config(city).unwrap_or_default();
         (waiting, config.entry_fee, config.prize)
     }
@@ -186,9 +224,7 @@ impl CityMatchmakingQueue {
 
     /// Get turn timer for city
     pub fn get_turn_timer(&self, city: &str) -> u32 {
-        self.configs.get(city)
-            .map(|c| c.turn_timer)
-            .unwrap_or(30)
+        self.configs.get(city).map(|c| c.turn_timer).unwrap_or(30)
     }
 }
 
@@ -205,8 +241,14 @@ mod tests {
         let p2_id = Uuid::new_v4();
 
         // Join queue
-        queue.join(p1_id, "Player 1".into(), "dubai".into()).await.unwrap();
-        queue.join(p2_id, "Player 2".into(), "dubai".into()).await.unwrap();
+        queue
+            .join(p1_id, "Player 1".into(), "dubai".into())
+            .await
+            .unwrap();
+        queue
+            .join(p2_id, "Player 2".into(), "dubai".into())
+            .await
+            .unwrap();
 
         // Check stats
         let stats = queue.get_stats().await;

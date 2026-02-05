@@ -1,12 +1,11 @@
-use axum::{Json, Router, routing::get};
+use crate::AppState;
+use axum::{routing::get, Json, Router};
 use serde::Serialize;
 use std::collections::HashMap;
-use crate::AppState;
 
 /// Create config router
 pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/config", get(get_config))
+    Router::new().route("/config", get(get_config))
 }
 
 #[derive(Debug, Serialize)]
@@ -36,14 +35,59 @@ pub struct GameConfig {
 /// Get game configuration
 pub async fn get_config() -> Json<GameConfig> {
     let mut city_config = HashMap::new();
-    city_config.insert("Dubai".into(), CityConfig { entry_fee: 500, prize_amount: 900, turn_timer: 30, difficulty: "easy".into() });
-    city_config.insert("Cairo".into(), CityConfig { entry_fee: 1000, prize_amount: 1800, turn_timer: 20, difficulty: "medium".into() });
-    city_config.insert("Oslo".into(), CityConfig { entry_fee: 5000, prize_amount: 9000, turn_timer: 10, difficulty: "hard".into() });
+    city_config.insert(
+        "Dubai".into(),
+        CityConfig {
+            entry_fee: 500,
+            prize_amount: 900,
+            turn_timer: 30,
+            difficulty: "easy".into(),
+        },
+    );
+    city_config.insert(
+        "Cairo".into(),
+        CityConfig {
+            entry_fee: 1000,
+            prize_amount: 1800,
+            turn_timer: 20,
+            difficulty: "medium".into(),
+        },
+    );
+    city_config.insert(
+        "Oslo".into(),
+        CityConfig {
+            entry_fee: 5000,
+            prize_amount: 9000,
+            turn_timer: 10,
+            difficulty: "hard".into(),
+        },
+    );
 
     let mut ai_config = HashMap::new();
-    ai_config.insert("easy".into(), AIConfig { entry_fee: 0, prize_amount: 0, turn_timer: 30 });
-    ai_config.insert("medium".into(), AIConfig { entry_fee: 100, prize_amount: 180, turn_timer: 20 });
-    ai_config.insert("hard".into(), AIConfig { entry_fee: 250, prize_amount: 450, turn_timer: 10 });
+    ai_config.insert(
+        "easy".into(),
+        AIConfig {
+            entry_fee: 0,
+            prize_amount: 0,
+            turn_timer: 30,
+        },
+    );
+    ai_config.insert(
+        "medium".into(),
+        AIConfig {
+            entry_fee: 100,
+            prize_amount: 180,
+            turn_timer: 20,
+        },
+    );
+    ai_config.insert(
+        "hard".into(),
+        AIConfig {
+            entry_fee: 250,
+            prize_amount: 450,
+            turn_timer: 10,
+        },
+    );
 
     Json(GameConfig {
         win_threshold: 11,
