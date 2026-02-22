@@ -53,7 +53,7 @@ interface GameState {
     isReconnecting: boolean;
     matchFound: boolean;
     isSettingPoisonFor: 'player' | 'opponent' | null;
-    searchTimeout?: NodeJS.Timeout | null;
+    searchTimeout?: ReturnType<typeof setTimeout> | null;
 
     // Queue stats for displaying online player counts
     queueStats: { [city: string]: { players_waiting: number; city_config: any } };
@@ -213,8 +213,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     initGame: async (mode, difficulty = 'easy', city = 'Dubai') => {
         const { aiConfig, cityConfig } = get().config;
-        const auth = require('./authStore').useAuthStore.getState();
-
+        // Reset server-bound player ID at game initialization; filled only when backend assigns one.
+        set({ playerId: null });
         const timerLimit = mode === 'online' ? (cityConfig[city]?.turnTimer || 30) :
             (mode === 'ai' ? (aiConfig[difficulty]?.turnTimer || 30) : 30);
 
@@ -224,24 +224,34 @@ export const useGameStore = create<GameState>((set, get) => ({
         let oPoison: string | null = null;
 
         if (mode === 'ai') {
-            // Authoritative AI Session (Handles fees and state on server)
+            // Prefer authoritative AI session from backend.
+            // If network/server is unavailable, gracefully fallback to local AI setup.
             try {
                 const res = await apiService.createAIGame(difficulty);
-                if (res.success && res.data) {
+                const gameState = res?.data?.game_state;
+                const hasServerPayload = Boolean(
+                    res?.success &&
+                    gameState?.player1?.owned_candies &&
+                    gameState?.player2?.owned_candies
+                );
+
+                if (hasServerPayload) {
                     serverGameId = res.data.game_id;
-                    // Store the server-assigned player ID for this game
-                    set({ playerId: res.data.player1_id });
-                    const gs = res.data.game_state;
-                    pCandies = gs.player1.owned_candies;
-                    oCandies = gs.player2.owned_candies;
-                    oPoison = res.data.opponent_poison;
+                    set({ playerId: res.data.player1_id ?? null });
+                    pCandies = gameState.player1.owned_candies;
+                    oCandies = gameState.player2.owned_candies;
+                    oPoison = res.data.opponent_poison ?? null;
                 } else {
-                    console.error("Failed to start AI game:", res.message);
-                    return;
+                    console.warn('⚠️ Falling back to local AI setup due to invalid server payload.');
+                    const { player, opponent } = generateCandyPool(city);
+                    pCandies = player;
+                    oCandies = opponent;
                 }
             } catch (error) {
-                console.error("AI Init Network Error:", error);
-                return;
+                console.warn('⚠️ AI init network error, using local fallback:', error);
+                const { player, opponent } = generateCandyPool(city);
+                pCandies = player;
+                oCandies = opponent;
             }
         } else {
             // Local fallback logic
@@ -470,8 +480,7 @@ export const useGameStore = create<GameState>((set, get) => ({
                 set({ isReconnecting: false });
                 const authState = useAuthStore.getState();
                 const player_name = authState.user?.username || 'Guest';
-                const pId = authState.user?.id || `guest_unknown`;
-                webSocketService.sendMessage({ type: 'join_queue', player_name, player_id: pId, city: arena });
+                webSocketService.sendMessage({ type: 'join_queue', player_name, city: arena });
             }
         });
 

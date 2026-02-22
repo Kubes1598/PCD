@@ -9,10 +9,33 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 import { useAuthStore } from '../store/authStore';
 import { getFriendlyError, isAuthError } from '../utils/errorMapping';
+const DEFAULT_PORT = '8000';
 
-// Use your machine's local IP to connect from simulators and physical devices
-const DEV_MACHINE_IP = '192.168.18.3';
-export const BASE_URL = `http://${DEV_MACHINE_IP}:8000`;
+const isDevEnvironment = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
+
+const normalizeBaseUrl = (value: string): string => value.replace(/\/$/, '');
+
+const getDefaultDevBaseUrl = (): string => {
+    if (Platform.OS === 'android') {
+        return `http://10.0.2.2:${DEFAULT_PORT}`;
+    }
+    return `http://127.0.0.1:${DEFAULT_PORT}`;
+};
+
+const resolveBaseUrl = (): string => {
+    const envBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+    if (envBaseUrl) {
+        return normalizeBaseUrl(envBaseUrl);
+    }
+
+    const fallback = getDefaultDevBaseUrl();
+    if (!isDevEnvironment) {
+        console.warn('⚠️ EXPO_PUBLIC_API_BASE_URL is not set in a non-dev environment. Falling back to local host URL.');
+    }
+    return fallback;
+};
+// Production-ready base URL resolution (EXPO_PUBLIC_API_BASE_URL for staging/prod).
+export const BASE_URL = resolveBaseUrl();
 
 const apiClient = axios.create({
     baseURL: BASE_URL,
@@ -47,7 +70,7 @@ apiClient.interceptors.response.use(
         // Import error store dynamically to avoid circular dependency
         const { useErrorStore } = require('../store/errorStore');
         const showError = useErrorStore.getState().showError;
-        const originalRequest = error.config;
+        const originalRequest = error.config || {};
 
         // Handle 401 - Token expired/invalid
         if (isAuthError(error)) {
@@ -73,6 +96,7 @@ apiClient.interceptors.response.use(
                             authStore.setToken(newToken);
 
                             // Retry the original request with new token
+                            originalRequest.headers = originalRequest.headers || {};
                             originalRequest.headers.Authorization = `Bearer ${newToken}`;
                             console.log('✅ Token refreshed successfully, retrying request...');
                             return apiClient(originalRequest);
