@@ -33,7 +33,7 @@ type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 type OutgoingMessage =
     | { type: 'ping' }
     | { type: 'select_city'; city: string }
-    | { type: 'join_queue'; city: string; player_name: string }
+    | { type: 'join_queue'; city: string; player_name: string; player_id?: string }
     | { type: 'leave_queue' }
     | { type: 'match_move'; target_id: string; candy?: string; move?: string }
     | { type: 'match_poison'; target_id: string; candy: string };
@@ -67,17 +67,6 @@ class WebSocketService {
         return parsedBaseUrl.toString();
     }
 
-
-    private disposeSocket(socket: WebSocket) {
-        socket.onopen = null;
-        socket.onmessage = null;
-        socket.onclose = null;
-        socket.onerror = null;
-        if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
-            socket.close();
-        }
-    }
-
     get connectionState(): ConnectionState {
         if (!this.socket) return 'disconnected';
         if (this.socket.readyState === WebSocket.CONNECTING) return 'connecting';
@@ -95,13 +84,6 @@ class WebSocketService {
         const wsUrl = this.buildWebSocketUrl(playerId, token);
 
         console.log('🔌 Connecting to WebSocket (Secure):', wsUrl.replace(token, 'REDACTED'));
-
-        // Ensure we do not keep multiple active sockets during reconnect/rapid retries
-        if (this.socket) {
-            this.disposeSocket(this.socket);
-            this.socket = null;
-        }
-
         this.onStatusChange?.('connecting');
         this.socket = new WebSocket(wsUrl);
 
