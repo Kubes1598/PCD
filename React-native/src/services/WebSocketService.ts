@@ -33,7 +33,7 @@ type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 type OutgoingMessage =
     | { type: 'ping' }
     | { type: 'select_city'; city: string }
-    | { type: 'join_queue'; city: string; player_name: string; player_id?: string }
+    | { type: 'join_queue'; city: string; player_name: string }
     | { type: 'leave_queue' }
     | { type: 'match_move'; target_id: string; candy?: string; move?: string }
     | { type: 'match_poison'; target_id: string; candy: string };
