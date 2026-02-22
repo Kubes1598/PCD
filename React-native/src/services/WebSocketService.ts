@@ -123,6 +123,10 @@ class WebSocketService {
                 // Get fresh token for reconnection
                 const authState = require('../store/authStore').useAuthStore.getState();
                 const freshToken = authState.token || '';
+                if (!freshToken) {
+                    console.warn('⚠️ Skipping WebSocket reconnect: missing auth token.');
+                    return;
+                }
                 setTimeout(() => this.connect(this.playerId, freshToken, onMessage, onStatusChange), delay);
             } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
                 console.error('❌ Max reconnection attempts reached.');
@@ -177,7 +181,7 @@ class WebSocketService {
         this.stopHeartbeat();
         this.reconnectAttempts = 0;
         if (this.socket) {
-            this.socket.close();
+            this.disposeSocket(this.socket);
             this.socket = null;
         }
     }
