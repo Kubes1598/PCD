@@ -30,6 +30,13 @@ export type MatchmakingMessage = {
 };
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected';
+type OutgoingMessage =
+    | { type: 'ping' }
+    | { type: 'select_city'; city: string }
+    | { type: 'join_queue'; city: string; player_name: string; player_id?: string }
+    | { type: 'leave_queue' }
+    | { type: 'match_move'; target_id: string; candy?: string; move?: string }
+    | { type: 'match_poison'; target_id: string; candy: string };
 
 class WebSocketService {
     private socket: WebSocket | null = null;
@@ -43,13 +50,22 @@ class WebSocketService {
     private baseDelay = 1000; // 1 second
 
     // Heartbeat
-    private heartbeatInterval: NodeJS.Timeout | null = null;
-    private heartbeatTimeout: NodeJS.Timeout | null = null;
+    private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+    private heartbeatTimeout: ReturnType<typeof setTimeout> | null = null;
     private heartbeatIntervalMs = 15000; // 15 seconds
     private heartbeatTimeoutMs = 5000; // 5 seconds to wait for pong
 
     // Stored for reconnection
     private playerId: string = '';
+
+    private buildWebSocketUrl(playerId: string, token: string): string {
+        const parsedBaseUrl = new URL(BASE_URL);
+        parsedBaseUrl.protocol = parsedBaseUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+        parsedBaseUrl.pathname = `/matchmaking/ws/${encodeURIComponent(playerId)}`;
+        parsedBaseUrl.search = '';
+        parsedBaseUrl.searchParams.set('token', token);
+        return parsedBaseUrl.toString();
+    }
 
     get connectionState(): ConnectionState {
         if (!this.socket) return 'disconnected';
@@ -64,21 +80,12 @@ class WebSocketService {
         this.onStatusChange = onStatusChange || null;
         this.isManuallyClosed = false;
 
-        // Convert http://... to ws://...
-        const wsBase = BASE_URL.replace('http', 'ws');
         // SECURITY: Append JWT token as query parameter
-        const wsUrl = `${wsBase}/matchmaking/ws/${playerId}?token=${token}`;
+        const wsUrl = this.buildWebSocketUrl(playerId, token);
 
-        console.log('🔌 Connecting to WebSocket (Secure):', `${wsBase}/matchmaking/ws/${playerId}?token=REDACTED`);
+        console.log('🔌 Connecting to WebSocket (Secure):', wsUrl.replace(token, 'REDACTED'));
         this.onStatusChange?.('connecting');
         this.socket = new WebSocket(wsUrl);
-
-        // ... rest of the code ...
-        // Note: For reconnection, we need to ensure we have a fresh token or the stored one
-        const retryConnection = () => {
-            const freshToken = require('../store/authStore').useAuthStore.getState().token;
-            this.connect(this.playerId, freshToken || token, onMessage, onStatusChange);
-        };
 
         this.socket.onopen = () => {
             console.log('✅ WebSocket Connected');
@@ -103,8 +110,8 @@ class WebSocketService {
             }
         };
 
-        this.socket.onclose = () => {
-            console.log('🔌 WebSocket Disconnected');
+        this.socket.onclose = (event) => {
+            console.log(`🔌 WebSocket Disconnected (code=${event.code}, reason=${event.reason || 'none'})`);
             this.stopHeartbeat();
             this.onStatusChange?.('disconnected');
 
@@ -157,7 +164,7 @@ class WebSocketService {
         }
     }
 
-    sendMessage(message: any) {
+    sendMessage(message: OutgoingMessage) {
         if (this.socket && this.socket.readyState === WebSocket.OPEN) {
             this.socket.send(JSON.stringify(message));
         } else {
