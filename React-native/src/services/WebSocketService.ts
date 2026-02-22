@@ -67,6 +67,17 @@ class WebSocketService {
         return parsedBaseUrl.toString();
     }
 
+
+    private disposeSocket(socket: WebSocket) {
+        socket.onopen = null;
+        socket.onmessage = null;
+        socket.onclose = null;
+        socket.onerror = null;
+        if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+            socket.close();
+        }
+    }
+
     get connectionState(): ConnectionState {
         if (!this.socket) return 'disconnected';
         if (this.socket.readyState === WebSocket.CONNECTING) return 'connecting';
@@ -86,11 +97,9 @@ class WebSocketService {
         console.log('🔌 Connecting to WebSocket (Secure):', wsUrl.replace(token, 'REDACTED'));
 
         // Ensure we do not keep multiple active sockets during reconnect/rapid retries
-        if (this.socket && (
-            this.socket.readyState === WebSocket.OPEN ||
-            this.socket.readyState === WebSocket.CONNECTING
-        )) {
-            this.socket.close();
+        if (this.socket) {
+            this.disposeSocket(this.socket);
+            this.socket = null;
         }
 
         this.onStatusChange?.('connecting');
@@ -190,7 +199,7 @@ class WebSocketService {
         this.stopHeartbeat();
         this.reconnectAttempts = 0;
         if (this.socket) {
-            this.socket.close();
+            this.disposeSocket(this.socket);
             this.socket = null;
         }
     }
