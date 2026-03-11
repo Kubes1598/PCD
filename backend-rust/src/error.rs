@@ -18,8 +18,8 @@ pub enum AppError {
     #[error("Invalid email or password")]
     InvalidCredentials,
 
-    #[error("Access denied")]
-    Forbidden,
+    #[error("Access denied: {0}")]
+    Forbidden(String),
 
     #[error("Resource not found: {0}")]
     NotFound(String),
@@ -63,7 +63,7 @@ impl IntoResponse for AppError {
                 "INVALID_CREDENTIALS",
                 self.to_string(),
             ),
-            AppError::Forbidden => (StatusCode::FORBIDDEN, "ACCESS_DENIED", self.to_string()),
+            AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, "ACCESS_DENIED", msg.clone()),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, "NOT_FOUND", msg.clone()),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, "BAD_REQUEST", msg.clone()),
             AppError::Conflict(msg) => (StatusCode::CONFLICT, "CONFLICT", msg.clone()),

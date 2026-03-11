@@ -1,7 +1,7 @@
 import { BASE_URL } from './api';
 
 export type MatchmakingMessage = {
-    type: 'match_found' | 'queue_status' | 'matchmaking_timeout' | 'pong' | 'match_move' | 'match_poison' | 'opponent_disconnected' | 'timer_sync' | 'timer_expired' | 'game_over' | 'reconnected' | 'matchmaking_error' | 'game_cancelled' | 'game_state_update' | 'city_stats_update';
+    type: 'match_found' | 'queue_status' | 'matchmaking_timeout' | 'pong' | 'match_move' | 'match_poison' | 'opponent_disconnected' | 'timer_sync' | 'timer_expired' | 'game_over' | 'reconnected' | 'matchmaking_error' | 'game_cancelled' | 'game_state_update' | 'city_stats_update' | 'game_started';
     game_id?: string;
     game_state?: any;
     your_role?: 'player1' | 'player2';
@@ -35,8 +35,8 @@ type OutgoingMessage =
     | { type: 'select_city'; city: string }
     | { type: 'join_queue'; city: string; player_name: string; player_id?: string }
     | { type: 'leave_queue' }
-    | { type: 'match_move'; target_id: string; candy?: string; move?: string }
-    | { type: 'match_poison'; target_id: string; candy: string };
+    | { type: 'match_move'; game_id: string; target_id: string; candy?: string; move?: string }
+    | { type: 'match_poison'; game_id: string; target_id: string; candy: string };
 
 class WebSocketService {
     private socket: WebSocket | null = null;
@@ -165,6 +165,20 @@ class WebSocketService {
         if (this.heartbeatTimeout) {
             clearTimeout(this.heartbeatTimeout);
             this.heartbeatTimeout = null;
+        }
+    }
+
+    /**
+     * Safely dispose of a WebSocket instance by removing all handlers
+     * before closing. Prevents ghost callbacks during teardown.
+     */
+    private disposeSocket(socket: WebSocket) {
+        socket.onopen = null;
+        socket.onmessage = null;
+        socket.onclose = null;
+        socket.onerror = null;
+        if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+            socket.close(1000, 'Client disconnect');
         }
     }
 

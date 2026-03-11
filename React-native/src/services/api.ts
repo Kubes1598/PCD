@@ -182,7 +182,7 @@ export const apiService = {
     // AUTHENTICATION
     // =========================================================================
 
-    register: async (data: { email: string; password: string; username: string; initial_coins?: number; initial_diamonds?: number }): Promise<ApiResponse> => {
+    register: async (data: { email: string; password: string; username: string; guest_id?: string }): Promise<ApiResponse> => {
         const response = await apiClient.post('/auth/register', data);
         return response.data;
     },
@@ -288,7 +288,6 @@ export const apiService = {
 
     setPoison: async (gameId: string, playerId: string, poisonChoice: string): Promise<ApiResponse> => {
         const response = await apiClient.post(`/games/${gameId}/poison`, {
-            player: playerId,        // Backend expects 'player' (renamed via serde)
             poison_choice: poisonChoice,
         });
         return response.data;
@@ -296,7 +295,6 @@ export const apiService = {
 
     pickCandy: async (gameId: string, playerId: string, candyChoice: string): Promise<ApiResponse> => {
         const response = await apiClient.post(`/games/${gameId}/pick`, {
-            player: playerId,        // Backend expects 'player' (renamed via serde)
             candy_choice: candyChoice,
         });
         return response.data;
@@ -343,7 +341,7 @@ export const apiService = {
     },
 
     getLeaderboard: async (sortBy: string = 'wins', limit: number = 20): Promise<ApiResponse> => {
-        const response = await apiClient.get(`/players/leaderboard/${sortBy}?limit=${limit}`);
+        const response = await apiClient.get(`/players/leaderboard?limit=${limit}`);
         return response.data;
     },
 

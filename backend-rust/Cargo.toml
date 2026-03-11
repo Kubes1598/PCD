@@ -10,7 +10,7 @@ authors = ["PCD Team"]
 axum = { version = "0.7", features = ["ws", "macros"] }
 tokio = { version = "1", features = ["full"] }
 tower = "0.4"
-tower-http = { version = "0.5", features = ["cors", "trace", "timeout"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "timeout", "limit"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

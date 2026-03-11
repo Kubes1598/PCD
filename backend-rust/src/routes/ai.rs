@@ -11,8 +11,13 @@ use crate::{
 use uuid::Uuid;
 
 /// Create AI router
-pub fn router() -> Router<AppState> {
-    Router::new().route("/move", post(calculate_move))
+pub fn router(state: AppState) -> Router<AppState> {
+    use crate::middleware::auth::require_auth;
+    use axum::middleware::from_fn_with_state;
+
+    Router::new()
+        .route("/move", post(calculate_move))
+        .layer(from_fn_with_state(state, require_auth))
 }
 
 /// AI move request

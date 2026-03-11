@@ -23,6 +23,12 @@ pub struct Player {
     pub stars: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub last_active: DateTime<Utc>,
+    // Security fields
+    pub password_hash: Option<String>,
+    pub mfa_enabled: Option<bool>,
+    pub totp_secret: Option<String>,
+    pub failed_login_attempts: Option<i32>,
+    pub lockout_until: Option<DateTime<Utc>>,
 }
 
 /// Game record from database
@@ -47,11 +53,23 @@ pub struct UserAuth {
     pub name: String,
     pub email: Option<String>,
     pub password_hash: Option<String>,
+    pub mfa_enabled: Option<bool>,
+    pub failed_login_attempts: Option<i32>,
+    pub lockout_until: Option<DateTime<Utc>>,
 }
 
 /// Create user request
 #[derive(Debug)]
 pub struct CreateUser {
+    pub username: String,
+    pub email: String,
+    pub password_hash: String,
+}
+
+/// Upgrade user request (guest to full)
+#[derive(Debug)]
+pub struct UpgradeUser {
+    pub id: Uuid,
     pub username: String,
     pub email: String,
     pub password_hash: String,

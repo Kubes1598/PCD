@@ -13,7 +13,7 @@ type AuthScreenProps = {
 };
 
 const AuthScreen: React.FC<AuthScreenProps> = ({ navigation, route }: any) => {
-    const { login, register, loginWithGoogle, loginWithApple, guestLogin, isLoading } = useAuth();
+    const { user, login, register, loginWithGoogle, loginWithApple, guestLogin, isLoading, isGuest } = useAuth();
     const [isLogin, setIsLogin] = useState(true);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -21,18 +21,10 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ navigation, route }: any) => {
     const [oauthStatus, setOauthStatus] = useState({ google: false, apple: false });
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Check for migration params
-    const initialCoins = route?.params?.initialCoins;
-    const initialDiamonds = route?.params?.initialDiamonds;
-
     useEffect(() => {
-        if (initialCoins !== undefined) {
-            setIsLogin(false);
-        }
-
         // Check which OAuth providers are available
         checkOAuthStatus();
-    }, [initialCoins]);
+    }, []);
 
     const checkOAuthStatus = async () => {
         try {
@@ -58,12 +50,29 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ navigation, route }: any) => {
             if (isLogin) {
                 result = await login(email, password);
             } else {
-                result = await register(email, password, username, initialCoins, initialDiamonds);
+                // Front-end validation for stronger password policy
+                if (!validatePassword(password)) {
+                    feedbackService.triggerError();
+                    Alert.alert(
+                        'Weak Password',
+                        'Password must be at least 8 characters long and include:\n• Uppercase & Lowercase letters\n• Numbers\n• Symbols (e.g. !@#$)',
+                        [{ text: 'OK' }]
+                    );
+                    return;
+                }
+
+                // If user is currently a guest, pass their ID for data transfer
+                const guestId = isGuest ? user?.id : undefined;
+                result = await register(email, password, username, guestId);
             }
 
             if (result.success) {
                 feedbackService.triggerSuccess();
-                navigation.navigate('App');
+                if (result.message?.includes('transferred')) {
+                    Alert.alert('Success', result.message, [{ text: 'Great!', onPress: () => navigation.navigate('App') }]);
+                } else {
+                    navigation.navigate('App');
+                }
             } else {
                 feedbackService.triggerError();
                 Alert.alert('Error', result.message || 'Authentication failed');
@@ -143,6 +152,14 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ navigation, route }: any) => {
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const validatePassword = (pass: string) => {
+        const hasUpper = /[A-Z]/.test(pass);
+        const hasLower = /[a-z]/.test(pass);
+        const hasNumber = /[0-9]/.test(pass);
+        const hasSymbol = /[^A-Za-z0-9]/.test(pass);
+        return pass.length >= 8 && hasUpper && hasLower && hasNumber && hasSymbol;
     };
 
     const isButtonDisabled = isLoading || isSubmitting;

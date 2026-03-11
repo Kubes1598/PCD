@@ -46,7 +46,7 @@ const RewardsScreen = ({ navigation }: any) => {
         try {
             const res = await apiService.getLeaderboard('wins');
             if (res && res.success) {
-                const data = res.data?.leaderboard || [];
+                const data = Array.isArray(res.data) ? res.data : [];
                 setLeaderboard(data);
             }
         } catch (error) {

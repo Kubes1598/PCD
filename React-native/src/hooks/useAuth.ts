@@ -32,14 +32,13 @@ export const useAuth = () => {
     /**
      * Email/Password Registration
      */
-    const register = async (email: string, password: string, username: string, initialCoins?: number, initialDiamonds?: number) => {
+    const register = async (email: string, password: string, username: string, guestId?: string) => {
         try {
             const result = await apiService.register({
                 email,
                 password,
                 username,
-                initial_coins: initialCoins,
-                initial_diamonds: initialDiamonds
+                guest_id: guestId
             });
             if (result.success) {
                 const userData = result.data.user;

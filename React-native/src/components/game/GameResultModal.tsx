@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Animated, Modal } from 'react-native';
-import { Trophy, Frown, Home, RefreshCw } from 'lucide-react-native';
+import { Trophy, Frown, Home, RefreshCw, Handshake } from 'lucide-react-native';
 import { THEME } from '../../utils/theme';
 import { feedbackService } from '../../services/FeedbackService';
 import { scale, moderateScale, SCREEN_WIDTH } from '../../utils/responsive';
@@ -53,7 +53,7 @@ const GameResultModal: React.FC<GameResultModalProps> = ({ visible, winner, onHo
         const iconSize = scale(48);
         if (winReason === 'cancelled') return <RefreshCw color={THEME.colors.white} size={iconSize} />; // Reuse icon or similar
         if (isWin) return <Trophy color={THEME.colors.white} size={iconSize} />;
-        if (isDraw) return <RefreshCw color={THEME.colors.white} size={iconSize} />;
+        if (isDraw) return <Handshake color={THEME.colors.white} size={iconSize} />;
         return <Frown color={THEME.colors.white} size={iconSize} />;
     };
 

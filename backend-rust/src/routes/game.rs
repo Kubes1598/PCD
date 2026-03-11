@@ -16,7 +16,10 @@ use crate::{
 };
 
 /// Create game router
-pub fn router() -> Router<AppState> {
+pub fn router(state: AppState) -> Router<AppState> {
+    use crate::middleware::auth::require_auth;
+    use axum::middleware::from_fn_with_state;
+
     Router::new()
         .route("/", post(create_game))
         .route("/ai", post(create_ai_game))
@@ -24,6 +27,7 @@ pub fn router() -> Router<AppState> {
         .route("/:game_id", delete(delete_game))
         .route("/:game_id/poison", post(set_poison))
         .route("/:game_id/pick", post(pick_candy))
+        .layer(from_fn_with_state(state, require_auth))
 }
 
 /// Create game request
@@ -38,16 +42,12 @@ pub struct CreateGameRequest {
 /// Set poison request
 #[derive(Debug, Deserialize)]
 pub struct SetPoisonRequest {
-    #[serde(rename = "player")]
-    pub player_id: Uuid,
     pub poison_choice: String,
 }
 
 /// Pick candy request
 #[derive(Debug, Deserialize)]
 pub struct PickCandyRequest {
-    #[serde(rename = "player")]
-    pub player_id: Uuid,
     pub candy_choice: String,
 }
 
@@ -62,8 +62,15 @@ pub struct GameResponse {
 /// Create a new game
 async fn create_game(
     State(state): State<AppState>,
+    Extension(user): Extension<AuthUser>,
     Json(req): Json<CreateGameRequest>,
 ) -> Result<Json<GameResponse>> {
+    // 1. Get player name from DB (IDOR Protection)
+    let player = state
+        .db
+        .get_player(&user.id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Player not found".into()))?;
     // Default timers for generic game creation
     let turn_timer = 30u32;
     let poison_timer = 60u32;
@@ -71,9 +78,9 @@ async fn create_game(
     let game_id = state
         .game_engine
         .create_game(
-            req.player1_name.clone(),
+            player.name.clone(),
             req.player2_name.clone(),
-            req.player1_id,
+            Some(user.id),
             req.player2_id,
             turn_timer,
             poison_timer,
@@ -129,7 +136,7 @@ async fn create_ai_game(
         let reference_id = format!("ai_{}_{}", user.id, Uuid::new_v4()); // AI games don't have a shared ID yet, use random for unique deduction
         state
             .db
-            .execute_transaction(&user.id, -fee, "ai_entry_fee", None, Some(reference_id))
+            .execute_transaction(&user.id, -fee, 0, "ai_entry_fee", None, Some(reference_id))
             .await
             .map_err(|_| AppError::Internal("Failed to deduct coins".into()))?;
     }
@@ -207,6 +214,7 @@ async fn create_ai_game(
 /// Get game state
 async fn get_game(
     State(state): State<AppState>,
+    Extension(user): Extension<AuthUser>,
     Path(game_id): Path<Uuid>,
 ) -> Result<Json<GameResponse>> {
     let game = state
@@ -214,39 +222,35 @@ async fn get_game(
         .get_game(game_id)
         .ok_or_else(|| AppError::NotFound(format!("Game {} not found", game_id)))?;
 
+    // SECURITY: Only players in the game can view full state
+    if game.player1.id != user.id && game.player2.id != user.id {
+        return Err(AppError::Forbidden("You are not part of this game".into()));
+    }
+
     Ok(Json(GameResponse {
         success: true,
-        message: "Game found".into(),
-        data: Some(serde_json::json!({
-            "game_id": game.id,
-            "state": game.state,
-            "current_turn": game.current_turn,
-            "result": game.result,
-            "player1": {
-                "id": game.player1.id,
-                "name": game.player1.name,
-                "collected": game.player1.collected_candies.len(),
-                "candies_remaining": game.player1.owned_candies.len(),
-            },
-            "player2": {
-                "id": game.player2.id,
-                "name": game.player2.name,
-                "collected": game.player2.collected_candies.len(),
-                "candies_remaining": game.player2.owned_candies.len(),
-            },
-        })),
+        message: "Game state retrieved".into(),
+        data: Some(serde_json::to_value(game.for_viewer(user.id)).unwrap()),
     }))
 }
 
-/// Delete a game
+/// Delete a game — requires authentication + ownership
 async fn delete_game(
     State(state): State<AppState>,
+    Extension(user): Extension<AuthUser>,
     Path(game_id): Path<Uuid>,
 ) -> Result<Json<GameResponse>> {
-    state
+    let game = state
         .game_engine
-        .remove_game(game_id)
+        .get_game(game_id)
         .ok_or_else(|| AppError::NotFound(format!("Game {} not found", game_id)))?;
+
+    // Only participants can delete their own game
+    if game.player1.id != user.id && game.player2.id != user.id {
+        return Err(AppError::Forbidden);
+    }
+
+    state.game_engine.remove_game(game_id);
 
     Ok(Json(GameResponse {
         success: true,
@@ -255,15 +259,16 @@ async fn delete_game(
     }))
 }
 
-/// Set poison choice
+/// Set poison choice — uses authenticated user, not request body
 async fn set_poison(
     State(state): State<AppState>,
+    Extension(user): Extension<AuthUser>,
     Path(game_id): Path<Uuid>,
     Json(req): Json<SetPoisonRequest>,
 ) -> Result<Json<GameResponse>> {
     let game_started = state
         .game_engine
-        .set_poison_choice(game_id, req.player_id, &req.poison_choice)
+        .set_poison_choice(game_id, user.id, &req.poison_choice)
         .await?;
 
     let message = if game_started {
@@ -281,15 +286,16 @@ async fn set_poison(
     }))
 }
 
-/// Pick a candy
+/// Pick a candy — uses authenticated user, not request body
 async fn pick_candy(
     State(state): State<AppState>,
+    Extension(user): Extension<AuthUser>,
     Path(game_id): Path<Uuid>,
     Json(req): Json<PickCandyRequest>,
 ) -> Result<Json<GameResponse>> {
     let result = state
         .game_engine
-        .make_move(game_id, req.player_id, &req.candy_choice)
+        .make_move(game_id, user.id, &req.candy_choice)
         .await?;
 
     // If game over, process victory/draw settlement
@@ -307,6 +313,7 @@ async fn pick_candy(
                     .execute_transaction(
                         &game.player1.id,
                         fee,
+                        0,
                         "draw_refund",
                         Some(game_id),
                         Some(ref1),
@@ -333,6 +340,7 @@ async fn pick_candy(
                         .execute_transaction(
                             &w_id,
                             prize,
+                            0,
                             "victory_reward",
                             Some(game_id),
                             Some(ref_id),

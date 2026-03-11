@@ -215,8 +215,9 @@ export const useGameStore = create<GameState>((set, get) => ({
         const { aiConfig, cityConfig } = get().config;
         // Reset server-bound player ID at game initialization; filled only when backend assigns one.
         set({ playerId: null });
-        const timerLimit = mode === 'online' ? (cityConfig[city]?.turnTimer || 30) :
-            (mode === 'ai' ? (aiConfig[difficulty]?.turnTimer || 30) : 30);
+        
+        // Initial timer for POISON selection is 30s as per gameplay.md
+        const timerLimit = 30; 
 
         let serverGameId = null;
         let pCandies: string[] = [];
@@ -337,7 +338,7 @@ export const useGameStore = create<GameState>((set, get) => ({
                         opponentCollection: them.collected_candies || [],
                         gameMode: 'online',
                         selectedCity: arena,
-                        turnTimeRemaining: cityInfo.turnTimer,
+                        turnTimeRemaining: 30, // 30s for poison selection as per gameplay.md
                         isSettingPoisonFor: 'player',
                         opponentId: data.opponent?.id || null
                     });
@@ -345,6 +346,17 @@ export const useGameStore = create<GameState>((set, get) => ({
             } else if (data.type === 'reconnected') {
                 console.log('🔄 Reconnected to active game:', data.game_id);
                 set({ isReconnecting: false, gameStarted: true });
+            } else if (data.type === 'game_started') {
+                console.log('🎮 Game officially started!');
+                const { config, selectedCity, gameMode, difficulty } = get();
+                const timerLimit = gameMode === 'online' ? (config.cityConfig[selectedCity as CityName]?.turnTimer || 30) :
+                    (gameMode === 'ai' ? (config.aiConfig[difficulty as Difficulty]?.turnTimer || 30) : 30);
+                
+                set({ 
+                    gameStarted: true, 
+                    isSettingPoisonFor: null,
+                    turnTimeRemaining: timerLimit 
+                });
             } else if (data.type === 'matchmaking_error') {
                 set({ isSearching: false });
                 Alert.alert("Matchmaking Error", data.message || "An unknown error occurred.");
@@ -538,30 +550,35 @@ export const useGameStore = create<GameState>((set, get) => ({
                 }
                 try {
                     await apiService.setPoison(gameId, pId, candy);
-                    set({ isSettingPoisonFor: null, gameStarted: true });
+                    const { aiConfig } = get().config;
+                    const timerLimit = aiConfig[state.difficulty]?.turnTimer || 30;
+                    set({ isSettingPoisonFor: null, gameStarted: true, turnTimeRemaining: timerLimit });
                 } catch (error) {
                     console.error("Failed to set poison on server:", error);
                     // Fallback to local if server fails (not ideal but avoids getting stuck)
-                    set({ isSettingPoisonFor: null, gameStarted: true });
+                    set({ isSettingPoisonFor: null, gameStarted: true, turnTimeRemaining: 30 });
                 }
             } else if (gameMode === 'online' && opponentId) {
                 // Online mode - send our poison to opponent and check if both are set
-                webSocketService.sendMessage({ type: 'match_poison', target_id: opponentId, candy: candy });
+                webSocketService.sendMessage({ type: 'match_poison', game_id: get().gameId!, target_id: opponentId, candy: candy });
                 set({ isSettingPoisonFor: null });
 
                 // If we already have opponent's poison, BOTH are now set - start game
                 if (opponentPoison) {
                     console.log('🎮 Both poisons set - starting game!');
-                    set({ gameStarted: true });
+                    const { config } = get();
+                    const timerLimit = config.cityConfig[get().selectedCity as CityName]?.turnTimer || 30;
+                    set({ gameStarted: true, turnTimeRemaining: timerLimit });
                 } else {
                     console.log('⏳ Waiting for opponent to set poison...');
                 }
-            } else {
                 // Fallback for other modes (friends, etc)
-                set({ isSettingPoisonFor: null, gameStarted: true });
+                set({ isSettingPoisonFor: null, gameStarted: true, turnTimeRemaining: 30 });
             }
         } else if (isSettingPoisonFor === 'opponent') {
-            set({ opponentPoison: candy, isSettingPoisonFor: null, gameStarted: true });
+            const { config, gameMode, selectedCity } = get();
+            const timerLimit = gameMode === 'online' ? (config.cityConfig[selectedCity as CityName]?.turnTimer || 30) : 30;
+            set({ opponentPoison: candy, isSettingPoisonFor: null, gameStarted: true, turnTimeRemaining: timerLimit });
         }
     },
 
@@ -643,7 +660,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         // Send move to server - only for online mode (AI games run locally after creation)
         if (state.gameMode === 'online' && state.opponentId && !isRemote) {
-            webSocketService.sendMessage({ type: 'match_move', target_id: state.opponentId, move: candy });
+            webSocketService.sendMessage({ type: 'match_move', game_id: state.gameId!, target_id: state.opponentId, move: candy });
         }
 
         // AI Logic
@@ -703,13 +720,31 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     tickTimer: () => {
-        const { turnTimeRemaining, gameEnded, isPlayerTurn, gameMode } = get();
-        if (gameEnded || !get().gameStarted) return;
+        const { turnTimeRemaining, gameEnded, isPlayerTurn, gameMode, isSettingPoisonFor, gameStarted } = get();
+        if (gameEnded) return;
+        
+        // If not started AND not setting poison, don't tick
+        if (!gameStarted && !isSettingPoisonFor) return;
 
         if (turnTimeRemaining > 0) {
             set({ turnTimeRemaining: turnTimeRemaining - 1 });
         } else {
             // Timeout occurred
+            if (isSettingPoisonFor) {
+                // Handle poison selection timeout
+                if (gameMode === 'online') {
+                    set({ turnTimeRemaining: 0 });
+                } else if (isSettingPoisonFor === 'player') {
+                    // Force pick first candy as poison if player idle
+                    const candies = get().playerCandies;
+                    if (candies.length > 0) get().setPoison(candies[0]);
+                } else if (isSettingPoisonFor === 'opponent') {
+                    const candies = get().opponentCandies;
+                    if (candies.length > 0) get().setPoison(candies[0]);
+                }
+                return;
+            }
+
             if (gameMode === 'online') {
                 // Online mode: server handles timeout, just show it
                 set({ turnTimeRemaining: 0 });

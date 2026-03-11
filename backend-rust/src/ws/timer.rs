@@ -130,8 +130,8 @@ impl GameTimerManager {
                                         let cat = if g.result == crate::game::GameResult::Draw { "draw_refund" } else { "cancel_refund" };
                                         let ref1 = format!("{}_{}_{}", game_id, g.player1.id, cat);
                                         let ref2 = format!("{}_{}_{}", game_id, g.player2.id, cat);
-                                        let _ = db.execute_transaction(&g.player1.id, fee, cat, Some(game_id), Some(ref1)).await;
-                                        let _ = db.execute_transaction(&g.player2.id, fee, cat, Some(game_id), Some(ref2)).await;
+                                        let _ = db.execute_transaction(&g.player1.id, fee as i32, 0, cat, Some(game_id), Some(ref1)).await;
+                                        let _ = db.execute_transaction(&g.player2.id, fee as i32, 0, cat, Some(game_id), Some(ref2)).await;
                                     }
                                 } else if prize > 0 {
                                     let winner_id = match g.result {
@@ -142,7 +142,7 @@ impl GameTimerManager {
 
                                     if let Some(w_id) = winner_id {
                                         let ref_id = format!("{}_{}_victory", game_id, w_id);
-                                        let _ = db.execute_transaction(&w_id, prize, "victory_reward", Some(game_id), Some(ref_id)).await;
+                                        let _ = db.execute_transaction(&w_id, prize as i32, 0, "victory_reward", Some(game_id), Some(ref_id)).await;
                                     }
                                 }
                             }

@@ -14,24 +14,55 @@ use crate::{
 };
 
 /// Create auth router
-pub fn router() -> Router<AppState> {
+pub fn router(state: AppState) -> Router<AppState> {
+    use crate::middleware::auth::require_auth;
+    use ax_mw::from_fn_with_state;
+    use axum::middleware as ax_mw;
+
+    let protected = Router::new()
+        .route("/logout", post(logout))
+        .route("/me", get(me))
+        .layer(from_fn_with_state(state.clone(), require_auth));
+
     Router::new()
         .route("/register", post(register))
         .route("/login", post(login))
-        .route("/logout", post(logout))
         .route("/refresh", post(refresh_token))
-        .route("/me", get(me))
         .route("/guest", post(guest_login))
         .route("/google", post(google_auth))
         .route("/apple", post(apple_auth))
         .route("/oauth/status", get(oauth_status))
+        .merge(protected)
 }
 
 /// Logout handler
-async fn logout() -> Result<Json<serde_json::Value>> {
+async fn logout(
+    State(state): State<AppState>,
+    axum::http::HeaderMap(headers): axum::http::HeaderMap,
+    Json(req): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>> {
+    // 1. Extract token from Authorization header (Access Token)
+    let token = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .ok_or_else(|| AppError::BadRequest("Missing Authorization header".into()))?;
+
+    // 2. Revoke Refresh Token if provided
+    if let Some(rt) = req["refresh_token"].as_str() {
+        state.db.revoke_refresh_token(rt).await?;
+    }
+
+    // 3. Blacklist Access Token in Redis
+    if let Some(redis) = &state.redis {
+        redis.blacklist_token(token, 86400).await.map_err(|e| {
+            AppError::Internal(format!("Failed to blacklist token: {}", e))
+        })?;
+    }
+
     Ok(Json(serde_json::json!({
         "success": true,
-        "message": "Logged out successfully"
+        "message": "Logged out successfully and session revoked."
     })))
 }
 
@@ -40,43 +71,39 @@ async fn refresh_token(
     State(state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<AuthResponse>> {
-    let refresh_token = req["refresh_token"]
+    let old_refresh_token = req["refresh_token"]
         .as_str()
         .ok_or_else(|| AppError::BadRequest("Missing refresh_token".into()))?;
 
-    // In a real app, we would verify the refresh token against the DB
-    // For now, let's just decode the old one to get user ID
-    use jsonwebtoken::{decode, DecodingKey, Validation};
-    #[derive(Debug, Deserialize, Serialize)]
-    struct Claims {
-        sub: String,
-        exp: u64,
-        iat: u64,
-    }
+    // 1. Verify Refresh Token against DB
+    let user_id = state.db.verify_refresh_token(old_refresh_token).await?
+        .ok_or(AppError::Unauthorized)?;
 
-    let token_data = decode::<Claims>(
-        refresh_token,
-        &DecodingKey::from_secret(state.config.jwt_secret.as_bytes()),
-        &Validation::default(),
-    )
-    .map_err(|_| AppError::Unauthorized)?;
+    // 2. ROTATE: Revoke old, Create new
+    state.db.revoke_refresh_token(old_refresh_token).await?;
+    
+    use rand::{distributions::Alphanumeric, Rng};
+    let new_refresh_token: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(64)
+        .map(char::from)
+        .collect();
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(30);
+    state.db.create_refresh_token(&user_id, &new_refresh_token, expires_at).await?;
 
-    let user_id =
-        uuid::Uuid::parse_str(&token_data.claims.sub).map_err(|_| AppError::Unauthorized)?;
-
-    let player = state
-        .db
-        .get_player(&user_id)
-        .await?
-        .ok_or_else(|| AppError::Unauthorized)?;
-
+    // 3. Generate new Access JWT
     let token = generate_jwt(user_id, &state.config.jwt_secret)?;
+
+    // 4. Get User data
+    let player = state.db.get_player(&user_id).await?
+        .ok_or_else(|| AppError::Unauthorized)?;
 
     Ok(Json(AuthResponse {
         success: true,
-        message: Some("Token refreshed".into()),
+        message: Some("Token refreshed and rotated".into()),
         data: AuthData {
             token,
+            refresh_token: new_refresh_token,
             user: UserResponse {
                 id: player.id,
                 username: player.name,
@@ -85,6 +112,7 @@ async fn refresh_token(
                 diamonds_balance: player.diamonds_balance,
                 games_played: player.games_played,
                 games_won: player.games_won,
+                mfa_enabled: player.mfa_enabled.unwrap_or(false),
             },
         },
     }))
@@ -96,26 +124,77 @@ async fn guest_login(
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<AuthResponse>> {
     let device_id = req["device_id"].as_str().unwrap_or("unknown");
-    let guest_id = uuid::Uuid::new_v4();
-    let guest_name = format!("Guest_{}", &guest_id.to_string()[..8]);
+    let pseudo_hash = format!("device:{}", device_id);
 
-    // Create guest user
+    // 1. Try to find existing guest by device ID
+    if let Some(user) = state.db.get_user_by_password_hash(&pseudo_hash).await? {
+        let player = state
+            .db
+            .get_player(&user.id)
+            .await?
+            .ok_or_else(|| AppError::Internal("Guest player data missing".into()))?;
+
+        let token = generate_jwt(user.id, &state.config.jwt_secret)?;
+        
+        use rand::{distributions::Alphanumeric, Rng};
+        let refresh_token: String = rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(64)
+            .map(char::from)
+            .collect();
+        let expires_at = chrono::Utc::now() + chrono::Duration::days(30);
+        state.db.create_refresh_token(&user.id, &refresh_token, expires_at).await?;
+
+        return Ok(Json(AuthResponse {
+            success: true,
+            message: Some("Welcome back, Guest!".into()),
+            data: AuthData {
+                token,
+                refresh_token,
+                user: UserResponse {
+                    id: user.id,
+                    username: user.name,
+                    email: "".into(),
+                    coin_balance: player.coin_balance,
+                    diamonds_balance: player.diamonds_balance,
+                    games_played: player.games_played,
+                    games_won: player.games_won,
+                    mfa_enabled: false,
+                },
+            },
+        }));
+    }
+
+    // 2. Create new guest if not found
+    let guest_uuid = uuid::Uuid::new_v4();
+    let guest_name = format!("Guest_{}", &guest_uuid.to_string()[..8]);
+
     let user_id = state
         .db
         .create_user(&crate::db::CreateUser {
             username: guest_name.clone(),
-            email: format!("{}@guest.pcd", guest_id),
-            password_hash: format!("device:{}", device_id), // Use device ID as a pseudo-password
+            email: format!("{}@guest.pcd", guest_uuid),
+            password_hash: pseudo_hash,
         })
         .await?;
 
     let token = generate_jwt(user_id, &state.config.jwt_secret)?;
+    
+    use rand::{distributions::Alphanumeric, Rng};
+    let refresh_token: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(64)
+        .map(char::from)
+        .collect();
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(30);
+    state.db.create_refresh_token(&user_id, &refresh_token, expires_at).await?;
 
     Ok(Json(AuthResponse {
         success: true,
-        message: Some("Guest login successful".into()),
+        message: Some("Guest account created".into()),
         data: AuthData {
             token,
+            refresh_token,
             user: UserResponse {
                 id: user_id,
                 username: guest_name,
@@ -124,106 +203,52 @@ async fn guest_login(
                 diamonds_balance: 5,
                 games_played: 0,
                 games_won: 0,
+                mfa_enabled: false,
             },
         },
     }))
 }
 
-/// Google auth handler
+/// Google auth handler — NOT YET IMPLEMENTED
+///
+/// TODO: Verify id_token against Google's tokeninfo endpoint,
+///       validate `aud` matches our client ID, require verified email,
+///       upsert user keyed on Google `sub` (not email).
 async fn google_auth(
-    State(state): State<AppState>,
-    Json(req): Json<serde_json::Value>,
-) -> Result<Json<AuthResponse>> {
-    let id_token = req["id_token"]
-        .as_str()
-        .ok_or_else(|| AppError::BadRequest("Missing id_token".into()))?;
-
-    // Stub for Google authentication
-    tracing::info!("Google Auth attempt with token: {}...", &id_token[..10]);
-
-    // In production, verify token and get email/name
-    let email = "google_user@example.com";
-    let name = "Google User";
-
-    let player = if let Some(p) = state.db.get_player_by_name(name).await? {
-        p
-    } else {
-        let user_id = state
-            .db
-            .create_user(&crate::db::CreateUser {
-                username: name.to_string(),
-                email: email.to_string(),
-                password_hash: "oauth:google".into(),
-            })
-            .await?;
-        state.db.get_player(&user_id).await?.unwrap()
-    };
-
-    let token = generate_jwt(player.id, &state.config.jwt_secret)?;
-
-    Ok(Json(AuthResponse {
-        success: true,
-        message: Some("OAuth login successful".into()),
-        data: AuthData {
-            token,
-            user: UserResponse {
-                id: player.id,
-                username: player.name,
-                email: player.email,
-                coin_balance: player.coin_balance,
-                diamonds_balance: player.diamonds_balance,
-                games_played: player.games_played,
-                games_won: player.games_won,
-            },
-        },
-    }))
-}
-
-/// Apple auth handler
-async fn apple_auth(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<AuthResponse>> {
     let _id_token = req["id_token"]
         .as_str()
         .ok_or_else(|| AppError::BadRequest("Missing id_token".into()))?;
 
-    // Stub for Apple authentication
-    let email = "apple_user@example.com";
-    let name = "Apple User";
+    // SECURITY: Do not accept tokens without proper verification.
+    // Implement Google token verification before enabling this endpoint.
+    tracing::warn!("Google OAuth called but not yet implemented — rejecting");
+    Err(AppError::Internal(
+        "Google authentication is not yet available. Please use email or guest login.".into(),
+    ))
+}
 
-    let player = if let Some(p) = state.db.get_player_by_name(name).await? {
-        p
-    } else {
-        let user_id = state
-            .db
-            .create_user(&crate::db::CreateUser {
-                username: name.to_string(),
-                email: email.to_string(),
-                password_hash: "oauth:apple".into(),
-            })
-            .await?;
-        state.db.get_player(&user_id).await?.unwrap()
-    };
+/// Apple auth handler — NOT YET IMPLEMENTED
+///
+/// TODO: Verify identity_token as RS256 JWT signed by Apple's public keys
+///       (https://appleid.apple.com/auth/keys), validate `iss`, `aud`, `exp`,
+///       upsert user keyed on Apple `sub`.
+async fn apple_auth(
+    State(_state): State<AppState>,
+    Json(req): Json<serde_json::Value>,
+) -> Result<Json<AuthResponse>> {
+    let _identity_token = req["identity_token"]
+        .as_str()
+        .or_else(|| req["id_token"].as_str())
+        .ok_or_else(|| AppError::BadRequest("Missing identity_token".into()))?;
 
-    let token = generate_jwt(player.id, &state.config.jwt_secret)?;
-
-    Ok(Json(AuthResponse {
-        success: true,
-        message: Some("OAuth login successful".into()),
-        data: AuthData {
-            token,
-            user: UserResponse {
-                id: player.id,
-                username: player.name,
-                email: player.email,
-                coin_balance: player.coin_balance,
-                diamonds_balance: player.diamonds_balance,
-                games_played: player.games_played,
-                games_won: player.games_won,
-            },
-        },
-    }))
+    // SECURITY: Do not accept tokens without proper verification.
+    tracing::warn!("Apple OAuth called but not yet implemented — rejecting");
+    Err(AppError::Internal(
+        "Apple authentication is not yet available. Please use email or guest login.".into(),
+    ))
 }
 
 /// OAuth status handler
@@ -231,8 +256,8 @@ async fn oauth_status() -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "success": true,
         "data": {
-            "google": true,
-            "apple": true,
+            "google": false,
+            "apple": false,
             "email": true,
             "guest": true
         }
@@ -245,6 +270,7 @@ pub struct RegisterRequest {
     pub email: String,
     pub password: String,
     pub username: String,
+    pub guest_id: Option<uuid::Uuid>,
 }
 
 /// Login request
@@ -266,6 +292,7 @@ pub struct AuthResponse {
 #[derive(Debug, Serialize)]
 pub struct AuthData {
     pub token: String,
+    pub refresh_token: String,
     pub user: UserResponse,
 }
 
@@ -279,6 +306,7 @@ pub struct UserResponse {
     pub diamonds_balance: i32,
     pub games_played: i32,
     pub games_won: i32,
+    pub mfa_enabled: bool,
 }
 
 /// Register a new user
@@ -292,9 +320,9 @@ async fn register(
     }
 
     // Validate password strength
-    if req.password.len() < 8 {
+    if !is_password_strong(&req.password) {
         return Err(AppError::BadRequest(
-            "Password must be at least 8 characters".into(),
+            "Password must be at least 8 characters long and include uppercase, lowercase, numbers, and symbols".into(),
         ));
     }
 
@@ -306,32 +334,90 @@ async fn register(
     // Hash password
     let password_hash = hash_password(&req.password)?;
 
-    // Create user
-    let user_id = state
-        .db
-        .create_user(&crate::db::CreateUser {
+    let user_id;
+    let mut is_upgrade = false;
+    let mut existing_coins = 1000;
+    let mut existing_diamonds = 5;
+    let mut existing_played = 0;
+    let mut existing_won = 0;
+
+    // Handle Guest Transfer/Upgrade
+    if let Some(gid) = req.guest_id {
+        if let Some(player) = state.db.get_player(&gid).await? {
+            // Verify it's actually a guest account (e.g. contains @guest.pcd or has device: prefix)
+            let user_auth = state.db.get_user_by_email(&player.email).await?;
+            let is_guest = user_auth.as_ref().map(|ua| ua.password_hash.as_ref().map(|h| h.starts_with("device:")).unwrap_or(false)).unwrap_or(false);
+
+            if is_guest {
+                state.db.upgrade_user(&crate::db::UpgradeUser {
+                    id: gid,
+                    username: req.username.clone(),
+                    email: req.email.clone(),
+                    password_hash: password_hash.clone(),
+                }).await?;
+                
+                user_id = gid;
+                is_upgrade = true;
+                existing_coins = player.coin_balance;
+                existing_diamonds = player.diamonds_balance;
+                existing_played = player.games_played;
+                existing_won = player.games_won;
+                tracing::info!("Upgraded guest {} to full account {}", gid, req.email);
+            } else {
+                // Not a guest or already upgraded, create fresh
+                user_id = state.db.create_user(&crate::db::CreateUser {
+                    username: req.username.clone(),
+                    email: req.email.clone(),
+                    password_hash,
+                }).await?;
+            }
+        } else {
+            // Guest ID provided but not found, create fresh
+            user_id = state.db.create_user(&crate::db::CreateUser {
+                username: req.username.clone(),
+                email: req.email.clone(),
+                password_hash,
+            }).await?;
+        }
+    } else {
+        // No Guest ID, create fresh
+        user_id = state.db.create_user(&crate::db::CreateUser {
             username: req.username.clone(),
             email: req.email.clone(),
             password_hash,
-        })
-        .await?;
+        }).await?;
+    }
 
-    // Generate JWT
+    // Generate Tokens
     let token = generate_jwt(user_id, &state.config.jwt_secret)?;
+    
+    // Generate secure Refresh Token (64 chars)
+    use rand::{distributions::Alphanumeric, Rng};
+    let refresh_token: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(64)
+        .map(char::from)
+        .collect();
+
+    // Store refresh token in DB (30 days)
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(30);
+    state.db.create_refresh_token(&user_id, &refresh_token, expires_at).await?;
 
     Ok(Json(AuthResponse {
         success: true,
-        message: Some("Account created successfully".into()),
+        message: Some(if is_upgrade { "Guest data transferred successfully!" } else { "Account created successfully" }.into()),
         data: AuthData {
             token,
+            refresh_token,
             user: UserResponse {
                 id: user_id,
                 username: req.username,
                 email: req.email,
-                coin_balance: 1000,
-                diamonds_balance: 5,
-                games_played: 0,
-                games_won: 0,
+                coin_balance: existing_coins,
+                diamonds_balance: existing_diamonds,
+                games_played: existing_played,
+                games_won: existing_won,
+                mfa_enabled: false, // New accounts don't have MFA enabled by default
             },
         },
     }))
@@ -342,38 +428,76 @@ async fn login(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>> {
-    // Find user
-    let user = state
-        .db
-        .get_user_by_email(&req.email)
-        .await?
-        .ok_or(AppError::InvalidCredentials)?;
+    // 1. Find user
+    let user_res = state.db.get_user_by_email(&req.email).await?;
+    if user_res.is_none() {
+        let _ = state.db.create_audit_log(
+            None, Some(Some(req.email.clone())), "LOGIN_FAILED", "warning",
+            serde_json::json!({ "reason": "User not found" })
+        ).await;
+        return Err(AppError::InvalidCredentials);
+    }
+    let user = user_res.unwrap();
 
-    // Verify password
-    let password_hash = user
-        .password_hash
-        .as_ref()
-        .ok_or(AppError::InvalidCredentials)?;
+    // 2. CHECK ACCOUNT LOCKOUT
+    if let Some(lockout_until) = user.lockout_until {
+        if lockout_until > chrono::Utc::now() {
+            let wait_mins = (lockout_until - chrono::Utc::now()).num_minutes();
+            return Err(AppError::Forbidden(format!("Account is temporarily locked. Please try again in {} minutes.", wait_mins)));
+        }
+    }
+
+    // 3. Verify password
+    let password_hash = user.password_hash.as_ref().ok_or_else(|| AppError::InvalidCredentials)?;
 
     if !verify_password(&req.password, password_hash)? {
+        // Increment failed attempts
+        let new_attempts = user.failed_login_attempts.unwrap_or(0) + 1;
+        let mut lockout_time = None;
+        if new_attempts >= 5 {
+            lockout_time = Some(chrono::Utc::now() + chrono::Duration::minutes(15));
+            tracing::warn!("Account {} locked due to 5+ failed attempts", user.email.as_ref().unwrap_or(&"unknown".into()));
+        }
+        
+        state.db.update_lockout(&user.id, new_attempts, lockout_time).await?;
+        
+        let _ = state.db.create_audit_log(
+            Some(user.id), Some(user.email.clone()), "LOGIN_FAILED", "warning", 
+            serde_json::json!({ "reason": "Invalid password", "attempts": new_attempts, "locked": lockout_time.is_some() })
+        ).await;
         return Err(AppError::InvalidCredentials);
     }
 
-    // Get full player data
-    let player = state
-        .db
-        .get_player(&user.id)
-        .await?
-        .ok_or(AppError::Internal("Player data not found".into()))?;
+    // 4. Success: Reset lockout counters
+    state.db.update_lockout(&user.id, 0, None).await?;
+    
+    // Log success
+    let _ = state.db.create_audit_log(
+        Some(user.id), Some(user.email.clone()), "LOGIN_SUCCESS", "info", serde_json::json!({})
+    ).await;
 
-    // Generate JWT
+    // 5. Generate Tokens
     let token = generate_jwt(user.id, &state.config.jwt_secret)?;
+    
+    use rand::{distributions::Alphanumeric, Rng};
+    let refresh_token: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(64)
+        .map(char::from)
+        .collect();
+
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(30);
+    state.db.create_refresh_token(&user.id, &refresh_token, expires_at).await?;
+
+    // 6. Get full player data
+    let player = state.db.get_player(&user.id).await?.ok_or(AppError::Internal("Player data missing".into()))?;
 
     Ok(Json(AuthResponse {
         success: true,
         message: Some("Logged in successfully".into()),
         data: AuthData {
             token,
+            refresh_token,
             user: UserResponse {
                 id: user.id,
                 username: user.name,
@@ -382,6 +506,7 @@ async fn login(
                 diamonds_balance: player.diamonds_balance,
                 games_played: player.games_played,
                 games_won: player.games_won,
+                mfa_enabled: user.mfa_enabled.unwrap_or(false),
             },
         },
     }))
@@ -402,7 +527,8 @@ async fn me(
         success: true,
         message: Some("Current user retrieved".into()),
         data: AuthData {
-            token: "".into(), // We don't need to send the token back here
+            token: "".into(), 
+            refresh_token: "".into(),
             user: UserResponse {
                 id: player.id,
                 username: player.name,
@@ -411,6 +537,7 @@ async fn me(
                 diamonds_balance: player.diamonds_balance,
                 games_played: player.games_played,
                 games_won: player.games_won,
+                mfa_enabled: player.mfa_enabled.unwrap_or(false),
             },
         },
     }))
@@ -467,7 +594,7 @@ fn generate_jwt(user_id: uuid::Uuid, secret: &str) -> Result<String> {
     let claims = Claims {
         sub: user_id.to_string(),
         iat: now,
-        exp: now + 604800, // 7 days
+        exp: now + 86400, // 24 hours
     };
 
     encode(
@@ -476,4 +603,30 @@ fn generate_jwt(user_id: uuid::Uuid, secret: &str) -> Result<String> {
         &EncodingKey::from_secret(secret.as_bytes()),
     )
     .map_err(|e| AppError::Internal(format!("JWT generation failed: {}", e)))
+}
+
+/// Helper to validate password strength
+fn is_password_strong(password: &str) -> bool {
+    if password.len() < 8 {
+        return false;
+    }
+
+    let mut has_upper = false;
+    let mut has_lower = false;
+    let mut has_digit = false;
+    let mut has_symbol = false;
+
+    for c in password.chars() {
+        if c.is_uppercase() {
+            has_upper = true;
+        } else if c.is_lowercase() {
+            has_lower = true;
+        } else if c.is_digit(10) {
+            has_digit = true;
+        } else if !c.is_alphanumeric() {
+            has_symbol = true;
+        }
+    }
+
+    has_upper && has_lower && has_digit && has_symbol
 }

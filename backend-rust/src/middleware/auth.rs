@@ -39,6 +39,15 @@ pub async fn auth_middleware(
     let token = extract_token(&request);
 
     if let Some(token) = token {
+        // 1. Check Redis blacklist if available
+        if let Some(redis) = &state.redis {
+            if let Ok(true) = redis.is_token_blacklisted(&token).await {
+                // Token is revoked — treat as anonymous (no AuthUser injected)
+                return Ok(next.run(request).await);
+            }
+        }
+
+        // 2. Validate token
         if let Ok(claims) = validate_token(&token, &state.config.jwt_secret) {
             if let Ok(user_id) = Uuid::parse_str(&claims.sub) {
                 // Insert user into request extensions
@@ -67,6 +76,20 @@ pub async fn require_auth(
             })),
         )
     })?;
+
+    // 1. Check Redis blacklist if available
+    if let Some(redis) = &state.redis {
+        if let Ok(true) = redis.is_token_blacklisted(&token).await {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({
+                    "success": false,
+                    "message": "Session has been revoked. Please log in again.",
+                    "error_code": "TOKEN_REVOKED"
+                })),
+            ));
+        }
+    }
 
     let claims = validate_token(&token, &state.config.jwt_secret).map_err(|_| {
         (
@@ -120,7 +143,7 @@ fn extract_token(request: &Request<Body>) -> Option<String> {
 }
 
 /// Validate JWT token
-fn validate_token(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
+pub fn validate_token(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
     let token_data = decode::<Claims>(
         token,
         &DecodingKey::from_secret(secret.as_bytes()),

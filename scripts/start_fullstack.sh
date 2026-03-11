@@ -10,6 +10,10 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}🚀 Starting Poisoned Candy Duel Fullstack...${NC}"
 
+# Ensure we are in the project root
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR/.."
+
 # Check for .env file
 if [ ! -f "backend-rust/.env" ]; then
     echo -e "${RED}⚠️ No .env file found in backend-rust/. Trying to copy from .env.example...${NC}"

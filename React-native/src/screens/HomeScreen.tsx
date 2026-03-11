@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Platform } from 'react-native';
-import { Menu, Sword, Globe, Users, X, Gift, User, Coins as CoinIcon, Gem, Monitor, Trophy, Target, UserPlus, Wifi, WifiOff } from 'lucide-react-native';
+import { Menu, Sword, Globe, Users, X, Gift, User, Coins as CoinIcon, Gem, Monitor, Trophy, Target, UserPlus, Wifi, WifiOff, Gamepad2 } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import ScreenContainer from '../components/layout/ScreenContainer';
 import { useAuth } from '../hooks/useAuth';
@@ -67,6 +68,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     // Auto-navigate to game after match is found with a brief delay
     useEffect(() => {
         if (matchFound && gameId) {
+            // Haptic feedback for match found
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            
             // Show "MATCH FOUND!" for 1.5s then navigate to game
             const timeout = setTimeout(() => {
                 clearMatchFound(); // Clear the modal state

@@ -99,6 +99,22 @@ impl RedisClient {
     }
 
     // =========================================================================
+    // TOKEN BLACKLISTING
+    // =========================================================================
+
+    /// Blacklist a JWT token (e.g. on logout)
+    pub async fn blacklist_token(&self, token: &str, ttl_secs: u64) -> Result<(), redis::RedisError> {
+        let key = format!("blacklist:{}", token);
+        self.set_ex(&key, "revoked", ttl_secs).await
+    }
+
+    /// Check if a token is blacklisted
+    pub async fn is_token_blacklisted(&self, token: &str) -> Result<bool, redis::RedisError> {
+        let key = format!("blacklist:{}", token);
+        self.exists(&key).await
+    }
+
+    // =========================================================================
     // RATE LIMITING
     // =========================================================================
 
@@ -118,5 +134,49 @@ impl RedisClient {
         }
 
         Ok(count <= max_requests)
+    }
+
+    // =========================================================================
+    // DISTRIBUTED GOVERNANCE (WS & SESSIONS)
+    // =========================================================================
+
+    /// Track a new active connection (Global, Per-User, or Per-IP)
+    pub async fn track_connection(&self, key: &str, limit: i64) -> Result<bool, redis::RedisError> {
+        let count: i64 = self.incr(key).await?;
+        if count == 1 {
+            self.expire(key, 86400).await?; // 24h cleanup safety
+        }
+
+        if count > limit {
+            // Rollback the increment if limit exceeded
+            let mut conn = self.conn.clone();
+            let _: () = conn.decr(key, 1).await?;
+            return Ok(false);
+        }
+        Ok(true)
+    }
+
+    /// Release an active connection
+    pub async fn release_connection(&self, key: &str) -> Result<(), redis::RedisError> {
+        let mut conn = self.conn.clone();
+        let _: () = conn.decr(key, 1).await?;
+        Ok(())
+    }
+
+    /// Store a short-lived security proof (e.g. for Step-Up MFA)
+    pub async fn store_security_proof(
+        &self,
+        user_id: &uuid::Uuid,
+        action_id: &str,
+        ttl_secs: u64,
+    ) -> Result<(), redis::RedisError> {
+        let key = format!("proof:{}:{}", user_id, action_id);
+        self.set_ex(&key, "verified", ttl_secs).await
+    }
+
+    /// Verify if a security proof exists and is valid
+    pub async fn verify_security_proof(&self, user_id: &uuid::Uuid, action_id: &str) -> Result<bool, redis::RedisError> {
+        let key = format!("proof:{}:{}", user_id, action_id);
+        self.exists(&key).await
     }
 }

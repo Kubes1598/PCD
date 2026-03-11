@@ -65,6 +65,16 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation }) => {
                     timeLeft={game.turnTimeRemaining}
                 />
 
+                {/* Final Chance Banner */}
+                {(game.gameProgress.gamePhase === 'player_reached_11' || game.gameProgress.gamePhase === 'opponent_reached_11') && !game.gameEnded && (
+                    <View style={styles.finalChanceBanner}>
+                        <Text style={styles.finalChanceText}>⚡ FINAL CHANCE ⚡</Text>
+                        <Text style={styles.finalChanceSubtext}>
+                            {game.gameProgress.gamePhase === 'player_reached_11' ? "Player 2 can still force a draw!" : "You can still force a draw!"}
+                        </Text>
+                    </View>
+                )}
+
                 {/* Opponent's Collection - Top */}
                 <CollectionPanel
                     playerName={game.gameMode === 'offline' ? "Player 2" : "Opponent"}
@@ -211,6 +221,27 @@ const styles = StyleSheet.create({
         fontSize: moderateScale(14),
         color: THEME.colors.gray600,
         textAlign: 'center',
+    },
+    finalChanceBanner: {
+        backgroundColor: THEME.colors.warning,
+        paddingVertical: scale(6),
+        alignItems: 'center',
+        marginVertical: scale(4),
+        borderRadius: scale(8),
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.1)',
+        ...THEME.shadows.sm,
+    },
+    finalChanceText: {
+        fontSize: moderateScale(14),
+        fontWeight: '900',
+        color: THEME.colors.white,
+        letterSpacing: 1,
+    },
+    finalChanceSubtext: {
+        fontSize: moderateScale(10),
+        fontWeight: '700',
+        color: 'rgba(255,255,255,0.9)',
     },
 });
 

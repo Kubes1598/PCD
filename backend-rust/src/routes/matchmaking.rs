@@ -3,14 +3,17 @@
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        Path, State,
+        Path, Query, State,
     },
+    http::StatusCode,
     response::Response,
 };
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
+use std::collections::HashMap;
 use uuid::Uuid;
 
+use crate::middleware::auth::validate_token;
 use crate::AppState;
 
 use axum::{
@@ -111,13 +114,93 @@ async fn get_status(State(state): State<AppState>) -> Json<serde_json::Value> {
     }))
 }
 
-/// WebSocket upgrade handler
+/// WebSocket upgrade handler — requires JWT authentication
+///
+/// The client must pass `?token=<JWT>` as a query parameter.
+/// The JWT's `sub` claim must match the `player_id` in the path.
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
     Path(player_id): Path<Uuid>,
-) -> Response {
-    ws.on_upgrade(move |socket| handle_socket(socket, state, player_id))
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
+    // 1. Require token
+    let token = params.get("token").ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({
+                "success": false,
+                "message": "Authentication required: pass ?token=<JWT>",
+                "error_code": "WS_AUTH_REQUIRED"
+            })),
+        )
+    })?;
+
+    // 2. Validate JWT & Check Blacklist
+    if let Some(redis) = &state.redis {
+        if let Ok(true) = redis.is_token_blacklisted(token).await {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({
+                    "success": false,
+                    "message": "Session has been revoked. Please log in again.",
+                    "error_code": "TOKEN_REVOKED"
+                })),
+            ));
+        }
+    }
+
+    let claims = validate_token(token, &state.config.jwt_secret).map_err(|_| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({
+                "success": false,
+                "message": "Invalid or expired token",
+                "error_code": "WS_INVALID_TOKEN"
+            })),
+        )
+    })?;
+
+    // 3. Ensure JWT subject matches the requested player_id
+    let token_user_id = Uuid::parse_str(&claims.sub).map_err(|_| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({
+                "success": false,
+                "message": "Invalid token subject",
+                "error_code": "WS_INVALID_TOKEN"
+            })),
+        )
+    })?;
+
+    if token_user_id != player_id {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "success": false,
+                "message": "Token does not match player ID",
+                "error_code": "WS_FORBIDDEN"
+            })),
+        ));
+    }
+
+    // 4. ADMISSION CONTROL: Enforce connection limits
+    if let Some(redis) = &state.redis {
+        // A. Global Cap
+        if !redis.track_connection("ws:global_total", 10000).await.map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error":"Redis error"}))))? {
+            return Err((StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error": "Global connection limit reached"}))));
+        }
+
+        // B. Per-User Cap (Primary Control)
+        let user_key = format!("ws:user:{}", player_id);
+        if !redis.track_connection(&user_key, 3).await.map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error":"Redis error"}))))? {
+            // Revert global if user fails
+            let _ = redis.release_connection("ws:global_total").await;
+            return Err((StatusCode::TOO_MANY_REQUESTS, Json(serde_json::json!({"error": "Too many concurrent connections for this user"}))));
+        }
+    }
+
+    Ok(ws.on_upgrade(move |socket| handle_socket(socket, state, player_id)))
 }
 
 /// Handle WebSocket connection
@@ -155,8 +238,25 @@ async fn handle_socket(socket: WebSocket, state: AppState, player_id: Uuid) {
 
     // Message handling loop (incoming)
     while let Some(msg) = receiver.next().await {
+        // Enforce Message Size Limit (e.g. 32KB)
         match msg {
             Ok(Message::Text(text)) => {
+                if text.len() > 32768 {
+                    let _ = tx.send(Message::Text(serde_json::json!({"type":"error", "message":"Message too large"}).to_string()));
+                    continue;
+                }
+
+                // Enforce Message Rate Limiting
+                if let Some(redis) = &state.redis {
+                    let rate_key = format!("ws:rate:{}", player_id);
+                    if let Ok(allowed) = redis.check_rate_limit(&rate_key, 5, 5).await {
+                        if !allowed {
+                            let _ = tx.send(Message::Text(serde_json::json!({"type":"error", "message":"Message rate limit exceeded"}).to_string()));
+                            continue;
+                        }
+                    }
+                }
+
                 if let Err(e) = handle_message(&state, player_id, &text).await {
                     tracing::error!("Error handling message: {}", e);
                     let error = serde_json::json!({
@@ -179,6 +279,10 @@ async fn handle_socket(socket: WebSocket, state: AppState, player_id: Uuid) {
     }
 
     // Cleanup on disconnect
+    if let Some(redis) = &state.redis {
+        let _ = redis.release_connection("ws:global_total").await;
+        let _ = redis.release_connection(&format!("ws:user:{}", player_id)).await;
+    }
     send_task.abort();
     let city = state.matchmaking_queue.leave(player_id).await;
     state.connection_manager.disconnect(player_id).await;
@@ -216,6 +320,11 @@ async fn handle_message(
     player_id: Uuid,
     text: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Security: reject oversized messages (prevent memory DoS)
+    if text.len() > 4096 {
+        return Err("Message too large (max 4KB)".into());
+    }
+
     let msg: serde_json::Value = serde_json::from_str(text)?;
     let msg_type = msg["type"].as_str().unwrap_or("");
 
@@ -290,7 +399,10 @@ async fn handle_message(
             }
         }
         "match_poison" => {
-            let game_id = msg["target_id"]
+            let game_id = msg["game_id"]
+                .as_str()
+                .and_then(|s| Uuid::parse_str(s).ok());
+            let target_id = msg["target_id"]
                 .as_str()
                 .and_then(|s| Uuid::parse_str(s).ok());
             let candy = msg["candy"].as_str().unwrap_or("");
@@ -314,6 +426,17 @@ async fn handle_message(
                         state
                             .connection_manager
                             .send_message(&player_id, Message::Text(response.to_string()));
+
+                        // Forward poison to opponent so they know poison is set
+                        if let Some(opponent_id) = target_id {
+                            let forward = serde_json::json!({
+                                "type": "match_poison",
+                                "candy": candy
+                            });
+                            state
+                                .connection_manager
+                                .send_message(&opponent_id, Message::Text(forward.to_string()));
+                        }
 
                         // If game started, notify both players with sanitized state
                         if started {
@@ -353,7 +476,7 @@ async fn handle_message(
             }
         }
         "match_move" => {
-            let game_id = msg["target_id"]
+            let game_id = msg["game_id"]
                 .as_str()
                 .and_then(|s| Uuid::parse_str(s).ok());
             let candy = msg["candy"]
@@ -406,6 +529,7 @@ async fn handle_message(
                                         .execute_transaction(
                                             &p1_id,
                                             fee,
+                                            0,
                                             "draw_refund",
                                             Some(game_id),
                                             Some(ref1),
@@ -416,6 +540,7 @@ async fn handle_message(
                                         .execute_transaction(
                                             &p2_id,
                                             fee,
+                                            0,
                                             "draw_refund",
                                             Some(game_id),
                                             Some(ref2),
@@ -439,6 +564,7 @@ async fn handle_message(
                                             .execute_transaction(
                                                 &w_id,
                                                 prize,
+                                                0,
                                                 "victory_reward",
                                                 Some(game_id),
                                                 Some(ref_id),
