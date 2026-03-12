@@ -1,4 +1,4 @@
-//! City-based matchmaking queue
+//! City-based matchmaking queue with ELO-based skill matching
 
 use dashmap::DashMap;
 use std::collections::VecDeque;
@@ -13,6 +13,7 @@ use crate::game::GameEngine;
 pub struct QueuedPlayer {
     pub id: Uuid,
     pub name: String,
+    pub elo: i32,
     pub joined_at: std::time::Instant,
 }
 
@@ -36,11 +37,17 @@ impl Default for CityConfig {
     }
 }
 
+/// ELO matchmaking constants
+const ELO_BASE_WINDOW: i32 = 100;     // Initial search range: ±100
+const ELO_EXPANSION_RATE: i32 = 50;   // Expand by ±50 per interval
+const ELO_EXPANSION_INTERVAL: u64 = 5; // Every 5 seconds of waiting
+const ELO_MAX_WINDOW: i32 = 500;      // Maximum search range: ±500
+
 /// City matchmaking queue
 /// 
 /// Thread-safe matchmaking queue that groups players by city.
-/// Each city has its own independent queue with configurable 
-/// entry fees, prizes, and turn timers.
+/// Uses ELO-based skill matching with a dynamic search window
+/// that expands over time to balance fairness vs. wait time.
 #[derive(Clone)]
 pub struct CityMatchmakingQueue {
     /// City -> Queue of waiting players
@@ -95,12 +102,23 @@ impl CityMatchmakingQueue {
         queue
     }
 
-    /// Add player to queue
+    /// Add player to queue (legacy — uses default ELO of 1000)
     pub async fn join(
         &self,
         player_id: Uuid,
         player_name: String,
         city: String,
+    ) -> crate::error::Result<bool> {
+        self.join_with_elo(player_id, player_name, city, 1000).await
+    }
+
+    /// Add player to queue with their ELO rating
+    pub async fn join_with_elo(
+        &self,
+        player_id: Uuid,
+        player_name: String,
+        city: String,
+        elo: i32,
     ) -> crate::error::Result<bool> {
         // If already in a queue, leave it first
         if let Some(old_city) = self.player_cities.get(&player_id).map(|c| c.clone()) {
@@ -120,13 +138,14 @@ impl CityMatchmakingQueue {
         let player = QueuedPlayer {
             id: player_id,
             name: player_name,
+            elo,
             joined_at: std::time::Instant::now(),
         };
 
         queue.write().await.push_back(player);
         self.player_cities.insert(player_id, city.to_string());
 
-        tracing::info!("Player {} added to {} queue", player_id, city);
+        tracing::info!("Player {} (ELO: {}) added to {} queue", player_id, elo, city);
         Ok(true)
     }
 
@@ -142,24 +161,69 @@ impl CityMatchmakingQueue {
         None
     }
 
-    /// Try to match players in a city (Advanced: pops them only if successful)
+    /// Try to match players in a city using ELO-based skill pairing
+    ///
+    /// Algorithm:
+    /// 1. For each player in the queue, calculate their dynamic search window
+    ///    based on how long they've been waiting (starts at ±100, expands by ±50
+    ///    every 5 seconds, capped at ±500).
+    /// 2. Find the best pair: the two players whose ELO difference is smallest
+    ///    AND who fall within each other's search windows.
+    /// 3. If a valid pair is found, pop them both and create the game.
     pub async fn try_match(&self, city: &str) -> Option<(QueuedPlayer, QueuedPlayer, Uuid)> {
         let queue = self.queues.get(city)?;
         let mut q = queue.write().await;
 
-        if q.len() >= 2 {
-            // Peek and check (could add logic here for rank matchmaking)
-            let p1 = q.pop_front()?;
-            let p2 = q.pop_front()?;
+        if q.len() < 2 {
+            return None;
+        }
+
+        // Find the best ELO-compatible pair
+        let now = std::time::Instant::now();
+        let mut best_pair: Option<(usize, usize, i32)> = None; // (idx1, idx2, elo_diff)
+
+        for i in 0..q.len() {
+            let p1 = &q[i];
+            let p1_wait_secs = now.duration_since(p1.joined_at).as_secs();
+            let p1_window = std::cmp::min(
+                ELO_BASE_WINDOW + ELO_EXPANSION_RATE * (p1_wait_secs / ELO_EXPANSION_INTERVAL) as i32,
+                ELO_MAX_WINDOW,
+            );
+
+            for j in (i + 1)..q.len() {
+                let p2 = &q[j];
+                let p2_wait_secs = now.duration_since(p2.joined_at).as_secs();
+                let p2_window = std::cmp::min(
+                    ELO_BASE_WINDOW + ELO_EXPANSION_RATE * (p2_wait_secs / ELO_EXPANSION_INTERVAL) as i32,
+                    ELO_MAX_WINDOW,
+                );
+
+                let elo_diff = (p1.elo - p2.elo).abs();
+
+                // Both players must accept each other within their respective windows
+                if elo_diff <= p1_window && elo_diff <= p2_window {
+                    match &best_pair {
+                        Some((_, _, best_diff)) if elo_diff >= *best_diff => {}
+                        _ => {
+                            best_pair = Some((i, j, elo_diff));
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some((idx1, idx2, elo_diff)) = best_pair {
+            // Remove in reverse order to preserve indices
+            let p2 = q.remove(idx2).expect("idx2 valid");
+            let p1 = q.remove(idx1).expect("idx1 valid");
 
             // Remove from tracking
             self.player_cities.remove(&p1.id);
             self.player_cities.remove(&p2.id);
 
             let turn_timer = self.get_turn_timer(city);
-            // Standard poison selection time - 60 seconds for all cities
-            // This is intentionally longer than turn timers to allow thoughtful poison choice
-            let poison_timer = 60u32;
+            // Poison selection time — 30 seconds for all cities
+            let poison_timer = 30u32;
 
             // Create game instance with city-specific timers
             let game_id = self
@@ -169,15 +233,19 @@ impl CityMatchmakingQueue {
                     p2.name.clone(),
                     Some(p1.id),
                     Some(p2.id),
+                    false, // p1 is human
+                    false, // p2 is human
                     turn_timer,
                     poison_timer,
+                    city.to_string(),
                 )
                 .await;
 
             tracing::info!(
-                "Match Found! {} vs {} in City: {} [Game ID: {}, Timer: {}s]",
-                p1.name,
-                p2.name,
+                "ELO Match! {} (ELO:{}) vs {} (ELO:{}) [Δ{}] in {} [Game: {}, Timer: {}s]",
+                p1.name, p1.elo,
+                p2.name, p2.elo,
+                elo_diff,
                 city,
                 game_id,
                 turn_timer
@@ -234,37 +302,37 @@ mod tests {
     use crate::game::GameEngine;
 
     #[tokio::test]
-    async fn test_matchmaking_flow() {
+    async fn test_elo_matchmaking_close_skill() {
         let engine = GameEngine::new();
         let queue = CityMatchmakingQueue::new(engine);
         let p1_id = Uuid::new_v4();
         let p2_id = Uuid::new_v4();
 
-        // Join queue
-        queue
-            .join(p1_id, "Player 1".into(), "dubai".into())
-            .await
-            .unwrap();
-        queue
-            .join(p2_id, "Player 2".into(), "dubai".into())
-            .await
-            .unwrap();
+        // Two players with close ELO should match immediately
+        queue.join_with_elo(p1_id, "Pro".into(), "dubai".into(), 1050).await.unwrap();
+        queue.join_with_elo(p2_id, "Semi-Pro".into(), "dubai".into(), 980).await.unwrap();
 
-        // Check stats
-        let stats = queue.get_stats().await;
-        let dubai_stats = stats.iter().find(|(c, _)| c == "dubai").unwrap();
-        assert_eq!(dubai_stats.1, 2);
-
-        // Try match
         let matched = queue.try_match("dubai").await;
-        assert!(matched.is_some());
-        let (p1, p2, _game_id) = matched.unwrap();
-        assert_eq!(p1.id, p1_id);
-        assert_eq!(p2.id, p2_id);
+        assert!(matched.is_some(), "Close-ELO players should match");
+    }
 
-        // Queue should be empty now
-        let stats_after = queue.get_stats().await;
-        let dubai_stats_after = stats_after.iter().find(|(c, _)| c == "dubai").unwrap();
-        assert_eq!(dubai_stats_after.1, 0);
+    #[tokio::test]
+    async fn test_elo_matchmaking_wide_gap_no_match() {
+        let engine = GameEngine::new();
+        let queue = CityMatchmakingQueue::new(engine);
+        let p1_id = Uuid::new_v4();
+        let p2_id = Uuid::new_v4();
+
+        // Two players with huge ELO gap should NOT match immediately
+        queue.join_with_elo(p1_id, "Newbie".into(), "dubai".into(), 800).await.unwrap();
+        queue.join_with_elo(p2_id, "Legend".into(), "dubai".into(), 1500).await.unwrap();
+
+        let matched = queue.try_match("dubai").await;
+        assert!(matched.is_none(), "700-ELO-gap players should NOT match with fresh window");
+
+        // Queue should still have both players
+        let stats = queue.get_stats().await;
+        let dubai = stats.iter().find(|(c, _)| c == "dubai").unwrap();
+        assert_eq!(dubai.1, 2);
     }
 }

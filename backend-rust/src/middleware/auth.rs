@@ -84,7 +84,7 @@ pub async fn require_auth(
                 StatusCode::UNAUTHORIZED,
                 Json(serde_json::json!({
                     "success": false,
-                    "message": "Session has been revoked. Please log in again.",
+                    "message": "Session expired. Please log in again.",
                     "error_code": "TOKEN_REVOKED"
                 })),
             ));

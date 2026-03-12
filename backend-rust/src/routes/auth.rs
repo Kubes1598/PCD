@@ -38,14 +38,14 @@ pub fn router(state: AppState) -> Router<AppState> {
 /// Logout handler
 async fn logout(
     State(state): State<AppState>,
-    axum::http::HeaderMap(headers): axum::http::HeaderMap,
+    headers: axum::http::HeaderMap,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>> {
     // 1. Extract token from Authorization header (Access Token)
     let token = headers
         .get(axum::http::header::AUTHORIZATION)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|s| s.strip_prefix("Bearer "))
+        .and_then(|h: &axum::http::HeaderValue| h.to_str().ok())
+        .and_then(|s: &str| s.strip_prefix("Bearer "))
         .ok_or_else(|| AppError::BadRequest("Missing Authorization header".into()))?;
 
     // 2. Revoke Refresh Token if provided

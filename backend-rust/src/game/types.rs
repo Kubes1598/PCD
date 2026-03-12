@@ -39,6 +39,7 @@ pub enum GameResult {
 pub struct GamePlayer {
     pub id: uuid::Uuid,
     pub name: String,
+    pub is_ai: bool,
     pub owned_candies: HashSet<String>,
     pub collected_candies: Vec<String>,
     pub poison_choice: Option<String>,
@@ -46,10 +47,11 @@ pub struct GamePlayer {
 }
 
 impl GamePlayer {
-    pub fn new(id: uuid::Uuid, name: String) -> Self {
+    pub fn new(id: uuid::Uuid, name: String, is_ai: bool) -> Self {
         Self {
             id,
             name,
+            is_ai,
             owned_candies: HashSet::new(),
             collected_candies: Vec::new(),
             poison_choice: None,

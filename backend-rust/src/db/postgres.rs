@@ -6,11 +6,12 @@ use sqlx::{postgres::PgPoolOptions, PgPool};
 #[derive(Clone)]
 pub struct Database {
     pool: PgPool,
+    pub redis: Option<crate::db::RedisClient>,
 }
 
 impl Database {
     /// Connect to PostgreSQL with connection pooling
-    pub async fn connect(database_url: &str) -> Result<Self, sqlx::Error> {
+    pub async fn connect(database_url: &str, redis: Option<crate::db::RedisClient>) -> Result<Self, sqlx::Error> {
         let pool = PgPoolOptions::new()
             .max_connections(20)
             .min_connections(2)
@@ -21,7 +22,7 @@ impl Database {
         // Run migrations on startup
         sqlx::migrate!("./migrations").run(&pool).await.ok(); // Ignore if migrations folder doesn't exist yet
 
-        Ok(Self { pool })
+        Ok(Self { pool, redis })
     }
 
     /// Get a reference to the connection pool
@@ -233,7 +234,7 @@ impl Database {
         diamonds: i32,
     ) -> Result<(), sqlx::Error> {
         // We use internal reference ID for direct balance updates
-        let ref_id = format!("direct_update_{}_{}", player_id, Uuid::new_v4());
+        let ref_id = format!("direct_update_{}_{}", player_id, uuid::Uuid::new_v4());
         self.execute_transaction(player_id, coins, diamonds, "direct_adjustment", None, Some(ref_id)).await?;
         Ok(())
     }
@@ -544,5 +545,295 @@ impl Database {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    // =========================================================================
+    // HIGH-ASSURANCE MATCHMAKING (Transactional Outbox + Atomicity)
+    // =========================================================================
+
+    /// Create match, reserve fees, and queue outbox event in ONE transaction
+    pub async fn create_match_with_outbox(
+        &self,
+        match_id: uuid::Uuid,
+        p1_id: &uuid::Uuid,
+        p2_id: &uuid::Uuid,
+        city: &str,
+        fee: i32,
+        match_event_payload: serde_json::Value,
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+
+        // 1. Deduct fees using atomic reference check
+        for pid in &[p1_id, p2_id] {
+            let ref_id = format!("{}_{}_entry", match_id, pid);
+            let res = sqlx::query!(
+                "UPDATE players SET coin_balance = coin_balance - $1 WHERE id = $2 AND coin_balance >= $1",
+                fee, pid
+            ).execute(&mut *tx).await?;
+
+            if res.rows_affected() == 0 {
+                tx.rollback().await?;
+                return Err(sqlx::Error::RowNotFound); // Insufficient funds
+            }
+
+            sqlx::query!(
+                "INSERT INTO transactions (player_id, amount, diamond_amount, category, game_id, reference_id) VALUES ($1, $2, $3, $4, $5, $6)",
+                pid, -fee, 0, "entry_fee", match_id, ref_id
+            ).execute(&mut *tx).await?;
+        }
+
+        // 2. Insert Persistent Match
+        sqlx::query!(
+            "INSERT INTO matches (id, p1_id, p2_id, city, status) VALUES ($1, $2, $3, $4, 'MATCHED')",
+            match_id, p1_id, p2_id, city
+        ).execute(&mut *tx).await?;
+
+        // 3. Queue Outbox Event (Transactional Outbox Pattern)
+        // This ensures the match notification is reliably sent even if worker dies
+        sqlx::query!(
+            "INSERT INTO outbox_events (event_type, payload, status) VALUES ($1, $2, 'pending')",
+            "MATCH_FOUND", match_event_payload
+        ).execute(&mut *tx).await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Create AI match and reserve fee in ONE transaction (Atomic)
+    pub async fn create_ai_match_atomic(
+        &self,
+        match_id: uuid::Uuid,
+        player_id: &uuid::Uuid,
+        difficulty: &str,
+        fee: i32,
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+
+        // 1. Deduct fee (only if > 0)
+        if fee > 0 {
+            let ref_id = format!("ai_{}_{}", player_id, match_id);
+            let res = sqlx::query!(
+                "UPDATE players SET coin_balance = coin_balance - $1 WHERE id = $2 AND coin_balance >= $1",
+                fee, player_id
+            ).execute(&mut *tx).await?;
+
+            if res.rows_affected() == 0 {
+                tx.rollback().await?;
+                return Err(sqlx::Error::RowNotFound); // Insufficient funds
+            }
+
+            sqlx::query!(
+                "INSERT INTO transactions (player_id, amount, diamond_amount, category, game_id, reference_id) VALUES ($1, $2, $3, $4, $5, $6)",
+                player_id, -fee, 0, "ai_entry_fee", match_id, ref_id
+            ).execute(&mut *tx).await?;
+        }
+
+        // 2. Insert Match record for stats/tracking
+        let city = format!("ai_{}", difficulty);
+        sqlx::query!(
+            "INSERT INTO matches (id, p1_id, p2_id, city, status) VALUES ($1, $2, $3, $4, 'STARTED')",
+            match_id, player_id, player_id, city // We use player_id twice or leave p2 null if schema allows, but here we'll just track player1
+        ).execute(&mut *tx).await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Settle match result, update wallet AND statistics atomically
+    pub async fn settle_match_result(
+        &self,
+        match_id: uuid::Uuid,
+        p1_id: &uuid::Uuid,
+        p2_id: &uuid::Uuid,
+        winner_id: Option<uuid::Uuid>,
+        fee: i32,
+        prize: i32,
+        result_type: &str,
+        city: &str, // Add city for leaderboard
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+
+        // 1. Immutable Ledger Entry (Idempotent shield)
+        let _ref_ledger = format!("match_ledger_{}", match_id);
+        let exists = sqlx::query!("SELECT match_id FROM match_ledger WHERE match_id = $1", match_id)
+            .fetch_optional(&mut *tx).await?;
+        if exists.is_some() {
+            tx.rollback().await?;
+            return Ok(()); // Already settled
+        }
+
+        sqlx::query!(
+            "INSERT INTO match_ledger (match_id, p1_id, p2_id, winner_id, entry_fee, prize, result_type) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            match_id, p1_id, p2_id, winner_id, fee, prize, result_type
+        ).execute(&mut *tx).await?;
+
+        // 2. Atomic Wallet Payout (only if there's a winner/prize)
+        if let Some(w_id) = winner_id {
+            if prize > 0 {
+                let ref_payout = format!("{}_{}_victory", match_id, w_id);
+                sqlx::query!(
+                    "UPDATE players SET coin_balance = coin_balance + $1 WHERE id = $2",
+                    prize, w_id
+                ).execute(&mut *tx).await?;
+
+                sqlx::query!(
+                    "INSERT INTO transactions (player_id, amount, diamond_amount, category, game_id, reference_id) VALUES ($1, $2, $3, $4, $5, $6)",
+                    w_id, prize, 0, "victory_reward", match_id, ref_payout
+                ).execute(&mut *tx).await?;
+            }
+        } else if result_type == "draw" && fee > 0 {
+            // Refund on draw
+            for pid in &[p1_id, p2_id] {
+                let ref_refund = format!("{}_{}_draw_refund", match_id, pid);
+                sqlx::query!(
+                    "UPDATE players SET coin_balance = coin_balance + $1 WHERE id = $2",
+                    fee, pid
+                ).execute(&mut *tx).await?;
+
+                sqlx::query!(
+                    "INSERT INTO transactions (player_id, amount, diamond_amount, category, game_id, reference_id) VALUES ($1, $2, $3, $4, $5, $6)",
+                    pid, fee, 0, "draw_refund", match_id, ref_refund
+                ).execute(&mut *tx).await?;
+            }
+        }
+
+        // 3. Update Player Statistics Aggregates
+        // Use row locking to prevent racing updates
+        for pid in &[p1_id, p2_id] {
+            let is_winner = winner_id.map(|id| id == **pid).unwrap_or(false);
+            let win_inc = if is_winner { 1 } else { 0 };
+
+            sqlx::query!(
+                "UPDATE players SET games_played = games_played + 1, games_won = games_won + $1 WHERE id = $2",
+                win_inc, pid
+            ).execute(&mut *tx).await?;
+        }
+
+        // 4. Finalize Match Status
+        sqlx::query!(
+            "UPDATE matches SET status = 'FINISHED', final_result = $1, updated_at = NOW() WHERE id = $2",
+            result_type, match_id
+        ).execute(&mut *tx).await?;
+
+        tx.commit().await?;
+
+        // 5. Update ELO ratings (outside the main transaction — non-blocking)
+        if let Err(e) = self.update_elo_after_match(winner_id, p1_id, p2_id).await {
+            tracing::error!("ELO update failed for match {}: {}", match_id, e);
+        }
+
+        // 6. Update Redis Leaderboard (Cache-Aside)
+        if let Some(redis) = &self.redis {
+            for pid in &[p1_id, p2_id] {
+                // Get updated wins count from DB to ensure consistency
+                if let Ok(wins) = sqlx::query_scalar!("SELECT games_won FROM players WHERE id = $1", *pid)
+                    .fetch_one(&self.pool)
+                    .await
+                {
+                    let _ = redis.update_leaderboard(city, pid, wins).await;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Process pending outbox events
+    pub async fn get_pending_outbox(&self, limit: i64) -> Result<Vec<super::OutboxEvent>, sqlx::Error> {
+        sqlx::query_as!(
+            super::OutboxEvent,
+            "SELECT id, event_type, payload, target_player_id, status, retry_count, created_at FROM outbox_events WHERE status = 'pending' ORDER BY created_at LIMIT $1",
+            limit
+        ).fetch_all(&self.pool).await
+    }
+
+    /// Mark outbox event as sent
+    pub async fn mark_outbox_sent(&self, id: i64) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            "UPDATE outbox_events SET status = 'sent', processed_at = NOW() WHERE id = $1",
+            id
+        ).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    // =========================================================================
+    // ELO RATING SYSTEM
+    // =========================================================================
+
+    /// Get a player's ELO rating
+    pub async fn get_player_elo(&self, player_id: &uuid::Uuid) -> Result<i32, sqlx::Error> {
+        let row = sqlx::query_scalar!(
+            "SELECT elo_rating FROM players WHERE id = $1",
+            player_id
+        ).fetch_optional(&self.pool).await?;
+
+        // elo_rating is NOT NULL DEFAULT 1000 — but fetch_optional wraps it in Option
+        Ok(row.unwrap_or(1000))
+    }
+
+    /// Update ELO ratings for both players after a match (standard K=32 formula)
+    pub async fn update_elo_after_match(
+        &self,
+        winner_id: Option<uuid::Uuid>,
+        p1_id: &uuid::Uuid,
+        p2_id: &uuid::Uuid,
+    ) -> Result<(), sqlx::Error> {
+        let p1_elo = self.get_player_elo(p1_id).await? as f64;
+        let p2_elo = self.get_player_elo(p2_id).await? as f64;
+
+        let k: f64 = 32.0;
+
+        // Expected scores
+        let expected_p1 = 1.0 / (1.0 + 10f64.powf((p2_elo - p1_elo) / 400.0));
+        let expected_p2 = 1.0 / (1.0 + 10f64.powf((p1_elo - p2_elo) / 400.0));
+
+        // Actual scores
+        let (score_p1, score_p2) = match winner_id {
+            Some(w) if w == *p1_id => (1.0, 0.0),
+            Some(w) if w == *p2_id => (0.0, 1.0),
+            _ => (0.5, 0.5), // Draw
+        };
+
+        let new_p1 = (p1_elo + k * (score_p1 - expected_p1)).round() as i32;
+        let new_p2 = (p2_elo + k * (score_p2 - expected_p2)).round() as i32;
+
+        // Floor at 100 to prevent going to 0
+        let new_p1 = std::cmp::max(new_p1, 100);
+        let new_p2 = std::cmp::max(new_p2, 100);
+
+        sqlx::query!(
+            "UPDATE players SET elo_rating = $1 WHERE id = $2",
+            new_p1, p1_id
+        ).execute(&self.pool).await?;
+
+        sqlx::query!(
+            "UPDATE players SET elo_rating = $1 WHERE id = $2",
+            new_p2, p2_id
+        ).execute(&self.pool).await?;
+
+        tracing::info!(
+            "ELO Update: P1({})={}->{}, P2({})={}->{}",
+            p1_id, p1_elo as i32, new_p1,
+            p2_id, p2_elo as i32, new_p2
+        );
+
+        Ok(())
+    }
+
+    // =========================================================================
+    // RECONNECT RECOVERY
+    // =========================================================================
+
+    /// Check if a player has an active (non-finished) match
+    pub async fn get_active_match_for_player(
+        &self,
+        player_id: &uuid::Uuid,
+    ) -> Result<Option<uuid::Uuid>, sqlx::Error> {
+        let row = sqlx::query!(
+            "SELECT id FROM matches WHERE (p1_id = $1 OR p2_id = $1) AND status IN ('MATCHED', 'READY', 'STARTED') LIMIT 1",
+            player_id
+        ).fetch_optional(&self.pool).await?;
+
+        Ok(row.map(|r| r.id))
     }
 }

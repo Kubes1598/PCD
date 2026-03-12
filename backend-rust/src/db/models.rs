@@ -83,3 +83,42 @@ pub struct CreateGame {
     pub player1_name: String,
     pub player2_name: String,
 }
+
+/// Match Status for persistent state machine
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MatchStatus {
+    MATCHED,
+    READY,
+    STARTED,
+    FINISHED,
+    CANCELED,
+}
+
+/// Persistent match record
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct PersistentMatch {
+    pub id: Uuid,
+    pub p1_id: Uuid,
+    pub p2_id: Uuid,
+    pub city: String,
+    pub status: MatchStatus,
+    pub p1_poison: Option<String>,
+    pub p2_poison: Option<String>,
+    pub final_result: Option<String>,
+    pub game_data: Option<serde_json::Value>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Outbox event for reliable messaging
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct OutboxEvent {
+    pub id: i64,
+    pub event_type: String,
+    pub payload: serde_json::Value,
+    pub target_player_id: Option<Uuid>,
+    pub status: Option<String>,
+    pub retry_count: Option<i32>,
+    pub created_at: Option<DateTime<Utc>>,
+}

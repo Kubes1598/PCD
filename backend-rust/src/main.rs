@@ -30,13 +30,6 @@ async fn main() {
 
     tracing::info!("🚀 Starting PCD Backend v{}", env!("CARGO_PKG_VERSION"));
 
-    // Initialize database
-    let db = Database::connect(&config.database_url)
-        .await
-        .expect("Failed to connect to database");
-
-    tracing::info!("✅ Database connected");
-
     // Initialize Redis (optional)
     let redis = if let Some(url) = config.redis_url.as_deref() {
         match RedisClient::connect(url).await {
@@ -52,6 +45,13 @@ async fn main() {
     } else {
         None
     };
+
+    // Initialize Database
+    let db = Database::connect(&config.database_url, redis.clone())
+        .await
+        .expect("Failed to connect to database");
+
+    tracing::info!("✅ Database connected");
 
     // Initialize game engine and managers
     let game_engine = game::GameEngine::new();
@@ -77,102 +77,135 @@ async fn main() {
         timer_manager,
     };
 
-    // Spawn matchmaking worker
-    let mm_state = state.clone();
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
-        loop {
-            interval.tick().await;
+    // Spawn distributed matchmaking workers (one per city)
+    let cities = vec!["dubai".to_string(), "cairo".to_string(), "oslo".to_string()];
+    for city in cities {
+        let mm_state = state.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+            tracing::info!("Started matchmaking worker for city: {}", city);
 
-            // Check each city for potential matches
-            let stats = mm_state.matchmaking_queue.get_stats().await;
-            for (city, count) in stats {
-                if count >= 2 {
-                    if let Some((p1, p2, game_id)) =
-                        mm_state.matchmaking_queue.try_match(&city).await
+            loop {
+                interval.tick().await;
+
+                // Try to match players in this city
+                while let Some((p1, p2, game_id)) = mm_state.matchmaking_queue.try_match(&city).await {
+                    let (_waiting, fee, prize) = mm_state.matchmaking_queue.get_city_stats(&city).await;
+
+                    // 1. Create Game State locally first to generate payload
+                    mm_state.game_engine.set_stakes(game_id, fee, prize);
+                    let game = mm_state.game_engine.get_game(game_id).unwrap();
+
+                    let game_p1 = game.for_viewer(p1.id);
+                    let msg_p1 = serde_json::json!({
+                        "type": "match_found",
+                        "game_id": game_id,
+                        "your_role": "player1",
+                        "opponent": { "id": p2.id, "name": p2.name },
+                        "game_state": game_p1,
+                        "city": city,
+                        "poison_timer_secs": game.poison_timer_secs,
+                        "turn_timer_secs": game.turn_timer_secs
+                    });
+
+                    let game_p2 = game.for_viewer(p2.id);
+                    let msg_p2 = serde_json::json!({
+                        "type": "match_found",
+                        "game_id": game_id,
+                        "your_role": "player2",
+                        "opponent": { "id": p1.id, "name": p1.name },
+                        "game_state": game_p2,
+                        "city": city,
+                        "poison_timer_secs": game.poison_timer_secs,
+                        "turn_timer_secs": game.turn_timer_secs
+                    });
+
+                    // 2. ATOMIC TRANSACTION: Deduct fees, Create Match, and Queue Outbox Events
+                    let outbox_payload = serde_json::json!({
+                        "match_id": game_id,
+                        "notifications": [
+                            { "player_id": p1.id, "message": msg_p1 },
+                            { "player_id": p2.id, "message": msg_p2 }
+                        ]
+                    });
+
+                    if let Err(e) = mm_state
+                        .db
+                        .create_match_with_outbox(game_id, &p1.id, &p2.id, &city, fee, outbox_payload)
+                        .await
                     {
-                        let (_waiting, fee, prize) =
-                            mm_state.matchmaking_queue.get_city_stats(&city).await;
+                        tracing::error!("Atomic Match Creation FAILED for city {}! {:?}", city, e);
 
-                        // 1. Deduct entry fees atomically for both players
-                        if let Err(e) = mm_state
-                            .db
-                            .execute_matchmaking_entry(&p1.id, &p2.id, fee, game_id)
-                            .await
-                        {
-                            tracing::error!("Payment failed for match {}! {:?}", game_id, e);
-
-                            // Notify players of failure
-                            let failure_msg = serde_json::json!({
-                                "type": "match_error",
-                                "message": "Match aborted: payment failed. Please check your balance."
-                            });
-                            mm_state.connection_manager.send_message(
-                                &p1.id,
-                                axum::extract::ws::Message::Text(failure_msg.to_string()),
-                            );
-                            mm_state.connection_manager.send_message(
-                                &p2.id,
-                                axum::extract::ws::Message::Text(failure_msg.to_string()),
-                            );
-
-                            // Clean up game from engine
-                            mm_state.game_engine.remove_game(game_id);
-                            continue;
-                        }
-
-                        // 2. Set stakes in game engine
-                        mm_state.game_engine.set_stakes(game_id, fee, prize);
-
-                        let game = mm_state.game_engine.get_game(game_id).unwrap();
-
-                        // 3. Notify players of the match
-                        let game_p1 = game.for_viewer(p1.id);
-                        let msg_p1 = serde_json::json!({
-                            "type": "match_found",
-                            "game_id": game_id,
-                            "your_role": "player1",
-                            "opponent": { "id": p2.id, "name": p2.name },
-                            "game_state": game_p1,
-                            "city": city
+                        // Notify players of failure immediately
+                        let failure_msg = serde_json::json!({
+                            "type": "match_error",
+                            "message": "Match aborted: payment failed or system error."
                         });
-
-                        let game_p2 = game.for_viewer(p2.id);
-                        let msg_p2 = serde_json::json!({
-                            "type": "match_found",
-                            "game_id": game_id,
-                            "your_role": "player2",
-                            "opponent": { "id": p1.id, "name": p1.name },
-                            "game_state": game_p2,
-                            "city": city
-                        });
-
+                        
                         mm_state.connection_manager.send_message(
                             &p1.id,
-                            axum::extract::ws::Message::Text(msg_p1.to_string()),
+                            axum::extract::ws::Message::Text(failure_msg.to_string()),
                         );
                         mm_state.connection_manager.send_message(
                             &p2.id,
-                            axum::extract::ws::Message::Text(msg_p2.to_string()),
+                            axum::extract::ws::Message::Text(failure_msg.to_string()),
                         );
 
-                        // Broadcast new queue size to everyone remaining in/viewing the city
-                        let (waiting, fee, prize) =
-                            mm_state.matchmaking_queue.get_city_stats(&city).await;
-                        let online = mm_state.connection_manager.get_online_count(&city);
-                        let update = serde_json::json!({
-                            "type": "city_stats_update",
-                            "city": city,
-                            "players_online": online,
-                            "players_waiting": waiting,
-                            "entry_fee": fee,
-                            "prize_pool": prize
-                        });
-                        mm_state.connection_manager.broadcast_to_city(
-                            &city,
-                            axum::extract::ws::Message::Text(update.to_string()),
-                        );
+                        // Clean up game from engine
+                        mm_state.game_engine.remove_game(game_id);
+                        continue;
                     }
+
+                    // Broadcast new queue size (stats update is non-critical/best-effort)
+                    let (waiting, fee, prize) =
+                        mm_state.matchmaking_queue.get_city_stats(&city).await;
+                    let online = mm_state.connection_manager.get_online_count(&city);
+                    let update = serde_json::json!({
+                        "type": "city_stats_update",
+                        "city": city,
+                        "players_online": online,
+                        "players_waiting": waiting,
+                        "entry_fee": fee,
+                        "prize_pool": prize
+                    });
+                    mm_state.connection_manager.broadcast_to_city(
+                        &city,
+                        axum::extract::ws::Message::Text(update.to_string()),
+                    );
+                }
+            }
+        });
+    }
+
+    // Spawn Transactional Outbox Dispatcher
+    let outbox_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
+        loop {
+            interval.tick().await;
+            
+            if let Ok(events) = outbox_state.db.get_pending_outbox(10i64).await {
+                for event in events {
+                    if event.event_type == "MATCH_FOUND" {
+                        // Extract notifications from payload
+                        if let Some(notifications) = event.payload["notifications"].as_array() {
+                            for notification in notifications {
+                                if let (Some(pid_str), Some(msg)) = (
+                                    notification["player_id"].as_str(),
+                                    notification.get("message")
+                                ) {
+                                    if let Ok(pid) = uuid::Uuid::parse_str(pid_str) {
+                                        outbox_state.connection_manager.send_message(
+                                            &pid,
+                                            axum::extract::ws::Message::Text(msg.to_string())
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    let _ = outbox_state.db.mark_outbox_sent(event.id).await;
                 }
             }
         }

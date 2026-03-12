@@ -227,6 +227,34 @@ async fn handle_socket(socket: WebSocket, state: AppState, player_id: Uuid) {
 
     let _ = tx.send(Message::Text(welcome.to_string()));
 
+    // RECONNECT RECOVERY: Check if this player has an active match
+    if let Ok(Some(match_id)) = state.db.get_active_match_for_player(&player_id).await {
+        // Check if the game still exists in-memory
+        if let Some(game) = state.game_engine.get_game(match_id) {
+            let game_state = game.for_viewer(player_id);
+            let your_role = if game.player1.id == player_id { "player1" } else { "player2" };
+            let opponent = if game.player1.id == player_id {
+                serde_json::json!({"id": game.player2.id, "name": game.player2.name})
+            } else {
+                serde_json::json!({"id": game.player1.id, "name": game.player1.name})
+            };
+
+            let reconnect_msg = serde_json::json!({
+                "type": "game_reconnect",
+                "game_id": match_id,
+                "your_role": your_role,
+                "opponent": opponent,
+                "game_state": game_state,
+                "poison_timer_secs": game.poison_timer_secs,
+                "turn_timer_secs": game.turn_timer_secs,
+                "message": "You have been reconnected to your active match"
+            });
+
+            let _ = tx.send(Message::Text(reconnect_msg.to_string()));
+            tracing::info!("Player {} reconnected to active match {}", player_id, match_id);
+        }
+    }
+
     // Spawn a task to handle outgoing messages from the channel
     let send_task = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
@@ -284,7 +312,26 @@ async fn handle_socket(socket: WebSocket, state: AppState, player_id: Uuid) {
         let _ = redis.release_connection(&format!("ws:user:{}", player_id)).await;
     }
     send_task.abort();
+
+    // Only leave the matchmaking queue (not the game)
     let city = state.matchmaking_queue.leave(player_id).await;
+
+    // RECONNECT RECOVERY: Check if the player has an active game
+    // If so, DON'T destroy the connection manager entry immediately.
+    // The game timer will handle forfeit if the player doesn't reconnect.
+    let has_active_game = state.game_engine.find_game_by_player(player_id).is_some();
+
+    if has_active_game {
+        // Player disconnected mid-game. Their turn timer is still running.
+        // If they reconnect before the timer expires, they'll be restored.
+        // If not, handle_timeout will naturally forfeit them.
+        tracing::warn!(
+            "Player {} disconnected with active game — grace period until turn timer expires",
+            player_id
+        );
+    }
+
+    // Always disconnect from connection manager (reconnect will re-register)
     state.connection_manager.disconnect(player_id).await;
 
     // If they were in a queue, notify others in that city
@@ -364,17 +411,24 @@ async fn handle_message(
             let city = msg["city"].as_str().unwrap_or("dubai");
             let player_name = msg["player_name"].as_str().unwrap_or("Anonymous");
 
-            tracing::info!("Player {} joining {} queue", player_name, city);
+            // Fetch player's ELO from database (default 1000 for new/guest players)
+            let elo = match state.db.get_player_elo(&player_id).await {
+                Ok(rating) => rating,
+                Err(_) => 1000, // Fallback for guests or DB errors
+            };
+
+            tracing::info!("Player {} (ELO: {}) joining {} queue", player_name, elo, city);
 
             if state
                 .matchmaking_queue
-                .join(player_id, player_name.to_string(), city.to_string())
+                .join_with_elo(player_id, player_name.to_string(), city.to_string(), elo)
                 .await?
             {
                 let response = serde_json::json!({
                     "type": "queue_joined",
                     "city": city,
-                    "message": "Added to matchmaking queue"
+                    "message": "Added to matchmaking queue",
+                    "your_elo": elo
                 });
                 state
                     .connection_manager
@@ -427,15 +481,17 @@ async fn handle_message(
                             .connection_manager
                             .send_message(&player_id, Message::Text(response.to_string()));
 
-                        // Forward poison to opponent so they know poison is set
+                        // SECURITY: Do NOT forward the poison candy to the opponent!
+                        // Instead, notify the opponent that the player is READY.
                         if let Some(opponent_id) = target_id {
-                            let forward = serde_json::json!({
-                                "type": "match_poison",
-                                "candy": candy
+                            let ready_signal = serde_json::json!({
+                                "type": "opponent_ready",
+                                "player_id": player_id,
+                                "message": "Opponent has locked in their poison choice"
                             });
                             state
                                 .connection_manager
-                                .send_message(&opponent_id, Message::Text(forward.to_string()));
+                                .send_message(&opponent_id, Message::Text(ready_signal.to_string()));
                         }
 
                         // If game started, notify both players with sanitized state
@@ -485,7 +541,7 @@ async fn handle_message(
                 .unwrap_or("");
 
             if let Some(game_id) = game_id {
-                match state.game_engine.make_move(game_id, player_id, candy).await {
+                match state.game_engine.make_move(game_id, player_id, candy.to_string()).await {
                     Ok(result) => {
                         let game = state.game_engine.get_game(game_id).unwrap();
                         let p1_id = game.player1.id;
@@ -514,64 +570,31 @@ async fn handle_message(
                             .connection_manager
                             .send_message(&p2_id, Message::Text(msg2.to_string()));
 
-                        // 4. If game over, process victory reward or draw refund
+                        // 4. If game over, process victory reward or draw refund ATOMICALLY
                         if result.game_over {
                             let prize = game.prize;
                             let fee = game.entry_fee;
 
-                            if result.result == crate::game::GameResult::Draw {
-                                // Draw refund
-                                if fee > 0 {
-                                    let ref1 = format!("{}_{}_draw_refund", game_id, p1_id);
-                                    let ref2 = format!("{}_{}_draw_refund", game_id, p2_id);
-                                    let _ = state
-                                        .db
-                                        .execute_transaction(
-                                            &p1_id,
-                                            fee,
-                                            0,
-                                            "draw_refund",
-                                            Some(game_id),
-                                            Some(ref1),
-                                        )
-                                        .await;
-                                    let _ = state
-                                        .db
-                                        .execute_transaction(
-                                            &p2_id,
-                                            fee,
-                                            0,
-                                            "draw_refund",
-                                            Some(game_id),
-                                            Some(ref2),
-                                        )
-                                        .await;
-                                }
-                            } else if prize > 0 {
-                                if let Some(winner_name) = result.winner.as_deref() {
-                                    let winner_id = if winner_name == game.player1.name {
-                                        Some(game.player1.id)
-                                    } else if winner_name == game.player2.name {
-                                        Some(game.player2.id)
-                                    } else {
-                                        None
-                                    };
+                            let result_type = match result.result {
+                                crate::game::GameResult::Player1Win => "p1_win",
+                                crate::game::GameResult::Player2Win => "p2_win",
+                                crate::game::GameResult::Draw => "draw",
+                                _ => "unknown",
+                            };
 
-                                    if let Some(w_id) = winner_id {
-                                        let ref_id = format!("{}_{}_victory", game_id, w_id);
-                                        let _ = state
-                                            .db
-                                            .execute_transaction(
-                                                &w_id,
-                                                prize,
-                                                0,
-                                                "victory_reward",
-                                                Some(game_id),
-                                                Some(ref_id),
-                                            )
-                                            .await;
-                                    }
-                                }
+                            let winner_id = if result_type == "p1_win" {
+                                Some(game.player1.id)
+                            } else if result_type == "p2_win" {
+                                Some(game.player2.id)
+                            } else {
+                                None
+                            };
+
+                            // Atomic Settlement: Payout + Stats + Ledger
+                            if let Err(e) = state.db.settle_match_result(
+                                game_id, &p1_id, &p2_id, winner_id, fee, prize, result_type, &game.city
+                            ).await {
+                                tracing::error!("CRITICAL: Atomic Match Settlement FAILED for {}: {}", game_id, e);
                             }
                         }
                     }

@@ -5,7 +5,6 @@ use axum::{
     routing::{delete, get, post},
     Extension, Json, Router,
 };
-use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -73,7 +72,7 @@ async fn create_game(
         .ok_or_else(|| AppError::NotFound("Player not found".into()))?;
     // Default timers for generic game creation
     let turn_timer = 30u32;
-    let poison_timer = 60u32;
+    let poison_timer = 30u32; // Standard 30s poison pick
 
     let game_id = state
         .game_engine
@@ -82,8 +81,11 @@ async fn create_game(
             req.player2_name.clone(),
             Some(user.id),
             req.player2_id,
+            false, // p1 is human
+            false, // p2 is human
             turn_timer,
             poison_timer,
+            "local".to_string(),
         )
         .await;
 
@@ -132,68 +134,61 @@ async fn create_ai_game(
         _ => 0,
     };
 
-    if fee > 0 {
-        let reference_id = format!("ai_{}_{}", user.id, Uuid::new_v4()); // AI games don't have a shared ID yet, use random for unique deduction
-        state
-            .db
-            .execute_transaction(&user.id, -fee, 0, "ai_entry_fee", None, Some(reference_id))
-            .await
-            .map_err(|_| AppError::Internal("Failed to deduct coins".into()))?;
-    }
+    // Generate game ID first for atomic transaction
+    let game_id = Uuid::new_v4();
 
-    // Get difficulty-based timer configuration
-    let turn_timer = match difficulty.as_str() {
-        "medium" => 20u32,
-        "hard" => 10u32,
-        _ => 30u32, // easy
-    };
-    let poison_timer = 60u32; // Standard poison selection time
+    // ATOMIC TRANSACTION: Deduct fee and Create Match record
+    state.db.create_ai_match_atomic(
+        game_id,
+        &user.id,
+        &difficulty,
+        fee
+    ).await.map_err(|e| {
+        if matches!(e, sqlx::Error::RowNotFound) {
+            AppError::BadRequest("Insufficient coins".into())
+        } else {
+            AppError::Internal("Transaction failed".into())
+        }
+    })?;
 
-    // Create game session with difficulty-based timers
-    let game_id = state
+    // Create game session in engine
+    let actual_game_id = state
         .game_engine
         .create_game(
             player.name.clone(),
             "Computer".to_string(),
             Some(user.id),
-            Some(Uuid::new_v4()), // Random ID for computer
-            turn_timer,
-            poison_timer,
+            Some(Uuid::new_v4()), // AI UUID (virtual)
+            false,
+            true,
+            match difficulty.as_str() {
+                "medium" => 20,
+                "hard" => 10,
+                _ => 30,
+            },
+            30,
+            format!("ai_{}", difficulty),
         )
         .await;
 
-    // Set stakes for AI game
+    // Set stakes
     let prize = match difficulty.as_str() {
         "medium" => 180,
         "hard" => 450,
         _ => 0,
     };
-    state.game_engine.set_stakes(game_id, fee, prize);
+    state.game_engine.set_stakes(actual_game_id, fee, prize);
 
-    let game = state
-        .game_engine
-        .get_game(game_id)
-        .ok_or_else(|| AppError::Internal("Failed to retrieve new game".into()))?;
+    let game = state.game_engine.get_game(actual_game_id).unwrap();
 
-    // Randomly pick AI poison
-    let ai_id = game.player2.id;
-    let ai_candies: Vec<String> = game.player2.owned_candies.iter().cloned().collect();
-    let ai_poison = ai_candies
-        .choose(&mut rand::thread_rng())
-        .ok_or_else(|| AppError::Internal("Failed to pick AI poison".into()))?
-        .clone();
-
-    // Set AI poison
-    state
-        .game_engine
-        .set_poison_choice(game_id, ai_id, &ai_poison)
-        .await?;
+    // NOTE: AI poison is handled secretly by the server when it moves.
+    // We don't need to pick it now or expose it to anyone.
 
     Ok(Json(GameResponse {
         success: true,
         message: format!("AI Game ({}) created", difficulty),
         data: Some(serde_json::json!({
-            "game_id": game_id,
+            "game_id": actual_game_id,
             "player1_id": game.player1.id,
             "player2_id": game.player2.id,
             "state": game.state,
@@ -247,7 +242,7 @@ async fn delete_game(
 
     // Only participants can delete their own game
     if game.player1.id != user.id && game.player2.id != user.id {
-        return Err(AppError::Forbidden);
+        return Err(AppError::Forbidden("Only participants can delete this game".into()));
     }
 
     state.game_engine.remove_game(game_id);
@@ -295,60 +290,43 @@ async fn pick_candy(
 ) -> Result<Json<GameResponse>> {
     let result = state
         .game_engine
-        .make_move(game_id, user.id, &req.candy_choice)
+        .make_move(game_id, user.id, req.candy_choice.clone())
         .await?;
 
     // If game over, process victory/draw settlement
     if result.game_over {
         let game = state.game_engine.get_game(game_id).unwrap();
-        let prize = game.prize;
 
-        if result.result == crate::game::GameResult::Draw {
-            // Refund entry fee in case of draw
-            let fee = game.entry_fee;
-            if fee > 0 {
-                let ref1 = format!("{}_{}_draw_refund", game_id, game.player1.id);
-                let _ = state
-                    .db
-                    .execute_transaction(
-                        &game.player1.id,
-                        fee,
-                        0,
-                        "draw_refund",
-                        Some(game_id),
-                        Some(ref1),
-                    )
-                    .await;
-                // If player2 is a real player (not AI), refund them too
-                // In AI mode, player2 is a random UUID from Uuid::new_v4() which won't exist in DB,
-                // so execute_transaction will gracefully return RowNotFound or we can skip it.
+        let winner_id = if let Some(winner_name) = result.winner.as_deref() {
+            if winner_name == game.player1.name && !game.player1.is_ai {
+                Some(game.player1.id)
+            } else if winner_name == game.player2.name && !game.player2.is_ai {
+                Some(game.player2.id)
+            } else {
+                None
             }
-        } else if prize > 0 {
-            if let Some(winner_name) = result.winner.as_deref() {
-                let winner_id = if winner_name == game.player1.name {
-                    Some(game.player1.id)
-                } else if winner_name == game.player2.name {
-                    Some(game.player2.id)
-                } else {
-                    None
-                };
+        } else {
+            None
+        };
 
-                if let Some(w_id) = winner_id {
-                    let ref_id = format!("{}_{}_victory", game_id, w_id);
-                    let _ = state
-                        .db
-                        .execute_transaction(
-                            &w_id,
-                            prize,
-                            0,
-                            "victory_reward",
-                            Some(game_id),
-                            Some(ref_id),
-                        )
-                        .await;
-                }
-            }
-        }
+        let result_type = match result.result {
+             crate::game::GameResult::Player1Win => "p1_win",
+             crate::game::GameResult::Player2Win => "p2_win",
+             crate::game::GameResult::Draw => "draw",
+             _ => "playing",
+        };
+
+        // Centralized atomic settlement
+        let _ = state.db.settle_match_result(
+            game_id,
+            &game.player1.id,
+            &game.player2.id,
+            winner_id,
+            game.entry_fee,
+            game.prize,
+            result_type,
+            &game.city
+        ).await;
     }
 
     Ok(Json(GameResponse {

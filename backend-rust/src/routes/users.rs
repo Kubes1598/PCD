@@ -1,7 +1,7 @@
 //! User routes
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, State, Query},
     routing::{get, post},
     Json, Router,
 };
@@ -42,6 +42,16 @@ pub struct ApiResponse<T> {
     pub success: bool,
     pub message: String,
     pub data: Option<T>,
+}
+
+impl<T> ApiResponse<T> {
+    pub fn success(data: T, message: Option<String>) -> Self {
+        Self {
+            success: true,
+            message: message.unwrap_or_else(|| "Success".to_string()),
+            data: Some(data),
+        }
+    }
 }
 
 /// User profile response
@@ -334,10 +344,54 @@ pub struct LeaderboardEntry {
     pub win_rate: f64,
 }
 
+/// Leaderboard query parameters
+#[derive(Debug, serde::Deserialize)]
+pub struct LeaderboardQuery {
+    pub city: Option<String>,
+}
+
 /// Get leaderboard
 async fn get_leaderboard(
     State(state): State<AppState>,
+    Query(query): Query<LeaderboardQuery>,
 ) -> Result<Json<ApiResponse<Vec<LeaderboardEntry>>>> {
+    let city = query.city.unwrap_or_else(|| "global".to_string());
+    
+    // 1. Try Cache-Aside: Try Redis first
+    if let Some(redis) = &state.redis {
+        if let Ok(cached) = redis.get_leaderboard(&city, 100).await {
+            if !cached.is_empty() {
+                // To get full info (name, games_played), we might still hit DB, 
+                // but we can use cached player profiles too or just fetch by IDs.
+                // For now, let's fetch these 100 players from DB.
+                let mut entries = Vec::new();
+                for (rank, (pid_str, cached_wins)) in cached.into_iter().enumerate() {
+                    if let Ok(pid) = uuid::Uuid::parse_str(&pid_str) {
+                        // Use cached wins for ranking, fetch name/games_played from DB
+                        if let Ok(Some(p)) = state.db.get_player(&pid).await {
+                            let win_rate = if p.games_played > 0 {
+                                (cached_wins as f64 / p.games_played as f64) * 100.0
+                            } else {
+                                0.0
+                            };
+                            entries.push(LeaderboardEntry {
+                                rank: rank + 1,
+                                name: p.name,
+                                games_won: cached_wins,
+                                games_played: p.games_played,
+                                win_rate,
+                            });
+                        }
+                    }
+                }
+                if !entries.is_empty() {
+                    return Ok(Json(ApiResponse::success(entries, None)));
+                }
+            }
+        }
+    }
+
+    // 2. Fallback to PostgreSQL
     let players = state.db.get_leaderboard(100).await?;
 
     let entries: Vec<LeaderboardEntry> = players
@@ -349,6 +403,20 @@ async fn get_leaderboard(
             } else {
                 0.0
             };
+            
+            // Periodically refresh Redis if it was a miss
+            if let Some(redis) = &state.redis {
+                let _ = tokio::spawn({
+                    let redis = redis.clone();
+                    let city = city.clone();
+                    let pid = p.id;
+                    let wins = p.games_won;
+                    async move {
+                        let _ = redis.update_leaderboard(&city, &pid, wins).await;
+                    }
+                });
+            }
+
             LeaderboardEntry {
                 rank: i + 1,
                 name: p.name,
@@ -359,11 +427,7 @@ async fn get_leaderboard(
         })
         .collect();
 
-    Ok(Json(ApiResponse {
-        success: true,
-        message: "Leaderboard retrieved".into(),
-        data: Some(entries),
-    }))
+    Ok(Json(ApiResponse::success(entries, None)))
 }
 
 /// Update stats request
@@ -423,7 +487,7 @@ async fn request_step_up(
 async fn delete_account(
     State(state): State<AppState>,
     Extension(user): Extension<AuthUser>,
-    Json(req): Json<serde_json::Value>,
+    Json(_req): Json<serde_json::Value>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>> {
     // 1. Verify Tier 2 Step-Up Proof
     let action_id = "DELETE_ACCOUNT";

@@ -179,4 +179,33 @@ impl RedisClient {
         let key = format!("proof:{}:{}", user_id, action_id);
         self.exists(&key).await
     }
+
+    // =========================================================================
+    // LEADERBOARD (Sorted Sets)
+    // =========================================================================
+
+    /// Update player score in city leaderboard
+    pub async fn update_leaderboard(
+        &self,
+        city: &str,
+        player_id: &uuid::Uuid,
+        wins: i32,
+    ) -> Result<(), redis::RedisError> {
+        let mut conn = self.conn.clone();
+        let key = format!("leaderboard:{}", city);
+        // ZADD key score member
+        conn.zadd(key, player_id.to_string(), wins).await
+    }
+
+    /// Get top players for a city
+    pub async fn get_leaderboard(
+        &self,
+        city: &str,
+        limit: isize,
+    ) -> Result<Vec<(String, i32)>, redis::RedisError> {
+        let mut conn = self.conn.clone();
+        let key = format!("leaderboard:{}", city);
+        // ZREVRANGE key 0 limit-1 WITHSCORES
+        conn.zrevrange_withscores(key, 0, limit - 1).await
+    }
 }

@@ -16,8 +16,9 @@ pub struct GameSession {
     pub result: GameResult,
     pub entry_fee: i32,
     pub prize: i32,
-    pub turn_timer_secs: u32, // Configurable turn timer (city/difficulty-based)
+    pub turn_timer_secs: u32,   // Configurable turn timer (city/difficulty-based)
     pub poison_timer_secs: u32, // Configurable poison selection timer
+    pub city: String,           // The city this match belongs to
     pub created_at: f64,
     pub last_updated: f64,
 }
@@ -29,8 +30,11 @@ impl GameSession {
         player2_name: String,
         p1_id: Option<Uuid>,
         p2_id: Option<Uuid>,
+        p1_is_ai: bool,
+        p2_is_ai: bool,
         turn_timer_secs: u32,   // Turn timer (city/difficulty-based)
         poison_timer_secs: u32, // Poison selection timer
+        city: String,           // Match city
     ) -> Self {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -48,10 +52,10 @@ impl GameSession {
         let p2_candies: std::collections::HashSet<String> =
             pool[12..24].iter().map(|&s| s.to_string()).collect();
 
-        let mut player1 = GamePlayer::new(p1_id.unwrap_or_else(Uuid::new_v4), player1_name);
+        let mut player1 = GamePlayer::new(p1_id.unwrap_or_else(Uuid::new_v4), player1_name, p1_is_ai);
         player1.owned_candies = p1_candies;
 
-        let mut player2 = GamePlayer::new(p2_id.unwrap_or_else(Uuid::new_v4), player2_name);
+        let mut player2 = GamePlayer::new(p2_id.unwrap_or_else(Uuid::new_v4), player2_name, p2_is_ai);
         player2.owned_candies = p2_candies;
 
         Self {
@@ -65,6 +69,7 @@ impl GameSession {
             prize: 0,     // Default, will be set by engine
             turn_timer_secs,
             poison_timer_secs,
+            city,
             created_at: now,
             last_updated: now,
         }
