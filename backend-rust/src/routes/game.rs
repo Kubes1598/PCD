@@ -152,13 +152,14 @@ async fn create_ai_game(
     })?;
 
     // Create game session in engine
+    let ai_uuid = Uuid::new_v4(); // AI UUID (virtual)
     let actual_game_id = state
         .game_engine
         .create_game(
             player.name.clone(),
             "Computer".to_string(),
             Some(user.id),
-            Some(Uuid::new_v4()), // AI UUID (virtual)
+            Some(ai_uuid),
             false,
             true,
             match difficulty.as_str() {
@@ -179,10 +180,22 @@ async fn create_ai_game(
     };
     state.game_engine.set_stakes(actual_game_id, fee, prize);
 
+    // Auto-pick AI's poison from its own candy pool (player2's candies)
     let game = state.game_engine.get_game(actual_game_id).unwrap();
+    let ai_poison = {
+        use rand::seq::IteratorRandom;
+        let mut rng = rand::thread_rng();
+        game.player2.owned_candies.iter().choose(&mut rng).cloned()
+    };
 
-    // NOTE: AI poison is handled secretly by the server when it moves.
-    // We don't need to pick it now or expose it to anyone.
+    // Set AI's poison on the engine so the game can transition to Playing
+    // once the human also sets theirs
+    if let Some(ref poison) = ai_poison {
+        let _ = state.game_engine.set_poison_choice(actual_game_id, ai_uuid, poison).await;
+    }
+
+    // Re-fetch game after poison was set
+    let game = state.game_engine.get_game(actual_game_id).unwrap();
 
     Ok(Json(GameResponse {
         success: true,
@@ -191,6 +204,7 @@ async fn create_ai_game(
             "game_id": actual_game_id,
             "player1_id": game.player1.id,
             "player2_id": game.player2.id,
+            "opponent_poison": ai_poison,
             "state": game.state,
             "game_state": {
                 "player1": {

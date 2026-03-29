@@ -69,6 +69,7 @@ export const AppNavigator: React.FC = () => {
                 component={GameScreen}
                 options={{
                     ...TransitionPresets.ModalPresentationIOS,
+                    gestureEnabled: false,
                 }}
             />
         </Stack.Navigator>

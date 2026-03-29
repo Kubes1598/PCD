@@ -4,6 +4,8 @@ import { DrawerContentScrollView, DrawerContentComponentProps } from '@react-nav
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { User, Users, Trophy, Settings, LogOut, Home, Coins as CoinIcon, Gem, Bell, LogIn } from 'lucide-react-native';
+import Coin from '../components/common/Coin';
+import PlayerAvatar from '../components/common/PlayerAvatar';
 import { useAuth } from '../hooks/useAuth';
 import { useCurrencyStore } from '../store/currencyStore';
 
@@ -52,9 +54,7 @@ const DrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
             >
                 {/* User Profile Section */}
                 <View style={styles.profileSection}>
-                    <View style={styles.avatarContainer}>
-                        <User color="#CBD5E1" size={32} />
-                    </View>
+                    <PlayerAvatar size={56} username={user?.username} />
                     <View style={styles.userInfo}>
                         <Text style={styles.welcomeText}>Welcome back,</Text>
                         <Text style={styles.usernameText}>{user?.username || 'Lee'}</Text>
@@ -64,9 +64,7 @@ const DrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
                 {/* Balance Section */}
                 <View style={styles.balanceSection}>
                     <View style={styles.balanceBadge}>
-                        <View style={[styles.currencyIcon, { backgroundColor: '#F59E0B' }]}>
-                            <CoinIcon color="#FFF" size={12} />
-                        </View>
+                        <Coin size={24} style={{ marginRight: 6 }} />
                         <Text style={styles.balanceValue}>{coins}</Text>
                     </View>
                     <View style={styles.balanceBadge}>

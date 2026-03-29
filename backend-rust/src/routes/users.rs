@@ -185,8 +185,27 @@ async fn get_friends(Path(name): Path<String>) -> Result<Json<ApiResponse<Vec<Fr
 }
 
 /// Get quests
-async fn get_quests(Path(name): Path<String>) -> Result<Json<ApiResponse<Vec<QuestInfo>>>> {
-    // Return some sample quests
+async fn get_quests(
+    State(state): State<AppState>,
+    Path(name): Path<String>
+) -> Result<Json<ApiResponse<Vec<QuestInfo>>>> {
+    let player = state
+        .db
+        .get_player_by_name(&name)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("Player {} not found", name)))?;
+
+    // Check claimed status from DB
+    let claimed_records = sqlx::query!(
+        "SELECT quest_id FROM claimed_quests WHERE player_id = $1",
+        player.id
+    )
+    .fetch_all(state.db.pool())
+    .await?;
+    
+    let claimed_ids: Vec<String> = claimed_records.into_iter().map(|r| r.quest_id).collect();
+
+    // Return some sample quests with actual DB claim status
     let quests = vec![
         QuestInfo {
             id: "daily_win".into(),
@@ -197,7 +216,7 @@ async fn get_quests(Path(name): Path<String>) -> Result<Json<ApiResponse<Vec<Que
             progress: 1,
             goal_value: 1,
             is_completed: true,
-            is_claimed: false,
+            is_claimed: claimed_ids.contains(&"daily_win".to_string()),
         },
         QuestInfo {
             id: "candy_collector".into(),
@@ -207,8 +226,8 @@ async fn get_quests(Path(name): Path<String>) -> Result<Json<ApiResponse<Vec<Que
             reward_diamonds: 0,
             progress: 34,
             goal_value: 50,
-            is_completed: false,
-            is_claimed: false,
+            is_completed: false, // This could also be fetched from DB later
+            is_claimed: claimed_ids.contains(&"candy_collector".to_string()),
         },
         QuestInfo {
             id: "duelist_pro".into(),
@@ -219,7 +238,7 @@ async fn get_quests(Path(name): Path<String>) -> Result<Json<ApiResponse<Vec<Que
             progress: 3,
             goal_value: 10,
             is_completed: false,
-            is_claimed: false,
+            is_claimed: claimed_ids.contains(&"duelist_pro".to_string()),
         },
     ];
 
@@ -250,7 +269,19 @@ async fn claim_quest(
         .await?
         .ok_or_else(|| AppError::NotFound("Player not found".into()))?;
 
-    // In a real app, check if quest is completed and not yet claimed
+    // Check if already claimed in DB
+    let existing_claim = sqlx::query!(
+        "SELECT quest_id FROM claimed_quests WHERE player_id = $1 AND quest_id = $2",
+        player.id, req.quest_id
+    )
+    .fetch_optional(state.db.pool())
+    .await?;
+
+    if existing_claim.is_some() {
+        return Err(AppError::BadRequest("Quest already claimed".into()));
+    }
+
+    // In a real app, check if quest is completed as well
     // For now, just give rewards for any valid quest ID
     let (coins, diamonds) = match req.quest_id.as_str() {
         "daily_win" => (500, 1),
@@ -258,6 +289,18 @@ async fn claim_quest(
         "duelist_pro" => (2000, 5),
         _ => return Err(AppError::NotFound("Quest not found".into())),
     };
+
+    // Insert claim record and update balance
+    let mut tx = state.db.pool().begin().await?;
+    
+    sqlx::query!(
+        "INSERT INTO claimed_quests (player_id, quest_id) VALUES ($1, $2)",
+        player.id, req.quest_id
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
 
     state.db.update_player_balance(&player.id, coins, diamonds).await?;
 
@@ -451,6 +494,16 @@ async fn update_stats(
         .ok_or_else(|| AppError::NotFound("Player not found".into()))?;
 
     state.db.update_player_stats(&player.id, req.won).await?;
+
+    if req.won {
+        if let Some(redis) = &state.redis {
+            // Fetch updated wins safely (we just incremented them in the DB above)
+            if let Ok(Some(updated_player)) = state.db.get_player(&player.id).await {
+                // By default, update "global" city or any specific ai arena if needed. Using "global" for now.
+                let _ = redis.update_leaderboard("global", &player.id, updated_player.games_won).await;
+            }
+        }
+    }
 
     Ok(Json(ApiResponse {
         success: true,

@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Animated, Modal } from 'react-native';
 import { Trophy, Frown, Home, RefreshCw, Handshake } from 'lucide-react-native';
 import { THEME } from '../../utils/theme';
+import Coin from '../common/Coin';
 import { feedbackService } from '../../services/FeedbackService';
 import { scale, moderateScale, SCREEN_WIDTH } from '../../utils/responsive';
 
@@ -104,7 +105,10 @@ const GameResultModal: React.FC<GameResultModalProps> = ({ visible, winner, onHo
                     {isWin && reward ? (
                         <View style={styles.rewardBox}>
                             <Text style={styles.rewardLabel}>REWARD EARNED</Text>
-                            <Text style={styles.rewardValue}>+{reward} Coins</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Coin size={scale(20)} style={{ marginRight: 6 }} />
+                                <Text style={styles.rewardValue}>+{reward} Coins</Text>
+                            </View>
                         </View>
                     ) : null}
 

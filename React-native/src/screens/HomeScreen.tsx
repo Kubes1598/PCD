@@ -1,9 +1,14 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Platform } from 'react-native';
+import React, { useEffect, useCallback } from 'react';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Platform, Image } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Menu, Sword, Globe, Users, X, Gift, User, Coins as CoinIcon, Gem, Monitor, Trophy, Target, UserPlus, Wifi, WifiOff, Gamepad2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import ScreenContainer from '../components/layout/ScreenContainer';
+import Coin from '../components/common/Coin';
+import Diamond from '../components/common/Diamond';
+import PlayerAvatar from '../components/common/PlayerAvatar';
+import BotAvatar from '../components/common/BotAvatar';
 import { useAuth } from '../hooks/useAuth';
 import { useGame } from '../hooks/useGame';
 import { useCurrencyStore } from '../store/currencyStore';
@@ -47,11 +52,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     const [showGuestSignupModal, setShowGuestSignupModal] = React.useState(false);
     const [stats, setStats] = React.useState<any>(null);
 
-    useEffect(() => {
-        if (user && !isGuest) {
-            loadStats();
-        }
-    }, [user, isGuest]);
+    useFocusEffect(
+        useCallback(() => {
+            if (user && !isGuest) {
+                loadStats();
+            }
+        }, [user, isGuest])
+    );
 
     const loadStats = async () => {
         if (!user || isGuest) return;
@@ -145,9 +152,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                             navigation.navigate('Profile');
                         }}
                     >
-                        <View style={styles.avatarContainer}>
-                            <User color="#CBD5E1" size={moderateScale(20)} />
-                        </View>
+                        <PlayerAvatar size={moderateScale(32)} username={user?.username} />
                         <Text style={styles.usernameText}>{user?.username || 'Lee'}</Text>
                     </TouchableOpacity>
                 </View>
@@ -155,11 +160,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 {/* Currency Balance Row - 15px */}
                 <View style={styles.balanceRow}>
                     <View style={styles.balanceBadge}>
-                        <CoinIcon color="#F59E0B" size={scale(15)} />
+                        <Coin size={scale(18)} style={{ marginRight: spacing.xs }} />
                         <Text style={styles.balanceValue}>{coins}</Text>
                     </View>
                     <View style={styles.balanceBadge}>
-                        <Gem color="#06B6D4" size={scale(15)} />
+                        <Diamond size={scale(18)} style={{ marginRight: spacing.xs }} />
                         <Text style={styles.balanceValue}>{diamonds}</Text>
                     </View>
                     {stats?.rank && (
@@ -311,7 +316,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                             colors={['#1E293B', '#0F172A'] as any}
                             style={StyleSheet.absoluteFill}
                         />
-                        <Globe color={matchFound ? THEME.colors.success : "#6366F1"} size={moderateScale(64)} />
+                        {matchFound ? (
+                            <Image 
+                                source={require('../../assets/match_found.jpg')} 
+                                style={{ width: moderateScale(120), height: moderateScale(160), borderRadius: 20, marginBottom: 20 }}
+                                resizeMode="cover"
+                            />
+                        ) : (
+                            <Globe color="#6366F1" size={moderateScale(64)} />
+                        )}
                         <Text style={styles.modalTitle}>
                             {matchFound ? "🎮 MATCH FOUND!" : "MATCHMAKING"}
                         </Text>
@@ -367,8 +380,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                                         style={[styles.difficultyItem, { borderColor: diff.color + '40' }]}
                                         onPress={() => handleStartGame('ai', diff.level as any)}
                                     >
-                                        <View style={[styles.difficultyIcon, { backgroundColor: diff.color + '20' }]}>
-                                            <Sword color={diff.color} size={moderateScale(24)} />
+                                        <View style={[styles.difficultyIcon, { backgroundColor: diff.color + '10' }]}>
+                                            <BotAvatar size={moderateScale(40)} bordered={true} style={{ borderColor: diff.color }} />
                                         </View>
                                         <View style={{ flex: 1, marginLeft: spacing.md }}>
                                             <Text style={[styles.difficultyLabel, { color: diff.color }]}>{diff.label}</Text>
@@ -376,7 +389,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                                         </View>
                                         {aiConfig.entryFee > 0 && (
                                             <View style={styles.difficultyFee}>
-                                                <CoinIcon color="#F59E0B" size={moderateScale(12)} />
+                                                <Coin size={moderateScale(16)} style={{ marginRight: 4 }} />
                                                 <Text style={styles.difficultyFeeText}>{aiConfig.entryFee}</Text>
                                             </View>
                                         )}
@@ -411,13 +424,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                             <View style={styles.rewardRow}>
                                 {reward.coins > 0 && (
                                     <View style={styles.rewardItem}>
-                                        <CoinIcon color="#F59E0B" size={moderateScale(24)} />
+                                        <Coin size={moderateScale(32)} style={{ marginBottom: spacing.xs }} />
                                         <Text style={styles.rewardAmount}>+{reward.coins}</Text>
                                     </View>
                                 )}
                                 {reward.diamonds > 0 && (
                                     <View style={styles.rewardItem}>
-                                        <Gem color="#06B6D4" size={moderateScale(24)} />
+                                        <Diamond size={moderateScale(32)} style={{ marginBottom: spacing.xs }} />
                                         <Text style={styles.rewardAmount}>+{reward.diamonds}</Text>
                                     </View>
                                 )}
@@ -468,15 +481,20 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                                         style={[styles.difficultyItem, { borderColor: color + '40' }]}
                                         onPress={() => handleStartGame('online', undefined, cityName)}
                                     >
-                                        <View style={[styles.difficultyIcon, { backgroundColor: color + '20' }]}>
-                                            <Globe color={color} size={moderateScale(24)} />
+                                        <View style={[styles.difficultyIcon, { backgroundColor: color + '10' }]}>
+                                            <Image 
+                                                source={cityName === 'Dubai' ? require('../../assets/dubai_logo.jpg') : cityName === 'Cairo' ? require('../../assets/cairo_logo.jpg') : require('../../assets/oslo_logo.jpg')}
+                                                style={{ width: moderateScale(48), height: moderateScale(48), borderRadius: 10 }}
+                                                resizeMode="cover"
+                                            />
                                         </View>
                                         <View style={{ flex: 1, marginLeft: spacing.md }}>
                                             <Text style={[styles.difficultyLabel, { color }]}>{cityName}</Text>
                                             <Text style={styles.difficultyDesc}>{desc}</Text>
                                         </View>
                                         <View style={styles.difficultyFee}>
-                                            <Text style={styles.difficultyFeeText}>Fee: {cityConfig.entryFee}</Text>
+                                            <Coin size={moderateScale(16)} style={{ marginRight: 4 }} />
+                                            <Text style={styles.difficultyFeeText}>{cityConfig.entryFee}</Text>
                                         </View>
                                     </TouchableOpacity>
                                 );

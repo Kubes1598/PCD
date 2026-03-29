@@ -5,6 +5,7 @@ import Navigation from './src/navigation';
 import ErrorBoundary from './src/components/common/ErrorBoundary';
 import GlobalErrorToast from './src/components/common/GlobalErrorToast';
 import BrandSplashScreen from './src/components/common/BrandSplashScreen';
+import GlobalModal from './src/components/common/GlobalModal';
 
 import { GluestackUIProvider } from '@/components/ui/gluestack-ui-provider';
 import '@/global.css';
@@ -44,6 +45,7 @@ export default function App() {
                                 <Navigation />
                             </NavigationContainer>
                             <GlobalErrorToast />
+                            <GlobalModal />
                         </>
                     )}
                 </SafeAreaProvider>

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Trophy, Gift, Calendar, ChevronLeft, Target, Medal, CheckCircle2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import ScreenContainer from '../components/layout/ScreenContainer';
@@ -7,7 +8,10 @@ import { THEME } from '../utils/theme';
 import { scale, moderateScale, spacing, radii, platformValue } from '../utils/responsive';
 import { apiService } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
+import Coin from '../components/common/Coin';
+import Diamond from '../components/common/Diamond';
 import { useCurrencyStore } from '../store/currencyStore';
+import { useModalStore } from '../store/modalStore';
 
 const RewardsScreen = ({ navigation }: any) => {
     const { user, isGuest } = useAuth();
@@ -18,13 +22,15 @@ const RewardsScreen = ({ navigation }: any) => {
     const [loading, setLoading] = useState(false);
     const [claimingId, setClaimingId] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (activeTab === 'ranking') {
-            loadLeaderboard();
-        } else {
-            loadQuests();
-        }
-    }, [activeTab]);
+    useFocusEffect(
+        useCallback(() => {
+            if (activeTab === 'ranking') {
+                loadLeaderboard();
+            } else {
+                loadQuests();
+            }
+        }, [activeTab])
+    );
 
     const loadQuests = async () => {
         if (!user || isGuest) return;
@@ -62,7 +68,7 @@ const RewardsScreen = ({ navigation }: any) => {
         try {
             const res = await apiService.claimQuest(user.username, questId);
             if (res.success) {
-                Alert.alert('Reward Claimed!', res.message);
+                useModalStore.getState().showModal('Reward Claimed!', res.message);
                 loadQuests();
                 // Refresh local currency store
                 const stats = await apiService.getPlayerStats(user.username);
@@ -70,10 +76,10 @@ const RewardsScreen = ({ navigation }: any) => {
                     setBalances(stats.data.coin_balance, stats.data.diamonds_balance);
                 }
             } else {
-                Alert.alert('Error', res.message || 'Could not claim reward');
+                useModalStore.getState().showModal('Error', res.message || 'Could not claim reward');
             }
         } catch (error) {
-            Alert.alert('Error', 'Failed to claim reward');
+            useModalStore.getState().showModal('Error', 'Failed to claim reward');
         } finally {
             setClaimingId(null);
         }
@@ -131,11 +137,14 @@ const RewardsScreen = ({ navigation }: any) => {
                                 <Text style={styles.questDesc}>{quest.description}</Text>
                             </View>
                             <View style={styles.rewardBadge}>
-                                <Text style={styles.questReward}>
-                                    {quest.reward_coins > 0 ? `+${quest.reward_coins} C` : ''}
-                                    {quest.reward_coins > 0 && quest.reward_diamonds > 0 ? ' ' : ''}
-                                    {quest.reward_diamonds > 0 ? `+${quest.reward_diamonds} D` : ''}
-                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    {quest.reward_coins > 0 && <Coin size={scale(14)} style={{ marginRight: 4 }} />}
+                                    <Text style={styles.questReward}>
+                                        {quest.reward_coins > 0 ? `+${quest.reward_coins}` : ''}
+                                        {quest.reward_diamonds > 0 && <Diamond size={scale(14)} style={{ marginLeft: scale(6), marginRight: 2 }} />}
+                                        {quest.reward_diamonds > 0 ? `+${quest.reward_diamonds}` : ''}
+                                    </Text>
+                                </View>
                             </View>
                         </View>
 

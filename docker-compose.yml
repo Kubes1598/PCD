@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pcd-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pcd
+      POSTGRES_PASSWORD: pcd_secret
+      POSTGRES_DB: pcd_game
+    ports:
+      - "5433:5432"
+    volumes:
+      - pcd_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pcd -d pcd_game"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: pcd-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - pcd_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    command: redis-server --appendonly yes
+
+volumes:
+  pcd_pgdata:
+  pcd_redisdata:

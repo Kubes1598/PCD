@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, Animated, ViewStyle, Dimensions } from 'react-native';
 import { THEME } from '../../utils/theme';
+import Poison from '../common/Poison';
 import { feedbackService } from '../../services/FeedbackService';
 import { scale, SCREEN_WIDTH, SCREEN_HEIGHT } from '../../utils/responsive';
 
@@ -106,9 +107,13 @@ const CandyItem: React.FC<CandyItemProps> = ({
                 activeOpacity={0.8}
                 style={styles.button}
             >
-                <Text style={[styles.candyText, { fontSize }, disabled && styles.disabledText]}>
-                    {candy}
-                </Text>
+                {isPoison ? (
+                    <Poison size={candySize * 0.7} style={disabled && styles.disabledText} />
+                ) : (
+                    <Text style={[styles.candyText, { fontSize }, disabled && styles.disabledText]}>
+                        {candy}
+                    </Text>
+                )}
             </TouchableOpacity>
         </Animated.View>
     );

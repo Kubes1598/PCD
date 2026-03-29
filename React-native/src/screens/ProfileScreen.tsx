@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { User, Trophy, Star, ChevronLeft, Copy, Target, TrendingUp, LogIn, UserPlus, LogOut } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import ScreenContainer from '../components/layout/ScreenContainer';
+import PlayerAvatar from '../components/common/PlayerAvatar';
 import { THEME } from '../utils/theme';
 import { useAuth } from '../hooks/useAuth';
 import { useCurrencyStore } from '../store/currencyStore';
 import { scale, moderateScale, spacing, radii, platformValue } from '../utils/responsive';
 import { apiService } from '../services/api';
+import { useModalStore } from '../store/modalStore';
 
 const ProfileScreen = ({ navigation }: any) => {
     const { user, isGuest, logout } = useAuth();
@@ -15,9 +18,11 @@ const ProfileScreen = ({ navigation }: any) => {
     const [stats, setStats] = useState<any>(null);
     const [loading, setLoading] = useState(false);
 
-    useEffect(() => {
-        loadStats();
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            loadStats();
+        }, [user, isGuest])
+    );
 
     const loadStats = async () => {
         if (!user || isGuest) return;
@@ -37,12 +42,12 @@ const ProfileScreen = ({ navigation }: any) => {
     const copyToClipboard = () => {
         if (stats?.profile_id) {
             // Mock clipboard functionality for now
-            Alert.alert('Copied', `Profile ID ${stats.profile_id} copied to clipboard!`);
+            useModalStore.getState().showModal('Copied', `Profile ID ${stats.profile_id} copied to clipboard!`);
         }
     };
 
     const handleLogout = () => {
-        Alert.alert(
+        useModalStore.getState().showModal(
             "Log Out",
             "Are you sure you want to log out?",
             [
@@ -61,7 +66,7 @@ const ProfileScreen = ({ navigation }: any) => {
 
     const handleRemoveAds = () => {
         if (isGuest) {
-            Alert.alert(
+            useModalStore.getState().showModal(
                 "Sign Up Required",
                 "Please sign up or log in to remove ads.",
                 [
@@ -72,7 +77,7 @@ const ProfileScreen = ({ navigation }: any) => {
             return;
         }
         // TODO: Integrate with in-app purchases
-        Alert.alert("Remove Ads", "In-App Purchase coming soon! 🚀");
+        useModalStore.getState().showModal("Remove Ads", "In-App Purchase coming soon! 🚀");
     };
 
     const winRate = stats && stats.games_played > 0
@@ -131,9 +136,7 @@ const ProfileScreen = ({ navigation }: any) => {
                     ) : (
                         <>
                             <View style={styles.profileInfo}>
-                                <View style={styles.avatarContainer}>
-                                    <User color="#CBD5E1" size={moderateScale(64)} />
-                                </View>
+                                <PlayerAvatar size={scale(110)} username={user?.username} />
                                 <Text style={styles.username}>{user?.username || 'Hunter'}</Text>
 
                                 <TouchableOpacity style={styles.badgeContainer} onPress={copyToClipboard}>

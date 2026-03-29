@@ -7,6 +7,7 @@ import { webSocketService, MatchmakingMessage } from '../services/WebSocketServi
 import { feedbackService } from '../services/FeedbackService';
 import { useCurrencyStore } from './currencyStore';
 import { useAuthStore } from './authStore';
+import { useModalStore } from './modalStore';
 import { WIN_THRESHOLD, CANDY_COUNT, CITY_CONFIG, AI_CONFIG, CityName, Difficulty } from '../config/gameConfig';
 
 export type { Difficulty, CityName };
@@ -242,17 +243,26 @@ export const useGameStore = create<GameState>((set, get) => ({
                     pCandies = gameState.player1.owned_candies;
                     oCandies = gameState.player2.owned_candies;
                     oPoison = res.data.opponent_poison ?? null;
+                    // Safety fallback: if server didn't return AI poison, pick one locally
+                    if (!oPoison && oCandies.length > 0) {
+                        console.warn('⚠️ Server did not return opponent_poison, picking locally.');
+                        oPoison = oCandies[Math.floor(Math.random() * oCandies.length)];
+                    }
                 } else {
                     console.warn('⚠️ Falling back to local AI setup due to invalid server payload.');
                     const { player, opponent } = generateCandyPool(city);
                     pCandies = player;
                     oCandies = opponent;
+                    // Set opponent poison locally since server didn't provide one
+                    oPoison = opponent[Math.floor(Math.random() * opponent.length)];
                 }
             } catch (error) {
                 console.warn('⚠️ AI init network error, using local fallback:', error);
                 const { player, opponent } = generateCandyPool(city);
                 pCandies = player;
                 oCandies = opponent;
+                // Set opponent poison locally since server is unreachable
+                oPoison = opponent[Math.floor(Math.random() * opponent.length)];
             }
         } else {
             // Local fallback logic
@@ -308,6 +318,22 @@ export const useGameStore = create<GameState>((set, get) => ({
         const playerId = auth.user?.id || `guest_${auth.isGuest ? 'guest' : 'unknown'}`;
         const token = auth.token || '';
 
+        // Guard: Guests without a token cannot use WebSocket matchmaking
+        if (!token) {
+            console.warn('⚠️ Cannot start online matchmaking without auth token.');
+            useModalStore.getState().showModal(
+                'Account Required',
+                'Create an account to play online matches against other players worldwide!',
+                [
+                    { text: 'Maybe Later', style: 'cancel' },
+                    { text: 'Sign Up', onPress: () => {
+                        // Navigation handled by the caller (HomeScreen)
+                    }}
+                ]
+            );
+            return;
+        }
+
         set({ isSearching: true, difficulty: cityInfo.difficulty });
 
         webSocketService.connect(playerId, token, (data: MatchmakingMessage) => {
@@ -359,7 +385,7 @@ export const useGameStore = create<GameState>((set, get) => ({
                 });
             } else if (data.type === 'matchmaking_error') {
                 set({ isSearching: false });
-                Alert.alert("Matchmaking Error", data.message || "An unknown error occurred.");
+                useModalStore.getState().showModal("Matchmaking Error", data.message || "An unknown error occurred.");
             } else if (data.type === 'match_poison') {
                 console.log('🧪 Received opponent poison:', data.candy);
                 set({ opponentPoison: data.candy });
@@ -396,6 +422,30 @@ export const useGameStore = create<GameState>((set, get) => ({
                             winReason: 'collection',
                             gameStarted: false
                         });
+                    }
+                }
+            } else if (data.type === 'move_result') {
+                const gameState = data.game_state;
+                if (gameState) {
+                    const isP1 = gameState.player1.id === userId;
+                    const me = isP1 ? gameState.player1 : gameState.player2;
+                    const them = isP1 ? gameState.player2 : gameState.player1;
+
+                    set({
+                        isPlayerTurn: gameState.current_player === userId,
+                        playerCandies: me.owned_candies,
+                        opponentCandies: them.owned_candies,
+                        playerCollection: me.collected_candies || [],
+                        opponentCollection: them.collected_candies || [],
+                        gameStarted: gameState.state === 'playing',
+                        gameEnded: gameState.state === 'finished'
+                    });
+
+                    // Trigger haptics/sounds for the remote move
+                    if (data.data?.is_poison) {
+                         // Game ended by poison pick
+                    } else {
+                        feedbackService.triggerSelection();
                     }
                 }
             } else if (data.type === 'timer_expired') {
@@ -499,7 +549,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         // SIMULATED MATCHMAKING FALLBACK
         const timeout = setTimeout(() => {
             if (get().isSearching) {
-                Alert.alert(
+                useModalStore.getState().showModal(
                     "No match found",
                     "We couldn't find a real opponent. Would you like to play against the AI to keep the fun going?",
                     [
@@ -509,13 +559,13 @@ export const useGameStore = create<GameState>((set, get) => ({
                             onPress: () => {
                                 console.log('🤖 Starting simulated AI match.');
                                 get().stopSearching();
-                                get().initGame('ai', cityInfo.difficulty as any, arena);
+                                get().initGame('ai', 'medium');
                             }
                         }
                     ]
                 );
             }
-        }, 60000);
+        }, 120000); // Trigger generic 2min wait prompt
 
         // We'll need to store this timeout to clear it
         set({ searchTimeout: timeout });
@@ -563,7 +613,6 @@ export const useGameStore = create<GameState>((set, get) => ({
                 webSocketService.sendMessage({ type: 'match_poison', game_id: get().gameId!, target_id: opponentId, candy: candy });
                 set({ isSettingPoisonFor: null });
 
-                // If we already have opponent's poison, BOTH are now set - start game
                 if (opponentPoison) {
                     console.log('🎮 Both poisons set - starting game!');
                     const { config } = get();
@@ -572,7 +621,8 @@ export const useGameStore = create<GameState>((set, get) => ({
                 } else {
                     console.log('⏳ Waiting for opponent to set poison...');
                 }
-                // Fallback for other modes (friends, etc)
+            } else {
+                // Fallback for other modes (friends, etc) or local AI mode without gameId
                 set({ isSettingPoisonFor: null, gameStarted: true, turnTimeRemaining: 30 });
             }
         } else if (isSettingPoisonFor === 'opponent') {

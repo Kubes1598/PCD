@@ -80,6 +80,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ navigation }) => {
                     playerName={game.gameMode === 'offline' ? "Player 2" : "Opponent"}
                     collection={game.opponentCollection}
                     isOpponent
+                    isBot={game.gameMode === 'ai'}
                 />
 
                 {/* Opponent's Candy Pool - Player picks from here */}

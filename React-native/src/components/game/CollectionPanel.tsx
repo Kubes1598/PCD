@@ -1,12 +1,15 @@
 import React from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import { THEME } from '../../utils/theme';
+import PlayerAvatar from '../common/PlayerAvatar';
+import BotAvatar from '../common/BotAvatar';
 import { scale, moderateScale, SCREEN_WIDTH } from '../../utils/responsive';
 
 interface CollectionPanelProps {
     collection: string[];
     playerName: string;
     isOpponent?: boolean;
+    isBot?: boolean;
 }
 
 // Calculate slot size based on screen width - need to fit 11 slots in a row
@@ -18,7 +21,8 @@ const getSlotSize = (): number => {
 const CollectionPanel: React.FC<CollectionPanelProps> = ({
     collection,
     playerName,
-    isOpponent = false
+    isOpponent = false,
+    isBot = false
 }) => {
     const slotSize = getSlotSize();
     const fontSize = slotSize * 0.6;
@@ -26,9 +30,16 @@ const CollectionPanel: React.FC<CollectionPanelProps> = ({
     return (
         <View style={[styles.container, isOpponent && styles.opponentContainer]}>
             <View style={styles.header}>
-                <Text style={[styles.playerName, isOpponent && styles.opponentName]}>
-                    {playerName}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    {isBot ? (
+                        <BotAvatar size={scale(24)} style={{ marginRight: 6 }} />
+                    ) : (
+                        <PlayerAvatar size={scale(24)} style={{ marginRight: 6 }} username={playerName} />
+                    )}
+                    <Text style={[styles.playerName, isOpponent && styles.opponentName]}>
+                        {playerName}
+                    </Text>
+                </View>
                 <View style={[
                     styles.scoreBadge,
                     { backgroundColor: isOpponent ? THEME.colors.danger : THEME.colors.primary }

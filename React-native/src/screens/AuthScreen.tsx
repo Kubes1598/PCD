@@ -61,8 +61,9 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ navigation, route }: any) => {
                     return;
                 }
 
-                // If user is currently a guest, pass their ID for data transfer
-                const guestId = isGuest ? user?.id : undefined;
+                // If user is currently a guest, pass their ID for data transfer ONLY if it's a valid UUID
+                const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+                const guestId = isGuest && user?.id && isUuid(user.id) ? user.id : undefined;
                 result = await register(email, password, username, guestId);
             }
 

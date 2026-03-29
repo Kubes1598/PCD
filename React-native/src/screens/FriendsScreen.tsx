@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Modal } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Users, Search, UserPlus, ChevronLeft, Circle, X, Trophy } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import ScreenContainer from '../components/layout/ScreenContainer';
@@ -7,6 +8,7 @@ import { THEME } from '../utils/theme';
 import { scale, moderateScale, spacing, radii, platformValue } from '../utils/responsive';
 import { useAuth } from '../hooks/useAuth';
 import { apiService } from '../services/api';
+import { useModalStore } from '../store/modalStore';
 
 const FriendsScreen = ({ navigation }: any) => {
     const { user, isGuest } = useAuth();
@@ -16,9 +18,11 @@ const FriendsScreen = ({ navigation }: any) => {
     const [profileIdInput, setProfileIdInput] = useState('');
     const [isAdding, setIsAdding] = useState(false);
 
-    useEffect(() => {
-        loadFriends();
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            loadFriends();
+        }, [user, isGuest])
+    );
 
     const loadFriends = async () => {
         if (!user || isGuest) return;
@@ -50,15 +54,15 @@ const FriendsScreen = ({ navigation }: any) => {
         try {
             const res = await apiService.addFriend(user.username, id);
             if (res.success) {
-                Alert.alert('Success', res.message);
+                useModalStore.getState().showModal('Success', res.message);
                 setShowAddModal(false);
                 setProfileIdInput('');
                 loadFriends();
             } else {
-                Alert.alert('Error', res.message || 'Could not find player');
+                useModalStore.getState().showModal('Error', res.message || 'Could not find player');
             }
         } catch (error) {
-            Alert.alert('Error', 'Failed to add friend. Check your connection.');
+            useModalStore.getState().showModal('Error', 'Failed to add friend. Check your connection.');
         } finally {
             setIsAdding(false);
         }
